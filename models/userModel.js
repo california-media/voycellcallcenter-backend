@@ -4,7 +4,6 @@ const { createTokenforUser } = require("../services/authentication");
 
 const userSchema = new Schema(
   {
-
     // serialNumber: {
     //   type: String,
     //   unique: true,
@@ -34,7 +33,6 @@ const userSchema = new Schema(
       // default: null, // ✅ makes sure null is used instead of ""
     },
 
-
     emailVerificationToken: String,
     isVerified: {
       type: Boolean,
@@ -63,7 +61,6 @@ const userSchema = new Schema(
 
     lastSeen: { type: Date, default: null },
 
-
     userInfo: {
       helps: {
         type: [String],
@@ -90,9 +87,8 @@ const userSchema = new Schema(
     extensionNumber: { type: String, default: null },
     yeastarExtensionId: { type: String, default: null }, // whatever PBX returns as id
     sipSecret: { type: String, default: null }, // store the extension secret if needed
-    yeastarProvisionStatus: { type: String, default: 'pending' }, // 'pending' | 'done' | 'failed'
-    yeastarProvisionError: { type: String, default: '' },
-
+    yeastarProvisionStatus: { type: String, default: "pending" }, // 'pending' | 'done' | 'failed'
+    yeastarProvisionError: { type: String, default: "" },
 
     phonenumbers: [
       {
@@ -146,7 +142,6 @@ const userSchema = new Schema(
       // default: "Dummy Firstname",
     },
 
-
     profileImageURL: {
       type: String,
     },
@@ -162,8 +157,6 @@ const userSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
-
-
 
     myReferrals: {
       type: [
@@ -196,7 +189,6 @@ const userSchema = new Schema(
 
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date },
-
   },
   { timestamps: true }
 );
@@ -281,7 +273,7 @@ userSchema.static(
     const query = email
       ? { email }
       : // : { phonenumbers: { $in: [phonenumber] } }; // assuming you store phone numbers as array
-      { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
+        { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
 
     const user = await this.findOne(query);
     if (!user) throw new Error("User not found");

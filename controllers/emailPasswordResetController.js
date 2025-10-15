@@ -1,36 +1,39 @@
-const crypto = require('crypto');
-const User = require('../models/userModel');
-const sendEmail = require('../utils/sendEmailResetPassword');
-
+const crypto = require("crypto");
+const User = require("../models/userModel");
+const sendEmail = require("../utils/sendEmailResetPassword");
 
 exports.forgotPassword = async (req, res) => {
   try {
     // 1) Normalize & validate incoming email (CHANGED)
-    const emailRaw = req.body.email || '';
+    const emailRaw = req.body.email || "";
     const email = String(emailRaw).trim().toLowerCase();
     if (!email) {
-      return res.status(400).json({ status: "error", message: "Email is required" });
+      return res
+        .status(400)
+        .json({ status: "error", message: "Email is required" });
     }
 
     // 2) Helper to escape regex special chars (CHANGED)
-    const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     // 3) Case-insensitive search (REPLACED)
     //    This works even if the email in DB was saved with mixed case.
     const user = await User.findOne({
-      email: { $regex: `^${escapeRegExp(email)}$`, $options: 'i' }
+      email: { $regex: `^${escapeRegExp(email)}$`, $options: "i" },
     });
 
-    if (!user) return res.status(404).json({ message: 'Email not found' });
+    if (!user) return res.status(404).json({ message: "Email not found" });
 
     // Generate token (unchanged)
-    const token = crypto.randomBytes(32).toString('hex');
+    const token = crypto.randomBytes(32).toString("hex");
     user.resetPasswordToken = token;
     user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
     await user.save();
 
     // Reset link (unchanged)
-    const resetLink = `http://localhost:3000/email/reset-password?token=${token}`;
+    const resetLink = `${
+      process.env.resetpasswordlink || "http://localhost:3000/reset-password"
+    }?token=${token}`;
     console.log("resetLink:", resetLink);
 
     // HTML (unchanged from your original)
@@ -80,17 +83,18 @@ exports.forgotPassword = async (req, res) => {
 </html>
 `;
 
-    await sendEmail(user.email, 'Reset Password', html);
+    await sendEmail(user.email, "Reset Password", html);
 
     res.json({
       status: "success",
-      message: "Password reset link sent to your email"
+      message: "Password reset link sent to your email",
     });
   } catch (err) {
-    res.status(500).json({ status: "error", message: 'Server error', error: err.message });
+    res
+      .status(500)
+      .json({ status: "error", message: "Server error", error: err.message });
   }
 };
-
 
 // Reset Password - Validate token and update password
 exports.resetPassword = async (req, res) => {
@@ -98,21 +102,23 @@ exports.resetPassword = async (req, res) => {
   const { password, confirmPassword } = req.body;
 
   if (!password || !confirmPassword) {
-    return res.status(400).json({ message: 'Password and confirm password are required' });
+    return res
+      .status(400)
+      .json({ message: "Password and confirm password are required" });
   }
 
   if (password !== confirmPassword) {
-    return res.status(400).json({ message: 'Passwords do not match' });
+    return res.status(400).json({ message: "Passwords do not match" });
   }
 
   try {
     const user = await User.findOne({
       resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() }
+      resetPasswordExpires: { $gt: Date.now() },
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired token' });
+      return res.status(400).json({ message: "Invalid or expired token" });
     }
 
     // // Hash password
@@ -128,10 +134,11 @@ exports.resetPassword = async (req, res) => {
 
     res.json({
       status: "success",
-      message: 'Password has been reset successfully'
+      message: "Password has been reset successfully",
     });
   } catch (err) {
-    res.status(500).json({ status: "error", message: 'Server error', error: err.message });
+    res
+      .status(500)
+      .json({ status: "error", message: "Server error", error: err.message });
   }
 };
-

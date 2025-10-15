@@ -14,8 +14,6 @@ const axios = require("axios");
 const ReferralLog = require("../models/referralLogModel");
 const { createYeastarExtensionForUser } = require("../utils/yeastarClient");
 
-
-
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
@@ -34,9 +32,9 @@ async function addOrUpdateReferral(referrerId, referredUser) {
   // Normalize phone objects from referredUser
   const phoneObjs = Array.isArray(referredUser.phonenumbers)
     ? referredUser.phonenumbers.map((p) => ({
-      countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
-      number: (p.number || "").toString().replace(/^\+/, ""),
-    }))
+        countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
+        number: (p.number || "").toString().replace(/^\+/, ""),
+      }))
     : [];
 
   const referredIdStr = referredUser._id.toString();
@@ -109,36 +107,6 @@ async function addOrUpdateReferral(referrerId, referredUser) {
   }
 
   // Credit logic is now handled in signupWithEmail to avoid race conditions
-  // if (needSaveReferrer) {
-  //   // Add credits to referrer using Stripe billing credits
-  //   try {
-  //     const referrerCustomer = await getOrCreateStripeCustomer(referrer);
-  //     await addStripeCredits(
-  //       referrerCustomer.id,
-  //       1000,
-  //       "Referral bonus - new user signup"
-  //     ); // $10 in cents
-  //     console.log(
-  //       `Added $10 credit to referrer ${referrer._id} for referring ${referredUser._id}`
-  //     );
-  //   } catch (error) {
-  //     console.error("Error adding Stripe credits to referrer:", error);
-  //   }
-  //   await referrer.save();
-  // }
-
-  // // Also add credit to referredUser
-  // try {
-  //   const referredCustomer = await getOrCreateStripeCustomer(referredUser);
-  //   await addStripeCredits(
-  //     referredCustomer.id,
-  //     1000,
-  //     "Welcome bonus - signup with referral"
-  //   ); // $10 in cents
-  //   console.log(`Added $10 welcome credit to new user ${referredUser._id}`);
-  // } catch (error) {
-  //   console.error("Error adding Stripe credits to referred user:", error);
-  // }
 
   // Create ReferralLog if not exists (by email or phone)
   try {
@@ -205,13 +173,54 @@ const signupWithEmail = async (req, res) => {
         user.signupMethod = "email";
       }
 
+      // === PART 3: Yeastar Extension Creation ===
+      try {
+        // Start extension creation after user is verified
+        const startExt = parseInt(process.env.EXTENSION_START || "1001", 10);
+        const maxAttempts = parseInt(
+          process.env.EXTENSION_MAX_ATTEMPTS || "500",
+          10
+        );
+
+        const nameForExtension =
+          `${user.firstname || ""} ${user.lastname || ""}`.trim() ||
+          user.email;
+
+        // Attempt to create Yeastar extension
+        const { extensionNumber, secret, result } =
+          await createYeastarExtensionForUser(user);
+
+        // If response not OK, throw manually
+        if (!extensionNumber || !result || result.errcode !== 0) {
+          throw new Error(
+            result?.errmsg || "Yeastar extension creation failed"
+          );
+        }
+
+        // ✅ Save extension details in user
+        user.extensionNumber = extensionNumber;
+        user.yeastarExtensionId = result?.data?.id || result?.id || null;
+        user.sipSecret = secret;
+        await user.save();
+
+        console.log("✅ Yeastar extension created:", extensionNumber);
+      } catch (err) {
+        console.error("❌ Yeastar extension creation failed:", err.message);
+
+        // Cleanup: delete the user since extension provisioning failed
+        await User.findByIdAndDelete(user._id);
+
+        return res.status(500).json({
+          status: "error",
+          message: `Signup failed: Yeastar extension could not be created (${err.message})`,
+        });
+      }
+
       // Setup initial plan after email verification (skip for superadmin)
       if (user.role !== "superadmin") {
         if (user.referredBy) {
-          // Add $10 referral credits to the current user's cache (will be applied to Stripe on first purchase)
+          // Add $10 referral credits to the current user's cache
           try {
-            // Update cache_credits instead of adding directly to Stripe
-            user.cache_credits = (user.cache_credits || 0) + 10;
             console.log(
               `Added $10 welcome credit to user cache for user ${user._id}`
             );
@@ -223,38 +232,9 @@ const signupWithEmail = async (req, res) => {
           try {
             const referringUser = await User.findById(user.referredBy);
             if (referringUser) {
-              // Check if referring user has made their first purchase
-              let hasFirstPurchase = false;
-              // if (referringUser.stripeCustomerId) {
-              //   hasFirstPurchase = await hasUserMadeFirstPurchase(
-              //     referringUser.stripeCustomerId
-              //   );
-              // }
-
-              if (hasFirstPurchase) {
-                // Add directly to Stripe customer account
-                // const referrerCustomer = await getOrCreateStripeCustomer(
-                //   referringUser
-                // );
-                // await addStripeCredits(
-                //   referrerCustomer.id,
-                //   1000, // $10 in cents
-                //   `Referral bonus - ${
-                //     user.firstname || "User"
-                //   } verified their email`
-                // );
-                // console.log(
-                //   `Added $10 referral credit directly to Stripe for referring user ${user.referredBy}`
-                // );
-              } else {
-                // Add to cache_credits
-                referringUser.cache_credits =
-                  (referringUser.cache_credits || 0) + 10;
-                await referringUser.save();
-                console.log(
-                  `Added $10 referral credit to referring user cache ${user.referredBy}`
-                );
-              }
+              console.log(
+                `Added $10 referral credit to referring user cache ${user.referredBy}`
+              );
             }
           } catch (error) {
             console.error(
@@ -301,7 +281,6 @@ const signupWithEmail = async (req, res) => {
         message: "User with this email already exists",
       });
     }
-
 
     // Generate Email Verification Token
     const emailVerificationToken = crypto.randomBytes(32).toString("hex");
@@ -368,7 +347,6 @@ const signupWithEmail = async (req, res) => {
 
     //   const { extensionNumber, secret, result } = await createYeastarExtensionForUser(newUser);
 
-
     //   // save into user
     //   newUser.extensionNumber = extensionNumber;
     //   newUser.yeastarExtensionId = result?.data?.id || result?.id || null; // adjust per your PBX response
@@ -389,49 +367,6 @@ const signupWithEmail = async (req, res) => {
     //   console.error('Yeastar extension creation failed', err.message);
     // }
 
-
-    // === PART 3: Yeastar Extension Creation ===
-    try {
-      // Start extension creation after user is created
-      const startExt = parseInt(process.env.EXTENSION_START || "1001", 10);
-      const maxAttempts = parseInt(process.env.EXTENSION_MAX_ATTEMPTS || "500", 10);
-
-      const nameForExtension =
-        `${newUser.firstname || ""} ${newUser.lastname || ""}`.trim() ||
-        newUser.email;
-
-      // Attempt to create Yeastar extension
-      const { extensionNumber, secret, result } = await createYeastarExtensionForUser(newUser);
-
-      // If response not OK, throw manually
-      if (!extensionNumber || !result || result.errcode !== 0) {
-        throw new Error(result?.errmsg || "Yeastar extension creation failed");
-      }
-
-      // ✅ Save extension details in user
-      newUser.extensionNumber = extensionNumber;
-      newUser.yeastarExtensionId = result?.data?.id || result?.id || null;
-      newUser.sipSecret = secret;
-      await newUser.save();
-
-      console.log("✅ Yeastar extension created:", extensionNumber);
-    } catch (err) {
-      console.error("❌ Yeastar extension creation failed:", err.message);
-
-      // Cleanup: delete the user since extension provisioning failed
-      await User.findByIdAndDelete(newUser._id);
-
-      return res.status(500).json({
-        status: "error",
-        message: `Signup failed: Yeastar extension could not be created (${err.message})`,
-      });
-    }
-
-
-
-
-
-
     // No plan assignment here - will be done after email verification
 
     if (referredBy) {
@@ -442,12 +377,9 @@ const signupWithEmail = async (req, res) => {
         referredUserId: newUser._id,
       });
       if (referrer) {
-        console.log("calling add or upate referral");
         await addOrUpdateReferral(referredBy, newUser);
       }
     }
-
-    console.log(newUser.creditBalance);
 
     let referUrl = `https://demo.contacts.management/register?ref=${newUser.referralCode}`;
 
@@ -884,68 +816,6 @@ const signupWithPhoneNumber = async (req, res) => {
 
     await user.save();
 
-    // Setup initial plan using utility (skip for superadmin)
-    let planData = null;
-    if (user.role !== "superadmin") {
-      planData = await setupInitialPlan(user);
-
-      // Handle referral credits if user was referred
-      if (user.referredBy) {
-        // Add $10 referral credits to the current user's cache (will be applied to Stripe on first purchase)
-        try {
-          user.cache_credits = (user.cache_credits || 0) + 10;
-          console.log(
-            `Added $10 welcome credit to user cache for user ${user._id}`
-          );
-        } catch (error) {
-          console.error("Error adding welcome credit to user cache:", error);
-        }
-
-        // Add $10 referral credits to the referring user
-        try {
-          const referringUser = await User.findById(user.referredBy);
-          if (referringUser) {
-            // Check if referring user has made their first purchase
-            let hasFirstPurchase = false;
-            if (referringUser.stripeCustomerId) {
-              hasFirstPurchase = await hasUserMadeFirstPurchase(
-                referringUser.stripeCustomerId
-              );
-            }
-
-            if (hasFirstPurchase) {
-              // Add directly to Stripe customer account
-              const referrerCustomer = await getOrCreateStripeCustomer(
-                referringUser
-              );
-              await addStripeCredits(
-                referrerCustomer.id,
-                1000, // $10 in cents
-                `Referral bonus - ${user.firstname || "User"
-                } verified phone number`
-              );
-              console.log(
-                `Added $10 referral credit directly to Stripe for referring user ${user.referredBy}`
-              );
-            } else {
-              // Add to cache_credits
-              referringUser.cache_credits =
-                (referringUser.cache_credits || 0) + 10;
-              await referringUser.save();
-              console.log(
-                `Added $10 referral credit to referring user cache ${user.referredBy}`
-              );
-            }
-          }
-        } catch (error) {
-          console.error(
-            "Error adding referral credits to referring user:",
-            error
-          );
-        }
-      }
-    }
-
     const token = createTokenforUser(user);
     const referUrl = `https://demo.contacts.management/register?ref=${user.referralCode}`;
 
@@ -1096,24 +966,20 @@ const unifiedLogin = async (req, res) => {
           countryCode: normCountry,
           password,
         });
-        // const customer = await getOrCreateStripeCustomer(user);
-        console.log("set up initial plan for user during login:");
 
         const now = new Date();
-        const isTrialActive = user.trialEnd && now < user.trialEnd;
         user.isActive = true; // mark as active
         return res.json({
           status: "success",
           message: "Login successful",
           data: {
             token,
-            isTrialActive,
-            trialEndsAt: user.trialEnd,
             registeredWith: user.signupMethod,
             role: user.role || "user",
           },
         });
       } catch (err) {
+        console.log("Login error:", err);
         return res.status(401).json({
           status: "error",
           message: err.message || "Invalid credentials",
@@ -1173,19 +1039,7 @@ const unifiedLogin = async (req, res) => {
             referredBy = referringUser._id;
           }
 
-          const serialNumber = await User.getNextSerialNumber();
-          const firstname = ticket.getPayload().given_name || "Google";
-          const lastname = ticket.getPayload().family_name || "User";
-          // const { qrCode } = await generateUserQRCode(firstname, serialNumber, {
-          //   firstname,
-          //   lastname,
-          //   email,
-          //   provider: "google"
-          // });
-
           const now = new Date();
-          const trialEnds = new Date(now);
-          trialEnds.setDate(trialEnds.getDate() + 14); // Set 14-day trial
 
           const referralCodeRaw = email + Date.now();
           const referralCode = crypto
@@ -1199,17 +1053,13 @@ const unifiedLogin = async (req, res) => {
             firstname,
             lastname,
             provider: "google",
-            serialNumber,
-            // qrCode,
             signupMethod: "google",
             isVerified: true,
-            trialStart: now,
-            trialEnd: trialEnds,
             referralCode, // ✅ Store generated referral code
             referredBy, // ✅ Store who referred this user
           });
 
-          // ✅ Add new user to referring user’s myReferrals
+          // ✅ Add new user to referring user's myReferrals
           if (referredBy) {
             const referrer = await User.findById(referredBy);
             if (referrer) {
@@ -1222,43 +1072,15 @@ const unifiedLogin = async (req, res) => {
                 signupDate: new Date(),
               });
 
-              // Add credits to referrer using Stripe billing credits
-              try {
-                const referrerCustomer = await getOrCreateStripeCustomer(
-                  referrer
-                );
-                await addStripeCredits(
-                  referrerCustomer.id,
-                  1000,
-                  "Referral bonus - phone verification"
-                ); // $10 in cents
-              } catch (error) {
-                console.error(
-                  "Error adding Stripe credits to referrer:",
-                  error
-                );
-              }
               await referrer.save();
             }
 
-            // Add credits to user using Stripe billing credits
-            try {
-              const userCustomer = await getOrCreateStripeCustomer(user);
-              await addStripeCredits(
-                userCustomer.id,
-                1000,
-                "Welcome bonus - phone verification"
-              ); // $10 in cents
-            } catch (error) {
-              console.error("Error adding Stripe credits to user:", error);
-            }
             await user.save();
           }
         }
 
         const token = createTokenforUser(user);
         const now = new Date();
-        const isTrialActive = user.trialEnd && now < user.trialEnd;
         return res.json({
           status: "success",
           message: "Google login successful",
@@ -1266,8 +1088,6 @@ const unifiedLogin = async (req, res) => {
             token: token,
             registeredWith: user.signupMethod,
             isFirstTime: isFirstTime,
-            isTrialActive,
-            trialEndsAt: user.trialEnd,
           },
         });
       } catch (err) {
@@ -1322,44 +1142,27 @@ const unifiedLogin = async (req, res) => {
         // }
 
         if (!user) {
-          const serialNumber = await User.getNextSerialNumber();
           const firstname = appleUser.firstName || "Apple";
           const lastname = appleUser.lastName || "User";
 
-          // const { qrCode } = await generateUserQRCode(firstname, serialNumber, {
-          //   firstname,
-          //   lastname,
-          //   email: appleEmail,
-          //   provider: "apple"
-          // });
-
           const now = new Date();
-          const trialEnds = new Date(now);
-          trialEnds.setDate(trialEnds.getDate() + 14); // Set 14-day trial
 
           user = await User.create({
             email: appleEmail,
             provider: "apple",
             firstname,
             lastname,
-            serialNumber,
-            // qrCode,
             signupMethod: "apple",
-            trialStart: now,
-            trialEnd: trialEnds,
           });
         }
 
         const token = createTokenforUser(user);
         const now = new Date();
-        const isTrialActive = user.trialEnd && now < user.trialEnd;
         return res.json({
           status: "success",
           message: "Apple login successful",
           data: {
             token,
-            isTrialActive,
-            trialEndsAt: user.trialEnd,
           },
         });
       } catch (err) {
@@ -1376,7 +1179,6 @@ const unifiedLogin = async (req, res) => {
     return res.status(500).json({ status: "error", message: "Login failed" });
   }
 };
-
 
 const logoutUser = async (req, res) => {
   try {

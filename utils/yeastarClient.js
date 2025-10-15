@@ -62,7 +62,10 @@ async function refreshYeastarToken(oldRefreshToken) {
       throw new Error("Refresh token failed");
     }
   } catch (err) {
-    console.error("❌ Yeastar refresh failed:", err.response?.data || err.message);
+    console.error(
+      "❌ Yeastar refresh failed:",
+      err.response?.data || err.message
+    );
     throw err;
   }
 }
@@ -113,7 +116,9 @@ async function getYeastarExtensions() {
 /** 🔢 Find next available extension */
 async function findNextAvailableExtension(start = 1001) {
   const existing = await getYeastarExtensions();
-  const numbers = existing.map((ext) => parseInt(ext.number || ext.extension, 10));
+  const numbers = existing.map((ext) =>
+    parseInt(ext.number || ext.extension, 10)
+  );
   let next = start;
   while (numbers.includes(next)) next++;
   return next.toString();
@@ -121,8 +126,12 @@ async function findNextAvailableExtension(start = 1001) {
 
 /** 🔑 Generate random SIP secret */
 function generateSecret(length = 12) {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  return Array.from(
+    { length },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join("");
 }
 
 /** 🧩 Create Yeastar extension */
@@ -136,9 +145,10 @@ async function createYeastarExtensionForUser(user) {
 
   const body = {
     number: extensionNumber.toString(),
-    first_name: user.firstname || "User",     // ✅ added
-    last_name: user.lastname || "",            // ✅ added
-    caller_id_name: `${user.firstname || ""} ${user.lastname || ""}`.trim() || "User",
+    first_name: user.firstname || "Voycell User", // ✅ added
+    last_name: user.lastname || "", // ✅ added
+    caller_id_name:
+      `${user.firstname || ""} ${user.lastname || ""}`.trim() || "User",
     reg_name: extensionNumber.toString(),
     reg_password: secret,
     concurrent_registrations: 1,
@@ -153,7 +163,6 @@ async function createYeastarExtensionForUser(user) {
     ],
   };
 
-
   try {
     const res = await axios.post(url, body, {
       headers: { Authorization: `Bearer ${token}` },
@@ -161,14 +170,20 @@ async function createYeastarExtensionForUser(user) {
 
     const data = res.data;
     if (data.errcode === 0) {
-      console.log("✅ Yeastar extension created successfully:", extensionNumber);
+      console.log(
+        "✅ Yeastar extension created successfully:",
+        extensionNumber
+      );
       return { extensionNumber, secret, result: data };
     }
 
     console.error("❌ Yeastar extension creation failed:", data);
     throw new Error(data.errmsg || "Yeastar extension creation failed");
   } catch (err) {
-    console.error("❌ Yeastar extension creation failed:", err.response?.data || err.message);
+    console.error(
+      "❌ Yeastar extension creation failed:",
+      err.response?.data || err.message
+    );
     throw err;
   }
 }

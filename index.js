@@ -41,7 +41,7 @@ const yeastarRoutes = require('./routes/yeastar');
 // const editTagRoutes = require("./routes/editTagRoutes");
 // const getTagRoutes = require("./routes/getTagRoutes");
 // const getTagWithContact = require("./routes/getTagWithContactRoutes");
-// const getUserRoutes = require("./routes/getUserRoutes");
+const getUserRoutes = require("./routes/getUserRoutes");
 // const deleteTagRoutes = require("./routes/deleteTagRoutes");
 // const addToFavouriteRoutes = require("./routes/addToFavouriteRoutes");
 // const signRoutes = require("./routes/signRoutes");
@@ -75,7 +75,7 @@ const checkRole = require("./middlewares/roleCheck");
 // const paymentRoutes = require("./routes/paymentRoutes");
 // const apiKeyRoutes = require("./routes/apiKeyRoutes");
 const { error } = require("console");
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3003;
 
 //for admin routes
 const adminLoginRoutes = require("./routes/admin/adminLoginRoute");
@@ -119,7 +119,7 @@ console.log("Setting up routes...");
 // app.use("/deleteTask", checkForAuthentication(), deleteTaskRoutes);
 // app.use("/deleteMeeting", checkForAuthentication(), deleteMeetingRoutes);
 // app.use("/deleteTemplate", checkForAuthentication(), deleteTemplateRoutes);
-// app.use("/getUser", checkForAuthentication(), getUserRoutes);
+app.use("/getUser", checkForAuthentication(), getUserRoutes);
 // app.use("/addTag", checkForAuthentication(), addTagRoutes);
 // app.use("/editTag", checkForAuthentication(), editTagRoutes);
 // app.use("/getTag", checkForAuthentication(), getTagRoutes);
