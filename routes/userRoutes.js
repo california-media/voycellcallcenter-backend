@@ -2,6 +2,7 @@ const { Router } = require("express");
 const { checkForAuthentication } = require("../middlewares/authentication");
 const {
   signupWithEmail,
+  signupWithPhoneNumber,
   unifiedLogin,
   resendVerificationLink,
   logoutUser
@@ -49,6 +50,8 @@ const router = Router();
 // router.post("/signup/request-otp", requestOtp);
 
 router.post("/signup/email", signupWithEmail);
+
+router.post("/signup/phonenumber", signupWithPhoneNumber);
 
 router.post("/resendVerificationLink", resendVerificationLink);
 
