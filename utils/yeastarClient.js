@@ -145,7 +145,7 @@ async function createYeastarExtensionForUser(user) {
 
   const body = {
     number: extensionNumber.toString(),
-    first_name: user.firstname || "Voycell User", // ✅ added
+    first_name: user.firstname || user?.email || "Voycell User", // ✅ added
     last_name: user.lastname || "", // ✅ added
     caller_id_name:
       `${user.firstname || ""} ${user.lastname || ""}`.trim() || "User",
