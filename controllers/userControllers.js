@@ -12,6 +12,8 @@ const { google } = require("googleapis");
 const querystring = require("querystring");
 const axios = require("axios");
 const ReferralLog = require("../models/referralLogModel");
+const { createYeastarExtensionForUser } = require("../utils/yeastarClient");
+
 
 
 const oauth2Client = new google.auth.OAuth2(
@@ -184,7 +186,6 @@ const signupWithEmail = async (req, res) => {
     } = req.body;
 
     const referralCodeParam = req.body.referralCode || req.query.ref || "";
-    // const tenantId = req.query.tenantId || req.body.tenantId || "";
 
     // === PART 1: Email Verification Flow ===
     if (verifyToken) {
@@ -348,6 +349,88 @@ const signupWithEmail = async (req, res) => {
       isActive: true, // User is not active until email verification
       referredBy,
     });
+
+    // // REPLACEMENT: sequential Yeastar extension creation (paste here instead of old try/catch)
+    // try {
+    //   // read start and max attempts from env or default
+    //   const startExt = parseInt(process.env.EXTENSION_START || '1001', 10);
+    //   const maxAttempts = parseInt(process.env.EXTENSION_MAX_ATTEMPTS || '500', 10);
+
+    //   // create sequentially; name uses firstname/lastname fallback to email
+    //   const nameForExtension = `${newUser.firstname || ''} ${newUser.lastname || ''}`.trim() || newUser.email;
+    //   // const { createYeastarExtensionSequential } = require('../controllers/yeastarController'); // local require in case top-level require not added
+
+    //   // const { extensionNumber, secret, result } = await createYeastarExtensionSequential({
+    //   //   startFrom: startExt,
+    //   //   maxAttempts,
+    //   //   name: nameForExtension,
+    //   // });
+
+    //   const { extensionNumber, secret, result } = await createYeastarExtensionForUser(newUser);
+
+
+    //   // save into user
+    //   newUser.extensionNumber = extensionNumber;
+    //   newUser.yeastarExtensionId = result?.data?.id || result?.id || null; // adjust per your PBX response
+    //   newUser.sipSecret = secret;
+    //   await newUser.save();
+
+    //   console.log('Yeastar extension created', extensionNumber, newUser.yeastarExtensionId);
+    // } catch (err) {
+    //   // important: do not fail the whole signup just because PBX failed.
+    //   // You could set a flag so a background job retries provisioning later:
+    //   try {
+    //     newUser.yeastarProvisionStatus = 'failed';
+    //     newUser.yeastarProvisionError = err.message;
+    //     await newUser.save();
+    //   } catch (saveErr) {
+    //     console.error('Failed to save provisioning error to user:', saveErr.message);
+    //   }
+    //   console.error('Yeastar extension creation failed', err.message);
+    // }
+
+
+    // === PART 3: Yeastar Extension Creation ===
+    try {
+      // Start extension creation after user is created
+      const startExt = parseInt(process.env.EXTENSION_START || "1001", 10);
+      const maxAttempts = parseInt(process.env.EXTENSION_MAX_ATTEMPTS || "500", 10);
+
+      const nameForExtension =
+        `${newUser.firstname || ""} ${newUser.lastname || ""}`.trim() ||
+        newUser.email;
+
+      // Attempt to create Yeastar extension
+      const { extensionNumber, secret, result } = await createYeastarExtensionForUser(newUser);
+
+      // If response not OK, throw manually
+      if (!extensionNumber || !result || result.errcode !== 0) {
+        throw new Error(result?.errmsg || "Yeastar extension creation failed");
+      }
+
+      // ✅ Save extension details in user
+      newUser.extensionNumber = extensionNumber;
+      newUser.yeastarExtensionId = result?.data?.id || result?.id || null;
+      newUser.sipSecret = secret;
+      await newUser.save();
+
+      console.log("✅ Yeastar extension created:", extensionNumber);
+    } catch (err) {
+      console.error("❌ Yeastar extension creation failed:", err.message);
+
+      // Cleanup: delete the user since extension provisioning failed
+      await User.findByIdAndDelete(newUser._id);
+
+      return res.status(500).json({
+        status: "error",
+        message: `Signup failed: Yeastar extension could not be created (${err.message})`,
+      });
+    }
+
+
+
+
+
 
     // No plan assignment here - will be done after email verification
 

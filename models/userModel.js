@@ -87,6 +87,13 @@ const userSchema = new Schema(
       },
     },
 
+    extensionNumber: { type: String, default: null },
+    yeastarExtensionId: { type: String, default: null }, // whatever PBX returns as id
+    sipSecret: { type: String, default: null }, // store the extension secret if needed
+    yeastarProvisionStatus: { type: String, default: 'pending' }, // 'pending' | 'done' | 'failed'
+    yeastarProvisionError: { type: String, default: '' },
+
+
     phonenumbers: [
       {
         countryCode: {
