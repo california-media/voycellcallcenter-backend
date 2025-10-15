@@ -1,0 +1,13 @@
+service: my-express-api
+provider:
+  name: aws
+  runtime: nodejs18.x
+  environment:
+    MONGO_URL: mongodb+srv://makvanayash2112_db_user:rG2eoqvZZz3JjB5k@cluster0.3o1mxes.mongodb.net/
+functions:
+  app:
+    handler: index.handler
+    events:
+      - http:
+          path: /{proxy+}
+          method: ANY

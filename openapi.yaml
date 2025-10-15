@@ -1,0 +1,435 @@
+openapi: 3.1.0
+info:
+  title: Contacts Management API
+  version: 1.0.0
+  description: |
+    REST API for contacts, tags, reminders.
+    Authentication uses JWT in Authorization header.
+servers:
+  - url: https://100rjobf76.execute-api.eu-north-1.amazonaws.com
+    description: Production
+  - url: http://localhost:3003
+    description: Local
+security:
+  - bearerAuth: []
+tags:
+  - name: Contacts
+  - name: Tags
+  - name: Reminders
+  - name: Import
+paths:
+  /addEditContact:
+    post:
+      tags: [Contacts]
+      summary: Add or edit contact
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                contact_id: { type: string }
+                firstname: { type: string }
+                lastname: { type: string }
+                emailaddresses:
+                  type: array
+                  items: { type: string, format: email }
+                phonenumbers:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      countryCode: { type: string }
+                      number: { type: string }
+                contactImage: { type: string, format: binary }
+      responses:
+        "200": { description: OK }
+  /getContact:
+    post:
+      tags: [Contacts]
+      summary: List contacts
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                page: { type: integer, default: 1 }
+                limit: { type: integer, default: 10 }
+                search: { type: string }
+                tag: { type: string }
+                isFavourite: { type: boolean }
+      responses:
+        "200": { description: OK }
+  /getContactById:
+    post:
+      tags: [Contacts]
+      summary: Get contact by ID
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_id: { type: string }
+              required: [contact_id]
+      responses:
+        "200": { description: OK }
+  /getAllContact:
+    post:
+      tags: [Contacts]
+      summary: Get all contacts
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK }
+  /deleteContact:
+    post:
+      tags: [Contacts]
+      summary: Delete contact
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_id: { type: string }
+              required: [contact_id]
+      responses:
+        "200": { description: OK }
+  /deleteAllContacts:
+    post:
+      tags: [Contacts]
+      summary: Delete all contacts
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK }
+  /save-bulk-contacts:
+    post:
+      tags: [Contacts]
+      summary: Save bulk contacts
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contacts:
+                  type: array
+                  items: { $ref: "#/components/schemas/ContactInput" }
+              required: [contacts]
+      responses:
+        "200": { description: OK }
+
+  /addTag:
+    post:
+      tags: [Tags]
+      summary: Add tag
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tag: { type: string }
+                emoji: { type: string }
+              required: [tag]
+      responses:
+        "200": { description: OK }
+  /getTag:
+    post:
+      tags: [Tags]
+      summary: Get tags
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK }
+  /editTag:
+    post:
+      tags: [Tags]
+      summary: Edit tag
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tag_id: { type: string }
+                tag: { type: string }
+                emoji: { type: string }
+              required: [tag_id]
+      responses:
+        "200": { description: OK }
+  /deleteTag:
+    post:
+      tags: [Tags]
+      summary: Delete tag
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tag_id: { type: string }
+              required: [tag_id]
+      responses:
+        "200": { description: OK }
+  /assign-unassign-tag:
+    post:
+      tags: [Tags]
+      summary: Assign/Unassign tag to contact
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_id: { type: string }
+                tag_id: { type: string }
+                action: { type: string, enum: [assign, unassign] }
+              required: [contact_id, tag_id, action]
+      responses:
+        "200": { description: OK }
+  /getTagWithContact:
+    post:
+      tags: [Tags]
+      summary: Get tags with contacts
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK }
+
+  /getContactActivities:
+    post:
+      tags: [Contacts]
+      summary: Get contact activities
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_id: { type: string }
+              required: [contact_id]
+      responses:
+        "200": { description: OK }
+
+  /fetch-google-contacts:
+    get:
+      tags: [Import]
+      summary: Start Google contacts import (OAuth)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Redirect URL returned }
+  /fetch-google-contacts/google/callback:
+    get:
+      tags: [Import]
+      summary: Google OAuth callback (contacts import)
+      security: []
+      parameters:
+        - in: query
+          name: code
+          schema: { type: string }
+        - in: query
+          name: state
+          schema: { type: string }
+      responses:
+        "200": { description: HTML page }
+
+  /fetch-linkedin-contacts:
+    get:
+      tags: [Import]
+      summary: Start LinkedIn contacts import (OAuth)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Redirect URL returned }
+  /fetch-linkedin-contacts/linkedin/callback:
+    get:
+      tags: [Import]
+      summary: LinkedIn OAuth callback (contacts import)
+      security: []
+      parameters:
+        - in: query
+          name: code
+          schema: { type: string }
+        - in: query
+          name: state
+          schema: { type: string }
+      responses:
+        "200": { description: HTML page }
+
+  /fetch-hubspot-contacts:
+    get:
+      tags: [Import]
+      summary: Start HubSpot contacts import (OAuth)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Redirect URL returned }
+  /fetch-hubspot-contacts/hubspot/callback:
+    get:
+      tags: [Import]
+      summary: HubSpot OAuth callback (contacts import)
+      security: []
+      parameters:
+        - in: query
+          name: code
+          schema: { type: string }
+        - in: query
+          name: state
+          schema: { type: string }
+      responses:
+        "200": { description: HTML page }
+
+  /fetch-zoho-contacts:
+    get:
+      tags: [Import]
+      summary: Start Zoho contacts import (OAuth)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Redirect URL returned }
+  /fetch-zoho-contacts/zoho/callback:
+    get:
+      tags: [Import]
+      summary: Zoho OAuth callback (contacts import)
+      security: []
+      parameters:
+        - in: query
+          name: code
+          schema: { type: string }
+        - in: query
+          name: state
+          schema: { type: string }
+      responses:
+        "200": { description: HTML page }
+
+  /reminders/getReminders:
+    get:
+      tags: [Reminders]
+      summary: Get reminders
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK }
+  /reminders/addEditReminder:
+    post:
+      tags: [Reminders]
+      summary: Add or edit reminder
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reminder_id: { type: string }
+                title: { type: string }
+                description: { type: string }
+                date: { type: string, format: date-time }
+      responses:
+        "200": { description: OK }
+  /reminders/deleteReminder:
+    delete:
+      tags: [Reminders]
+      summary: Delete reminder
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reminder_id: { type: string }
+      responses:
+        "200": { description: OK }
+
+  /addToFavourite:
+    post:
+      tags: [Contacts]
+      summary: Add to favourite
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_id: { type: string }
+                isFavourite: { type: boolean }
+      responses:
+        "200": { description: OK }
+
+  /deleteTask:
+    post:
+      tags: [Contacts]
+      summary: Delete task from contact
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_id: { type: string }
+                task_id: { type: string }
+      responses:
+        "200": { description: OK }
+  /deleteMeeting:
+    post:
+      tags: [Contacts]
+      summary: Delete meeting from contact
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_id: { type: string }
+                meeting_id: { type: string }
+      responses:
+        "200": { description: OK }
+  
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        status: { type: string }
+        message: { type: string }
+        data: { type: object }
+    ContactInput:
+      type: object
+      properties:
+        firstname: { type: string }
+        lastname: { type: string }
+        emailaddresses:
+          type: array
+          items: { type: string, format: email }
+        phonenumbers:
+          type: array
+          items:
+            type: object
+            properties:
+              countryCode: { type: string }
+              number: { type: string }
