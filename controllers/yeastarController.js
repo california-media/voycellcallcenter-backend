@@ -115,4 +115,5 @@ async function createYeastarExtensionSequential({ startFrom = 1001, maxAttempts 
 module.exports = {
   createExtensionWithNumber,
   createYeastarExtensionSequential,
+  ensureToken,
 };

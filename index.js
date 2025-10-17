@@ -25,7 +25,9 @@ const serverless = require("serverless-http");
 console.log("Connecting to MongoDB...");
 
 const userRoutes = require("./routes/userRoutes");
-const yeastarRoutes = require('./routes/yeastar');
+const yeastarRoutes = require("./routes/yeastarRoutes");
+// const yeastarRoutes = require('./routes/yeastar');
+// const yeastarCallRoutes = require("./routes/yeastarCallRoutes");
 // const editProfileRoutes = require("./routes/editProfileRoutes");
 // const contactRoutes = require("./routes/contactRoutes");
 // const assignedContactTag = require("./routes/assignedContactTag");
@@ -102,9 +104,11 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(express.static(path.resolve("./public")));
 app.use("/user", userRoutes);
 // app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-app.use('/api/yeastar', yeastarRoutes);
+// app.use("/api/yeastar", yeastarRoutes);
+// app.use("/yeastar", yeastarCallRoutes);
 
 console.log("Setting up routes...");
+app.use("/api/yeastar", yeastarRoutes);
 
 // Serve static files (for accessing uploaded images)
 // app.use("/editProfile", checkForAuthentication(), editProfileRoutes);
