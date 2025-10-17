@@ -1,7 +1,5 @@
-const crypto = require("crypto");
 const axios = require("axios");
 const User = require("../models/userModel");
-const YeastarToken = require("../models/YeastarToken");
 
 const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL;
 const YEASTAR_SDK_ACCESS_ID = process.env.YEASTAR_SDK_ACCESS_ID;
@@ -11,13 +9,6 @@ const YEASTAR_SDK_ACCESS_KEY = process.env.YEASTAR_SDK_ACCESS_KEY;
  * Get valid access token for Linkus SDK API calls
  */
 async function getValidToken() {
-  let tokenDoc = await YeastarToken.findOne().sort({ created_at: -1 });
-
-  // Check if token still valid
-  if (tokenDoc && !tokenDoc.isExpired) {
-    return tokenDoc.access_token;
-  }
-
   // Request new token using SDK AccessID and AccessKey
   console.log("🔐 Requesting new Linkus SDK access token...");
 
@@ -35,15 +26,6 @@ async function getValidToken() {
   const access_token = data.access_token;
   const refresh_token = data.refresh_token;
   const expires_in = data.access_token_expire_time || 1800;
-
-  // Store token
-  await YeastarToken.deleteMany({});
-  await YeastarToken.create({
-    access_token,
-    refresh_token,
-    expires_in,
-    created_at: new Date(),
-  });
 
   console.log("✅ Linkus SDK access token obtained");
   return access_token;
