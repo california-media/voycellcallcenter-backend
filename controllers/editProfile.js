@@ -4,7 +4,6 @@ const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const User = require("../models/userModel");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const s3 = require("../utils/s3");
-const { sendPushNotificationToUser } = require("../utils/oneSignal");
 
 const uploadImageToS3 = async (file) => {
   const ext = path.extname(file.originalname);
@@ -335,6 +334,7 @@ const editProfile = async (req, res) => {
 
           if (user.signupMethod === "phoneNumber") {
             // ✅ If same number, allow silently
+
             const currentPhone = user.phonenumbers?.[0];
             if (
               currentPhone &&
@@ -626,6 +626,7 @@ const editProfile = async (req, res) => {
     // });
 
     // user.qrcode = qrCode;
+    console.log(user.phonenumbers);
 
     await user.save();
 
@@ -696,22 +697,22 @@ const editProfile = async (req, res) => {
   }
 };
 
-const testingOneSignal = async (req, res) => {
-  try {
-    const ext_id = "68e5617c3b5414a7c66fdd75";
-    const data = await sendPushNotificationToUser(ext_id, {
-      heading: "Meeting Scheduled",
-      content: "Meeting Scheduled",
-      data: {
-        type: "meeting_created",
-      },
-    });
-    console.log("Test notification sent", data);
-    res.json({ message: "Test notification sent" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
+// const testingOneSignal = async (req, res) => {
+//   try {
+//     const ext_id = "68e5617c3b5414a7c66fdd75";
+//     const data = await sendPushNotificationToUser(ext_id, {
+//       heading: "Meeting Scheduled",
+//       content: "Meeting Scheduled",
+//       data: {
+//         type: "meeting_created",
+//       },
+//     });
+//     console.log("Test notification sent", data);
+//     res.json({ message: "Test notification sent" });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// };
 
-module.exports = { editProfile, testingOneSignal };
+module.exports = { editProfile };

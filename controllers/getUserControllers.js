@@ -9,6 +9,41 @@ const getUserData = async (req, res) => {
         .status(404)
         .json({ status: "error", message: "User not found" });
     }
+    // --------- Normalize phonenumbers for response based on apiType ----------
+    const phonenumbersForResponse = (() => {
+      const phones = Array.isArray(user.phonenumbers) ? user.phonenumbers : [];
+
+      return phones
+        .map((p) => {
+          if (!p) return null;
+
+          if (typeof p === "string") {
+            // strip '+', spaces, parentheses, dashes, etc -> digits only
+            return p.replace(/[^\d]/g, "");
+          }
+
+          // if stored as object { countryCode, number } (or similar)
+          const cc = String(p.countryCode || p.country || "").replace(
+            /[^\d]/g,
+            ""
+          );
+          const num = String(
+            p.number || p.nationalNumber || p.phone || ""
+          ).replace(/[^\d]/g, "");
+
+          // If only `number` exists but already contains country code (e.g., "9170..."), return it cleaned
+          if (!cc && num.length > 6) {
+            return num;
+          }
+
+          // join cc + num (safe even if one of them is empty)
+          return (cc + num).replace(/[^\d]/g, "");
+        })
+        .filter(Boolean); // remove null/empty entries
+
+      // For mobile (or by default) return raw stored structure so mobile UI keeps objects
+      return phones;
+    })();
 
     const data = {
       id: user._id,
@@ -30,6 +65,8 @@ const getUserData = async (req, res) => {
       referralCode: user.referralCode || null,
       isActive: user.isActive,
       lastSeen: user.lastSeen,
+      phonenumbers: phonenumbersForResponse,
+
       isVerified: user.isVerified,
       userInfo: user.userInfo || {
         helps: [],

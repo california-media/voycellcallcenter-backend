@@ -33,7 +33,7 @@ const scriptRoutes = require("./routes/scriptRoutes");
 const callmeServeRoute = require("./routes/callmeServeRoute");
 // const yeastarRoutes = require('./routes/yeastar');
 // const yeastarCallRoutes = require("./routes/yeastarCallRoutes");
-// const editProfileRoutes = require("./routes/editProfileRoutes");
+const editProfileRoutes = require("./routes/editProfileRoutes");
 // const contactRoutes = require("./routes/contactRoutes");
 // const assignedContactTag = require("./routes/assignedContactTag");
 // const getContactRoutes = require("./routes/getContactRoutes");
@@ -124,12 +124,12 @@ app.use("/api/script", scriptRoutes); // script generation (auth)
 app.use("/calling_system", callmeServeRoute); // serves callme.js (no auth)
 // Serve static files (for accessing uploaded images)
 // app.use("/editProfile", checkForAuthentication(), editProfileRoutes);
-// app.use(
-//   "/editProfile",
-//   checkForAuthentication(),
-//   upload.single("profileImage"),
-//   editProfileRoutes
-// );
+app.use(
+  "/editProfile",
+  checkForAuthentication(),
+  upload.single("profileImage"),
+  editProfileRoutes
+);
 // app.use("/deleteContact", deleteContactRoutes);
 // app.use("/deleteUser", checkForAuthentication(), deleteUserRoutes);
 // app.use("/deleteTask", checkForAuthentication(), deleteTaskRoutes);
@@ -304,7 +304,8 @@ app.use("/check", (req, res) => {
   res.json({ message: "API checkPage" });
 });
 app.use("/", (req, res) => {
-  console.log("hello from homepage");
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
 
   res.json({ message: "API Homepage" });
 });
