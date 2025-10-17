@@ -26,6 +26,8 @@ console.log("Connecting to MongoDB...");
 
 const userRoutes = require("./routes/userRoutes");
 const yeastarRoutes = require("./routes/yeastarRoutes");
+const scriptRoutes = require('./routes/scriptRoutes');
+const callmeServeRoute = require('./routes/callmeServeRoute');
 // const yeastarRoutes = require('./routes/yeastar');
 // const yeastarCallRoutes = require("./routes/yeastarCallRoutes");
 // const editProfileRoutes = require("./routes/editProfileRoutes");
@@ -108,8 +110,9 @@ app.use("/user", userRoutes);
 // app.use("/yeastar", yeastarCallRoutes);
 
 console.log("Setting up routes...");
-app.use("/api/yeastar", yeastarRoutes);
-
+app.use("/api/yeastar", express.json(), yeastarRoutes);
+app.use('/api/script', scriptRoutes);             // script generation (auth)
+app.use('/calling_system', callmeServeRoute); // serves callme.js (no auth)
 // Serve static files (for accessing uploaded images)
 // app.use("/editProfile", checkForAuthentication(), editProfileRoutes);
 // app.use(
