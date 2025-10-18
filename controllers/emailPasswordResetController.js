@@ -29,11 +29,9 @@ exports.forgotPassword = async (req, res) => {
     user.resetPasswordToken = token;
     user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
     await user.save();
-
+    const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:4004";
     // Reset link (unchanged)
-    const resetLink = `${
-      process.env.resetpasswordlink || "http://localhost:3000/reset-password"
-    }?token=${token}`;
+    const resetLink = `${API_BASE_URL + "/reset-password"}?token=${token}`;
     console.log("resetLink:", resetLink);
 
     // HTML (unchanged from your original)

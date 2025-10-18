@@ -8,9 +8,9 @@ exports.serveCallmeJS = async (req, res) => {
     popupText = "Enter your phone number and we’ll call you back in 30 seconds!",
     calltoaction = "📞 Call Me",
   } = req.query;
-
+  const API_BASE_URL = process.env.API_BASE_URL || "";
   const decodedExt = Buffer.from(ext, "base64").toString("utf8");
-  const apiUrl = "http://localhost:4004/api/yeastar/make-call";
+  const apiUrl = API_BASE_URL + "/api/yeastar/make-call";
 
   const js = `
 (function(){

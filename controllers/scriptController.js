@@ -1,6 +1,6 @@
 // const User = require("../models/userModel");
 
-// const SERVER_BASE = process.env.SCRIPT_BASE_URL || "http://localhost:4004";
+// const SERVER_BASE = API_BASE_URL || "http://localhost:4004";
 
 // exports.generateScriptTag = async (req, res) => {
 //     try {
@@ -32,8 +32,8 @@
 // };
 
 const User = require("../models/userModel");
-
-const SERVER_BASE = process.env.SCRIPT_BASE_URL || "http://localhost:4004";
+const API_BASE_URL = process.env.API_BASE_URL || "";
+const SERVER_BASE = API_BASE_URL || "http://localhost:4004";
 
 exports.generateScriptTag = async (req, res) => {
   try {
@@ -65,4 +65,3 @@ exports.generateScriptTag = async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 };
-
