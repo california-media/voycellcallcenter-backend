@@ -1,9 +1,9 @@
 const axios = require("axios");
 const User = require("../models/userModel");
 
-const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL;
-const YEASTAR_SDK_ACCESS_ID = process.env.YEASTAR_SDK_ACCESS_ID;
-const YEASTAR_SDK_ACCESS_KEY = process.env.YEASTAR_SDK_ACCESS_KEY;
+const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL?.trim();
+const YEASTAR_SDK_ACCESS_ID = process.env.YEASTAR_SDK_ACCESS_ID?.trim();
+const YEASTAR_SDK_ACCESS_KEY = process.env.YEASTAR_SDK_ACCESS_KEY?.trim();
 
 /**
  * Get valid access token for Linkus SDK API calls
@@ -11,24 +11,28 @@ const YEASTAR_SDK_ACCESS_KEY = process.env.YEASTAR_SDK_ACCESS_KEY;
 async function getValidToken() {
   // Request new token using SDK AccessID and AccessKey
   console.log("🔐 Requesting new Linkus SDK access token...");
+  try {
+    const response = await axios.post(`${YEASTAR_BASE_URL}/get_token`, {
+      username: YEASTAR_SDK_ACCESS_ID,
+      password: YEASTAR_SDK_ACCESS_KEY,
+    });
 
-  const response = await axios.post(`${YEASTAR_BASE_URL}/get_token`, {
-    username: YEASTAR_SDK_ACCESS_ID,
-    password: YEASTAR_SDK_ACCESS_KEY,
-  });
+    const data = response.data;
 
-  const data = response.data;
+    if (data.errcode !== 0) {
+      throw new Error(data.errmsg || "Failed to get access token");
+    }
 
-  if (data.errcode !== 0) {
-    throw new Error(data.errmsg || "Failed to get access token");
+    const access_token = data.access_token;
+    const refresh_token = data.refresh_token;
+    const expires_in = data.access_token_expire_time || 1800;
+
+    console.log("✅ Linkus SDK access token obtained");
+    return access_token;
+  } catch (err) {
+    console.error("❌ Failed to get access token:", err.message);
+    throw new Error("Failed to get access token");
   }
-
-  const access_token = data.access_token;
-  const refresh_token = data.refresh_token;
-  const expires_in = data.access_token_expire_time || 1800;
-
-  console.log("✅ Linkus SDK access token obtained");
-  return access_token;
 }
 
 /**

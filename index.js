@@ -320,9 +320,10 @@ const connectToDatabase = async () => {
   try {
     console.log("MongoDB URL log:", process.env.MONGO_URL);
     await mongoose.connect(process.env.MONGO_URL, {
-      maxPoolSize: 200, // allow up to 50 concurrent DB connections
-      minPoolSize: 10, // keep minimum connections ready
-      serverSelectionTimeoutMS: 5000, // fail fast if DB is unreachable
+      maxPoolSize: 200,
+      minPoolSize: 10,
+      serverSelectionTimeoutMS: 30000, // increased to 30 seconds
+      socketTimeoutMS: 45000, // socket timeout 45 seconds
     });
     isConnected = true;
     console.log("✅ MongoDB connected successfully");
