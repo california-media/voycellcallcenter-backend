@@ -54,6 +54,10 @@ exports.serveCallmeJS = async (req, res) => {
         </div>
         <button id="makeCallBtn">${calltoaction}</button>
         <div id="countdown" class="countdown"></div>
+        <div style="margin-top: 10px; font-size: 12px; color: #555; display: flex; align-items: center; justify-content: center;">
+          <img src="${API_BASE_URL}/favicon.webp" alt="Voycell Logo" style="width: 16px; height: 16px; margin-right: 5px; margin-bottom: 2px;" />
+          Powered by Voycell.com
+        </div>
       </div>
     \`;
     document.body.appendChild(overlay);

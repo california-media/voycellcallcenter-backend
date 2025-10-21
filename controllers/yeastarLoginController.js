@@ -1,5 +1,6 @@
 const axios = require("axios");
 const User = require("../models/userModel");
+const YeastarToken = require("../models/YeastarToken");
 
 const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL?.trim();
 const YEASTAR_SDK_ACCESS_ID = process.env.YEASTAR_SDK_ACCESS_ID?.trim();
@@ -7,11 +8,30 @@ const YEASTAR_SDK_ACCESS_KEY = process.env.YEASTAR_SDK_ACCESS_KEY?.trim();
 
 /**
  * Get valid access token for Linkus SDK API calls
+ * Uses cached token from DB if still valid, otherwise requests new one
  */
 async function getValidToken() {
-  // Request new token using SDK AccessID and AccessKey
-  console.log("🔐 Requesting new Linkus SDK access token...");
   try {
+    // Try to get existing token from database
+    const existingToken = await YeastarToken.findOne().sort({ created_at: -1 });
+
+    // Check if token exists and is not expired (with 5 minute buffer)
+    if (existingToken) {
+      const expiryTime =
+        new Date(existingToken.created_at).getTime() +
+        (existingToken.expires_in - 300) * 1000;
+      const isExpired = Date.now() > expiryTime;
+
+      if (!isExpired) {
+        console.log("✅ Using cached Linkus SDK access token from database");
+        return existingToken.access_token;
+      } else {
+        console.log("⏰ Cached token expired, requesting new one...");
+      }
+    }
+
+    // Request new token using SDK AccessID and AccessKey
+    console.log("🔐 Requesting new Linkus SDK access token...");
     const response = await axios.post(`${YEASTAR_BASE_URL}/get_token`, {
       username: YEASTAR_SDK_ACCESS_ID,
       password: YEASTAR_SDK_ACCESS_KEY,
@@ -27,7 +47,17 @@ async function getValidToken() {
     const refresh_token = data.refresh_token;
     const expires_in = data.access_token_expire_time || 1800;
 
-    console.log("✅ Linkus SDK access token obtained");
+    // Save new token to database (delete old tokens first)
+    await YeastarToken.deleteMany({});
+    await YeastarToken.create({
+      access_token,
+      refresh_token,
+      expires_in,
+    });
+
+    console.log(
+      "✅ New Linkus SDK access token obtained and cached in database"
+    );
     return access_token;
   } catch (err) {
     console.error("❌ Failed to get access token:", err.message);
