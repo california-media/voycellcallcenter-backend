@@ -121,7 +121,7 @@ app.use(
   yeastarLoginRoutes
 );
 app.use("/api/script", scriptRoutes); // script generation (auth)
-app.use("/calling_system", callmeServeRoute); // serves callme.js (no auth)
+app.use("/voycell_callback", callmeServeRoute); // serves callme.js (no auth)
 // Serve static files (for accessing uploaded images)
 // app.use("/editProfile", checkForAuthentication(), editProfileRoutes);
 app.use(
