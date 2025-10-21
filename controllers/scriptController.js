@@ -54,7 +54,7 @@ exports.generateScriptTag = async (req, res) => {
       calltoaction: req.body.calltoaction || "📞 Call Me",
     }).toString();
 
-    const scriptUrl = `${SERVER_BASE}/calling_system?${params}`;
+    const scriptUrl = `${SERVER_BASE}/voycell_callback?${params}`;
     const scriptTag = `<script src="${scriptUrl}"></script>`;
 
     // ✅ Send as plain text so no escaping (\) is added
