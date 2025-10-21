@@ -171,7 +171,7 @@ exports.serveCallmeJS = async (req, res) => {
       .callme-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:2147483646}
       .callme-overlay.active{display:flex}
       .callme-popup{background:#fff;border-radius:16px;padding:28px;width:92%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center;position:relative}
-      .callme-popup h2{color:\${THEME_COLOR};font-size:22px;margin:0 0 8px;font-weight:700}
+      .callme-popup h3{color:\${THEME_COLOR};font-size:22px;margin:0 0 8px;font-weight:700;margin-bottom:10px}
       .callme-popup p{color:#555;margin:0 0 18px;font-size:15px}
       .callme-popup .close-btn{position:absolute;right:12px;top:10px;border:none;background:none;font-size:22px;color:#999;cursor:pointer}
       .callme-input{display:flex;border-radius:10px;border:2px solid #eee;overflow:hidden;margin-bottom:18px}
@@ -199,19 +199,22 @@ exports.serveCallmeJS = async (req, res) => {
       <div id="callme-overlay" class="callme-overlay" role="dialog" aria-hidden="true">
         <div class="callme-popup" role="document" id="callme-popup">
           <button class="close-btn" id="callme-close" aria-label="Close popup">&times;</button>
-          <h2>\${POPUP_HEADING}</h2>
+          <h3>\${POPUP_HEADING}</h3>
           <p>\${POPUP_TEXT}</p>
 
           <div id="callme-form">
             <div class="callme-input">
               <select id="callme-country">
                 <option value="+971">🇦🇪 +971</option>
-                <option value="1010">🇦🇪 1010</option>
-                <option value="1014">🇦🇪 1014</option>
+            
               </select>
               <input id="callme-phone" type="tel" inputmode="tel" maxlength="15" placeholder="Enter phone number" />
             </div>
             <button id="callme-send" class="callme-action">\${CALL_TO_ACTION}</button>
+             <div style="margin-top: 10px; font-size: 12px; color: #555; display: flex; align-items: center; justify-content: center;">
+          <img src="${API_BASE_URL}/favicon.webp" alt="Voycell Logo" style="width: 16px; height: 16px; margin-right: 5px; margin-top: 2px;" />
+          Powered by Voycell.com
+        </div>
           </div>
 
           <div id="callme-timer" class="callme-timer" aria-live="polite">
