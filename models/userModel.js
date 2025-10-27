@@ -84,6 +84,17 @@ const userSchema = new Schema(
       },
     },
 
+    popupSettings: {
+      themeColor: { type: String, default: "#4CAF50" },
+      popupHeading: { type: String, default: "📞 Request a Call Back" },
+      popupText: {
+        type: String,
+        default: "Enter your phone number and we’ll call you back in 30 seconds!",
+      },
+      calltoaction: { type: String, default: "📞 Call Me" },
+    },
+
+
     extensionNumber: { type: String, default: null },
     yeastarExtensionId: { type: String, default: null }, // whatever PBX returns as id
     sipSecret: { type: String, default: null }, // store the extension secret if needed
@@ -273,7 +284,7 @@ userSchema.static(
     const query = email
       ? { email }
       : // : { phonenumbers: { $in: [phonenumber] } }; // assuming you store phone numbers as array
-        { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
+      { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
 
     const user = await this.findOne(query);
     if (!user) throw new Error("User not found");
