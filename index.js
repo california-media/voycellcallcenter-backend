@@ -26,82 +26,28 @@ console.log("Connecting to MongoDB...");
 
 const userRoutes = require("./routes/userRoutes");
 const yeastarRoutes = require("./routes/yeastarRoutes");
-
 ////for linkux web UI login signature
 const yeastarLoginRoutes = require("./routes/yeastarLoginRoutes");
 const scriptRoutes = require("./routes/scriptRoutes");
 const callmeServeRoute = require("./routes/callmeServeRoute");
-// const yeastarRoutes = require('./routes/yeastar');
-// const yeastarCallRoutes = require("./routes/yeastarCallRoutes");
 const editProfileRoutes = require("./routes/editProfileRoutes");
-// const contactRoutes = require("./routes/contactRoutes");
-// const assignedContactTag = require("./routes/assignedContactTag");
-// const getContactRoutes = require("./routes/getContactRoutes");
-// const getContactEmailRoutes = require("./routes/getContactEmailRoutes");
-// const getProfileEventRoutes = require("./routes/getProfileEventRoutes");
-// const deleteContactRoutes = require("./routes/deleteContactRoutes");
-// const deleteTaskRoutes = require("./routes/deleteTaskRoutes");
-// const deleteMeetingRoutes = require("./routes/deleteMeetingRoutes");
-// const deleteTemplateRoutes = require("./routes/deleteTemplateRoutes");
-// const deleteUserRoutes = require("./routes/deleteUserRoutes");
-// const addTagRoutes = require("./routes/addTagRoutes");
-// const editTagRoutes = require("./routes/editTagRoutes");
-// const getTagRoutes = require("./routes/getTagRoutes");
-// const getTagWithContact = require("./routes/getTagWithContactRoutes");
 const getUserRoutes = require("./routes/getUserRoutes");
-// const deleteTagRoutes = require("./routes/deleteTagRoutes");
-// const addToFavouriteRoutes = require("./routes/addToFavouriteRoutes");
-// const signRoutes = require("./routes/signRoutes");
 const emailPasswordResetRoutes = require("./routes/emailPasswordResetRoutes");
-// const phoneNumberPasswordResetRoutes = require("./routes/phoneNumberPasswordResetRoutes");
-// const changePasswordRoutes = require("./routes/changePasswordRoutes");
+const addEditContactLeadsRoutes = require("./routes/addEditContact&LeadsRoutes");
+const getAllContactsOrLeadsRoutes = require("./routes/getAllContactsOrLeadsRoutes");
 const { checkForAuthentication } = require("./middlewares/authentication");
 const checkRole = require("./middlewares/roleCheck");
-// const scanRoutes = require("./routes/scanRoutes");
-// const getScanDataRoutes = require("./routes/getScanDataRoutes");
-// const reminderRoutes = require("./routes/reminderRoutes");
-// const userInfoRoutes = require("./routes/userInfoRoutes");
-// const getUserCardRoutes = require("./routes/getUserCardRoutes");
-// const accountConnect = require("./routes/accountConnectRoutes");
-// const disconnectAccountRoutes = require("./routes/disconnectAccountRoutes");
-// const sendEmail = require("./routes/sendEmailRoutes");
-// const checkEmailPhoneDuplicate = require("./routes/checkEmailPhoneRoutes");
-// const saveBulkContactsRoutes = require("./routes/saveBulkContactsRoutes");
-// const getContactByIdRoutes = require("./routes/getContactByIdRoutes");
-// const getAllContactRoutes = require("./routes/getAllContactRoutes");
-// const getContactActivitiesRoutes = require("./routes/getActivityRoutes");
-// const fetchGoogleContacts = require("./routes/googleContactFatchRoutes");
-// const fetchLinkedInContacts = require("./routes/linkedinConnectionFetchRoutes");
-// const deleteAllContactRoutes = require("./routes/deleteAllContactRoutes");
-// const whatsappEmailActivityRoutes = require("./routes/whatsappEmailActivityRoutes");
-// const hubSpotContactFetchRoutes = require("./routes/hubSpotContactFetchRoutes");
-// const zohoContactFetchRoutes = require("./routes/zuhuContactFetchRoutes");
-// const myReferralsRoutes = require("./routes/getMyReferralsRoutes");
-// const helpSupportRoutes = require("./routes/helpSupportRoutes");
-// const planRoutes = require("./routes/planRoutes");
-// const paymentRoutes = require("./routes/paymentRoutes");
-// const apiKeyRoutes = require("./routes/apiKeyRoutes");
 const { error } = require("console");
 const PORT = process.env.PORT || 3003;
 
 //for admin routes
 const adminLoginRoutes = require("./routes/admin/adminLoginRoute");
-// const adminUserRoutes = require("./routes/admin/adminUserRoutes");
-// const adminPlansRoutes = require("./routes/admin/adminPlansRoutes");
-// const addEditPlanRoutes = require("./routes/admin/addEditPlanRoutes");
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
-// const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
-// const adminCouponsRoutes = require("./routes/admin/adminCouponsRoutes");
-// const testRoutes = require("./routes/testRoutes");
-// const webhookRoutes = require("./routes/webhookRoutes");
 
 console.log("Setting up Express app...");
 
 app.use(cors());
 
-// Webhook routes must be defined before JSON parsing middleware
-// because Stripe needs raw body for signature verification
-// app.use("/webhooks", webhookRoutes);
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -109,196 +55,24 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(express.static(path.resolve("./public")));
 app.use("/user", userRoutes);
 // app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-// app.use("/api/yeastar", yeastarRoutes);
-// app.use("/yeastar", yeastarCallRoutes);
+
 
 console.log("Setting up routes...");
 app.use("/api/yeastar", express.json(), yeastarRoutes);
-app.use(
-  "/api/yeastar-login",
-  express.json(),
-  checkForAuthentication(),
-  yeastarLoginRoutes
-);
+app.use("/api/yeastar-login", express.json(), checkForAuthentication(), yeastarLoginRoutes);
 app.use("/api/script", scriptRoutes); // script generation (auth)
 app.use("/voycell_callback", callmeServeRoute); // serves callme.js (no auth)
-// Serve static files (for accessing uploaded images)
-// app.use("/editProfile", checkForAuthentication(), editProfileRoutes);
-app.use(
-  "/editProfile",
-  checkForAuthentication(),
-  upload.single("profileImage"),
-  editProfileRoutes
-);
-// app.use("/deleteContact", deleteContactRoutes);
-// app.use("/deleteUser", checkForAuthentication(), deleteUserRoutes);
-// app.use("/deleteTask", checkForAuthentication(), deleteTaskRoutes);
-// app.use("/deleteMeeting", checkForAuthentication(), deleteMeetingRoutes);
-// app.use("/deleteTemplate", checkForAuthentication(), deleteTemplateRoutes);
+app.use("/editProfile", checkForAuthentication(), upload.single("profileImage"), editProfileRoutes);
 app.use("/getUser", checkForAuthentication(), getUserRoutes);
-// app.use("/addTag", checkForAuthentication(), addTagRoutes);
-// app.use("/editTag", checkForAuthentication(), editTagRoutes);
-// app.use("/getTag", checkForAuthentication(), getTagRoutes);
-// app.use("/getTagWithContact", checkForAuthentication(), getTagWithContact);
-// app.use("/deleteTag", checkForAuthentication(), deleteTagRoutes);
-// app.use("/addToFavourite", checkForAuthentication(), addToFavouriteRoutes);
-// app.use("/getContact", checkForAuthentication(), getContactRoutes);
-// app.use("/getContactEmail", checkForAuthentication(), getContactEmailRoutes);
-// app.use("/getProfileEvent", checkForAuthentication(), getProfileEventRoutes);
-// // app.use("/googleConnect", checkForAuthentication(), googleConnect);
-// app.use("/my-referrals", checkForAuthentication(), myReferralsRoutes);
-// app.use(
-//   "/connect",
-//   (req, res, next) => {
-//     const skipAuthPaths = ["/google-callback", "/microsoft-callback"];
-//     if (skipAuthPaths.includes(req.path)) {
-//       return next(); // No token required for callback
-//     }
-//     return checkForAuthentication()(req, res, next);
-//   },
-//   accountConnect
-// );
-
-// app.use(
-//   "/addEditContact",
-//   checkForAuthentication(),
-//   upload.single("contactImage"),
-//   contactRoutes
-// );
-// app.use("/assign-unassign-tag", checkForAuthentication(), assignedContactTag);
-// app.use("/disconnect", checkForAuthentication(), disconnectAccountRoutes);
-// app.use("/sign", checkForAuthentication(), signRoutes);
 app.use("/email", emailPasswordResetRoutes);
-// app.use("/phoneNumber", phoneNumberPasswordResetRoutes);
-// app.use("/changePassword", checkForAuthentication(), changePasswordRoutes);
-// app.use("/scan", scanRoutes);
-// app.use("/scan/get_data", checkForAuthentication(), getScanDataRoutes);
-// app.use("/sendEmail", checkForAuthentication(), sendEmail);
-// app.use("/reminders", checkForAuthentication(), reminderRoutes);
-// app.use("/user-info", checkForAuthentication(), userInfoRoutes);
-// app.use("/shareProfile", getUserCardRoutes);
-// app.use(
-//   "/check-duplicate-user",
-//   checkForAuthentication(),
-//   checkEmailPhoneDuplicate
-// );
-// app.use(
-//   "/save-bulk-contacts",
-//   checkForAuthentication(),
-//   saveBulkContactsRoutes
-// );
-// app.use("/getContactById", checkForAuthentication(), getContactByIdRoutes);
-// app.use("/getAllContact", checkForAuthentication(), getAllContactRoutes);
-// app.use(
-//   "/getContactActivities",
-//   checkForAuthentication(),
-//   getContactActivitiesRoutes
-// );
-// app.use("/deleteAllContacts", checkForAuthentication(), deleteAllContactRoutes);
-// // app.use("/fetch-google-contacts", checkForAuthentication(), fetchGoogleContacts);
-// app.use(
-//   "/whatsapp-email-activity",
-//   checkForAuthentication(),
-//   whatsappEmailActivityRoutes
-// );
-// app.use(
-//   "/help-support",
-//   checkForAuthentication(),
-//   upload.single("helpAndSupportAttachments"),
-//   helpSupportRoutes
-// );
-// app.use("/plans", planRoutes); // Public route for getting plans
-// app.use("/user/payment", checkForAuthentication(), paymentRoutes);
-// app.use("/api-key", checkForAuthentication(), apiKeyRoutes);
-// app.use(
-//   "/fetch-google-contacts",
-//   (req, res, next) => {
-//     const skipAuthPaths = ["/google/callback"];
-//     if (skipAuthPaths.includes(req.path)) {
-//       return next(); // No token required for callback
-//     }
-//     return checkForAuthentication()(req, res, next);
-//   },
-//   fetchGoogleContacts
-// );
+app.use("/addEditContactLeads", checkForAuthentication(), addEditContactLeadsRoutes);
+app.use("/getAllContactsOrLeads", checkForAuthentication(), getAllContactsOrLeadsRoutes);
 
-// app.use(
-//   "/fetch-linkedin-contacts",
-//   (req, res, next) => {
-//     const skipAuthPaths = ["/linkedin/callback"];
-//     if (skipAuthPaths.includes(req.path)) {
-//       return next(); // No token required for callback
-//     }
-//     return checkForAuthentication()(req, res, next);
-//   },
-//   fetchLinkedInContacts
-// );
-
-// app.use(
-//   "/fetch-hubspot-contacts",
-//   (req, res, next) => {
-//     const skipAuthPaths = ["/hubspot/callback"];
-//     if (skipAuthPaths.includes(req.path)) {
-//       return next(); // No token required for callback
-//     }
-//     return checkForAuthentication()(req, res, next);
-//   },
-//   hubSpotContactFetchRoutes
-// );
-
-// app.use(
-//   "/fetch-zoho-contacts",
-//   (req, res, next) => {
-//     const skipAuthPaths = ["/zoho/callback"];
-//     if (skipAuthPaths.includes(req.path)) {
-//       return next(); // No token required for callback
-//     }
-//     return checkForAuthentication()(req, res, next);
-//   },
-//   zohoContactFetchRoutes
-// );
-
-// //for admin routes
-// app.use(
-//   "/admin/users",
-//   checkForAuthentication(),
-//   checkRole(["superadmin"]),
-//   adminUserRoutes
-// );
-// app.use(
-//   "/admin/plans",
-//   checkForAuthentication(),
-//   checkRole(["superadmin"]),
-//   adminPlansRoutes
-// );
-
+// Admin routes
 app.use("/admin/login", adminLoginRoutes);
-// app.use(
-//   "/admin/addEditPlan",
-//   checkForAuthentication(),
-//   checkRole(["superadmin"]),
-//   addEditPlanRoutes
-// );
-// app.use(
-//   "/admin/help-support",
-//   checkForAuthentication(),
-//   checkRole(["superadmin"]),
-//   adminHelpSupportRoutes
-// );
-// app.use(
-//   "/admin/coupons",
-//   checkForAuthentication(),
-//   checkRole(["superadmin"]),
-//   adminCouponsRoutes
-// );
+app.use("/admin", checkForAuthentication(), checkRole(["superadmin"]), getAdminDetailsRoutes);
 
-// app.use("/test", testRoutes);
-app.use(
-  "/admin",
-  checkForAuthentication(),
-  checkRole(["superadmin"]),
-  getAdminDetailsRoutes
-);
+
 
 app.use("/check", (req, res) => {
   res.json({ message: "API checkPage" });
@@ -335,7 +109,6 @@ const connectToDatabase = async () => {
 
 // ------------------- SOCKET HANDLER -------------------
 const http = require("http");
-// const { startPlanExpiryScheduler } = require("./utils/planScheduler");
 
 // ------------------- START APP -------------------
 (async () => {
