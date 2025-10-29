@@ -69,13 +69,15 @@ exports.generateScriptTag = async (req, res) => {
     await user.save();
 
     // Generate secure token
-    const path = crypto.randomBytes(16).toString("hex");
+    const token = crypto.randomBytes(16).toString("hex");
 
     await ScriptToken.create({
-      path,
+      token,
       userId,
       extensionNumber: user.extensionNumber,
     });
+
+    const path = `${token}.js`;
 
     // This will be your *public safe URL*
     //for local
