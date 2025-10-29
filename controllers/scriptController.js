@@ -77,14 +77,14 @@ exports.generateScriptTag = async (req, res) => {
       extensionNumber: user.extensionNumber,
     });
 
-    const path = `${token}.js`;
+    // const path = `${token}`;
 
     // This will be your *public safe URL*
     //for local
     // const scriptUrl = `${SERVER_BASE}/voycell_callback/${token}.js`;
 
     //for live
-    const scriptUrl = `${FRONTEND_BASE}/voycell_callback/${path}`;
+    const scriptUrl = `${FRONTEND_BASE}/voycell_callback/${token}`;
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.status(200).send(`<script src="${scriptUrl}"></script>`);
