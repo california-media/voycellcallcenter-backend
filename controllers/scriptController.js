@@ -69,10 +69,10 @@ exports.generateScriptTag = async (req, res) => {
     await user.save();
 
     // Generate secure token
-    const token = crypto.randomBytes(16).toString("hex");
+    const path = crypto.randomBytes(16).toString("hex");
 
     await ScriptToken.create({
-      token,
+      path,
       userId,
       extensionNumber: user.extensionNumber,
     });
@@ -82,7 +82,7 @@ exports.generateScriptTag = async (req, res) => {
     // const scriptUrl = `${SERVER_BASE}/voycell_callback/${token}.js`;
 
     //for live
-    const scriptUrl = `${FRONTEND_BASE}/voycell_callback/${token}.js`;
+    const scriptUrl = `${FRONTEND_BASE}/voycell_callback/${path}`;
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.status(200).send(`<script src="${scriptUrl}"></script>`);
