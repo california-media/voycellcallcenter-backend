@@ -258,11 +258,14 @@
 const { Buffer } = require("buffer");
 // ① ADD: import your User model
 const User = require("../models/userModel");
+const ScriptToken = require("../models/ScriptToken");
 
 exports.serveCallmeJS = async (req, res) => {
   // Query params the widget accepts (all optional)
+  const { token } = req.params;
+
   const {
-    ext = "",
+    // ext = "",
     themeColor: themeColorQuery = "#4CAF50",
     popupHeading: popupHeadingQuery = "📞 Request a Call Back",
     popupText: popupTextQuery = "Enter your phone number and we’ll call you back in 30 seconds!",
@@ -270,19 +273,36 @@ exports.serveCallmeJS = async (req, res) => {
   } = req.query;
 
   // Decode extension (client supplies base64 via ?ext=...)
-  const decodedExt = Buffer.from(ext, "base64").toString("utf8");
+  // const decodedExt = Buffer.from(ext, "base64").toString("utf8");
+
+  // Look up token document to find user + extension
+  const tokenDoc = await ScriptToken.findOne({ token }).lean();
+
+  if (!tokenDoc) {
+    return res.status(404).send("// Invalid or expired widget token");
+  }
+
+  const decodedExt = tokenDoc.extensionNumber; // this replaces your base64 decoded ext
+
 
   // ② ADD: Look up user by extensionNumber in DB
-  let user = null;
+  // let user = null;
 
-  try {
-    if (decodedExt) {
-      user = await User.findOne({ extensionNumber: decodedExt }).lean();
-    }
-  } catch (dbErr) {
-    console.error("[serveCallmeJS] DB lookup failed:", dbErr);
-    // continue — we'll fall back to query params
+  // try {
+  //   if (decodedExt) {
+  //     user = await User.findOne({ extensionNumber: decodedExt }).lean();
+  //   }
+  // } catch (dbErr) {
+  //   console.error("[serveCallmeJS] DB lookup failed:", dbErr);
+  //   // continue — we'll fall back to query params
+  // }
+
+  // Find user who owns this token
+  const user = await User.findById(tokenDoc.userId).lean();
+  if (!user) {
+    return res.status(404).send("// User not found for this token");
   }
+
 
   // const user = await User.findById(userId);
   // const decodedExt = user.extensionNumber;
