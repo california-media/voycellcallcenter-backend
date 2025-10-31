@@ -84,6 +84,10 @@ exports.generateScriptTag = async (req, res) => {
     user.popupSettings = {
       themeColor:
         req.body.themeColor || user.popupSettings?.themeColor || "#4CAF50",
+      headingColor:
+        req.body.headingColor || user.popupSettings?.headingColor || "#4CAF50",
+      floatingButtonColor:
+        req.body.floatingButtonColor || user.popupSettings?.floatingButtonColor || "#4CAF50",
       popupHeading:
         req.body.popupHeading ||
         user.popupSettings?.popupHeading ||
