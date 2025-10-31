@@ -92,6 +92,11 @@ const userSchema = new Schema(
         default: "Enter your phone number and we’ll call you back in 30 seconds!",
       },
       calltoaction: { type: String, default: "📞 Call Me" },
+      // Add this near popupSettings in userSchema
+      allowedOrigin: {
+        type: String,
+        default: "", // store the website URL (origin) where the script is allowed, e.g. "https://example.com"
+      },
     },
 
 

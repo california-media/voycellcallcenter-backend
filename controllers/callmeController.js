@@ -303,6 +303,41 @@ exports.serveCallmeJS = async (req, res) => {
     return res.status(404).send("// User not found for this token");
   }
 
+ function requestOriginMatches(req, allowedOrigin) {
+  if (!allowedOrigin) return true; // if no restriction set at all
+
+  console.log(allowedOrigin);
+  
+
+  const allowed = allowedOrigin.trim().replace(/\/+$/, "").toLowerCase();
+
+  const referer = (req.get("referer") || req.get("referrer") || "")
+    .split("#")[0]
+    .split("?")[0]
+    .trim()
+    .toLowerCase();
+
+  const originHeader = (req.get("origin") || "").trim().toLowerCase();
+
+  // If no origin or referer at all, block (e.g., file://)
+  if (!originHeader && !referer) {
+    return false; // 🚫 disallow if no headers
+  }
+
+  if (originHeader && originHeader.startsWith(allowed)) return true;
+  if (referer && referer.startsWith(allowed)) return true;
+
+  return false; // 🚫 disallow all other cases
+}
+
+
+  if (tokenDoc.allowedOrigin && !requestOriginMatches(req, tokenDoc.allowedOrigin)) {
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    return res
+      .status(403)
+      .send(`// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOrigin}`);
+  }
+
 
   // const user = await User.findById(userId);
   // const decodedExt = user.extensionNumber;
