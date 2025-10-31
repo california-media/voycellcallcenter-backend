@@ -41,7 +41,7 @@ const User = require("../models/userModel");
 const API_BASE_URL = process.env.API_BASE_URL || "";
 const SERVER_BASE = API_BASE_URL || "http://localhost:4004";
 // Public frontend domain where widget will be embedded
-const FRONTEND_BASE = "https://voycell-call-center-admin-frontend.vercel.app";
+const FRONTEND_BASE = "https://voycellcallcenter.vercel.app";
 
 // // (Keep API base for backend usage if needed)
 // const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:4004";

@@ -6,7 +6,7 @@ const {
   unifiedLogin,
   resendVerificationLink,
   logoutUser
-} = require("../controllers/userControllers");
+} = require("../controllers/companyAdminAuthController");
 
 const router = Router();
 

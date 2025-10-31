@@ -23,7 +23,7 @@ const yeastarTokenSchema = new mongoose.Schema(
     access_token: { type: String, required: true },
     refresh_token: { type: String, required: true },
     expires_in: { type: Number, required: true, default: 7200 }, // lifespan in seconds
-    expires_at: { type: Date, required: true }, // exact expiry timestamp
+    expires_at: { type: Date, required: false }, // exact expiry timestamp
     created_at: { type: Date, default: Date.now },
   },
   { timestamps: true }

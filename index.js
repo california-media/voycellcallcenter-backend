@@ -16,15 +16,15 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 const mongoose = require("mongoose");
-// const v1Router = express.Router();
 const serverless = require("serverless-http");
 
-// const swaggerUi = require("swagger-ui-express");
-// const swaggerDocs = require("./swaggerConfig");
 
 console.log("Connecting to MongoDB...");
-
-const userRoutes = require("./routes/userRoutes");
+const { checkForAuthentication } = require("./middlewares/authentication");
+const checkRole = require("./middlewares/roleCheck");
+const { error } = require("console");
+const PORT = process.env.PORT || 3003;
+const userRoutes = require("./routes/companyAdminAuthRoutes");
 const yeastarRoutes = require("./routes/yeastarRoutes");
 ////for linkux web UI login signature
 const yeastarLoginRoutes = require("./routes/yeastarLoginRoutes");
@@ -35,14 +35,12 @@ const getUserRoutes = require("./routes/getUserRoutes");
 const emailPasswordResetRoutes = require("./routes/emailPasswordResetRoutes");
 const addEditContactLeadsRoutes = require("./routes/addEditContact&LeadsRoutes");
 const getAllContactsOrLeadsRoutes = require("./routes/getAllContactsOrLeadsRoutes");
-const { checkForAuthentication } = require("./middlewares/authentication");
-const checkRole = require("./middlewares/roleCheck");
-const { error } = require("console");
-const PORT = process.env.PORT || 3003;
+const contactAndLeadStatusPiplineRoutes = require("./routes/contactAndLeadStatusPiplineRoutes");
 
 //for admin routes
-const adminLoginRoutes = require("./routes/admin/adminLoginRoute");
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
+const adminUserRoutes = require("./routes/admin/adminUserRoutes");
+const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
 
 console.log("Setting up Express app...");
 
@@ -67,11 +65,12 @@ app.use("/getUser", checkForAuthentication(), getUserRoutes);
 app.use("/email", emailPasswordResetRoutes);
 app.use("/addEditContactLeads", checkForAuthentication(), addEditContactLeadsRoutes);
 app.use("/getAllContactsOrLeads", checkForAuthentication(), getAllContactsOrLeadsRoutes);
+app.use("/contactAndLeadStatusPipline", checkForAuthentication(), contactAndLeadStatusPiplineRoutes);
 
 // Admin routes
-app.use("/admin/login", adminLoginRoutes);
+app.use("/admin/user/verify", adminUserVerifyRoutes);
+app.use("/admin/user", checkForAuthentication(), checkRole(["companyAdmin"]), adminUserRoutes);
 app.use("/admin", checkForAuthentication(), checkRole(["superadmin"]), getAdminDetailsRoutes);
-
 
 
 app.use("/check", (req, res) => {

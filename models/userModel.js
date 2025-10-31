@@ -4,18 +4,12 @@ const { createTokenforUser } = require("../services/authentication");
 
 const userSchema = new Schema(
   {
-    // serialNumber: {
-    //   type: String,
-    //   unique: true,
-    //   required: true,
-    //   default: "", // Avoids null
-    // },
 
-    firstname: {
+    firstName: {
       type: String,
       // default: "Dummy Firstname",
     },
-    lastname: {
+    lastName: {
       type: String,
       // default: "Dummy Lastname",
     },
@@ -47,8 +41,14 @@ const userSchema = new Schema(
 
     role: {
       type: String,
-      enum: ["user", "superadmin"],
+      enum: ["user", "companyAdmin", "superadmin"],
       default: "user",
+    },
+
+    createdByWhichCompanyAdmin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "companyAdmin", // reference to the company admin user who created this user
+      default: null,
     },
 
     trialStart: { type: Date },
@@ -120,13 +120,22 @@ const userSchema = new Schema(
       type: String,
       // required: true,
     },
+    // password: {
+    //   type: String,
+    //   required: function () {
+    //     // Only require password for local users
+    //     return !this.provider || this.provider === "local";
+    //   },
+    // },
+
     password: {
       type: String,
       required: function () {
-        // Only require password for local users
-        return !this.provider || this.provider === "local";
+        // ✅ Only require password if the user is completing signup, not being added by admin
+        return this.isVerified && (!this.provider || this.provider === "local");
       },
     },
+
 
     linkedin: {
       type: String,

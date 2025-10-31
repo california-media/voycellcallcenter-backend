@@ -15,14 +15,14 @@ const transporter = nodemailer.createTransport({
 
 const sendVerificationEmail = async (email, link) => {
     const mailOptions = {
-        from: '"Contacts Management" <noreply@contacts.management>',
+        from: '"VoyCell Call Center" <noreply@contacts.management>',
         to: email,
-        subject: "Contacts.Management : Verify Your E-mail",
+        subject: "voyCell : Verify Your E-mail",
         html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>Verify Your Contacts Management Account</title>
+    <title>Verify Your VoyCell Call Center Account</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -77,11 +77,11 @@ const sendVerificationEmail = async (email, link) => {
 <body>
     <div class="container">
 
-        <center> <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logoWithName.png"
-                    alt="Contacts Management Logo" style="width:200px; display:block;"></center>
+        <center> <img src="https://voycell-call-center-admin-frontend.vercel.app/assets/img/voycell-logo.webp"
+                    alt="VoyCell Call Center Logo" style="width:200px; display:block;"></center>
         <p><strong>Hello,</strong></p>
         
-        <p>Congratulations on creating your <strong>Contacts Management CRM</strong> account — a powerful step toward
+        <p>Congratulations on creating your <strong>VoyCell Call Center CRM</strong> account — a powerful step toward
             organizing, connecting, and growing your professional network.</p>
 
         <p>To ensure the security of your account and activate all features, please verify your email address:</p>
@@ -89,8 +89,6 @@ const sendVerificationEmail = async (email, link) => {
         <p><span style="font-size:18px;">👉</span> <a href="${link}" style="color:#007bff;text-decoration:none;">${link}</a></p>
 
         <p>We look forward to helping you along your journey!</p>
-
-        <p>If you didn't sign up for this account, please ignore this email.</p>
 
         <p>Warm regards,<br>Contacts Management</p>
 
@@ -103,8 +101,8 @@ const sendVerificationEmail = async (email, link) => {
 
             <!-- Left Column (Image) -->
             <div style="float:left; width:110px; margin-right:10px;">
-                <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logo.png"
-                    alt="Contacts Management Logo" style="width:100px; display:block;">
+                <img src="https://voycell-call-center-admin-frontend.vercel.app/assets/img/voycell-logo.webp"
+                    alt="VoyCell Call Center logo" style="width:100px; display:block;">
             </div>
 
             <!-- Right Column (Text) -->
@@ -114,7 +112,7 @@ const sendVerificationEmail = async (email, link) => {
                 <span style="color:rgb(45,49,58); font-size:14px; letter-spacing:0.25px;">Be Extraordinary,</span><br>
 
                 <span>
-                    <b>Contacts Management Team</b><br>
+                    <b>VoyCell Call Center Team</b><br>
                     <a href="https://contacts.management" target="_blank" style="color:#007BFF; text-decoration:none;">
                         https://contacts.management
                     </a>

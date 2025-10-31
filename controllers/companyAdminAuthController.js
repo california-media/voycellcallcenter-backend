@@ -20,6 +20,26 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_LOGIN_URI // e.g. https://yourapi.com/auth/google/callback
 );
 
+const disallowedEmailDomains = [
+  // "gmail.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "yahoo.com",
+  "icloud.com",
+  "aol.com",
+  "mail.com",
+  "gmx.com",
+  "protonmail.com",
+  "zoho.com",
+  "yandex.com",
+  "tutanota.com",
+  "fastmail.com",
+  "hushmail.com",
+  "inbox.com",
+  "lycos.com",
+];
+
 // Requires: User and ReferralLog models in scope.
 // Put this near top of your controller file:
 async function addOrUpdateReferral(referrerId, referredUser) {
@@ -32,9 +52,9 @@ async function addOrUpdateReferral(referrerId, referredUser) {
   // Normalize phone objects from referredUser
   const phoneObjs = Array.isArray(referredUser.phonenumbers)
     ? referredUser.phonenumbers.map((p) => ({
-        countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
-        number: (p.number || "").toString().replace(/^\+/, ""),
-      }))
+      countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
+      number: (p.number || "").toString().replace(/^\+/, ""),
+    }))
     : [];
 
   const referredIdStr = referredUser._id.toString();
@@ -152,6 +172,22 @@ const signupWithEmail = async (req, res) => {
       lastname = "",
       verifyToken = "",
     } = req.body;
+
+    // === BLOCK PUBLIC EMAIL PROVIDERS ===
+    const emailDomain = email.split("@")[1]?.toLowerCase();
+    if (!emailDomain) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid email format",
+      });
+    }
+
+    if (disallowedEmailDomains.includes(emailDomain)) {
+      return res.status(400).json({
+        status: "error",
+        message: `Registration using ${emailDomain} is not allowed. Please use your company or custom domain email.`,
+      });
+    }
 
     const referralCodeParam = req.body.referralCode || req.query.ref || "";
 
@@ -322,52 +358,12 @@ const signupWithEmail = async (req, res) => {
       lastname,
       isVerified: false,
       signupMethod: "email",
-      role: "user",
+      role: "companyAdmin",
       emailVerificationToken,
       referralCode, // 🔥 store user’s unique referral code
       isActive: true, // User is not active until email verification
       referredBy,
     });
-
-    // // REPLACEMENT: sequential Yeastar extension creation (paste here instead of old try/catch)
-    // try {
-    //   // read start and max attempts from env or default
-    //   const startExt = parseInt(process.env.EXTENSION_START || '1001', 10);
-    //   const maxAttempts = parseInt(process.env.EXTENSION_MAX_ATTEMPTS || '500', 10);
-
-    //   // create sequentially; name uses firstname/lastname fallback to email
-    //   const nameForExtension = `${newUser.firstname || ''} ${newUser.lastname || ''}`.trim() || newUser.email;
-    //   // const { createYeastarExtensionSequential } = require('../controllers/yeastarController'); // local require in case top-level require not added
-
-    //   // const { extensionNumber, secret, result } = await createYeastarExtensionSequential({
-    //   //   startFrom: startExt,
-    //   //   maxAttempts,
-    //   //   name: nameForExtension,
-    //   // });
-
-    //   const { extensionNumber, secret, result } = await createYeastarExtensionForUser(newUser);
-
-    //   // save into user
-    //   newUser.extensionNumber = extensionNumber;
-    //   newUser.yeastarExtensionId = result?.data?.id || result?.id || null; // adjust per your PBX response
-    //   newUser.sipSecret = secret;
-    //   await newUser.save();
-
-    //   console.log('Yeastar extension created', extensionNumber, newUser.yeastarExtensionId);
-    // } catch (err) {
-    //   // important: do not fail the whole signup just because PBX failed.
-    //   // You could set a flag so a background job retries provisioning later:
-    //   try {
-    //     newUser.yeastarProvisionStatus = 'failed';
-    //     newUser.yeastarProvisionError = err.message;
-    //     await newUser.save();
-    //   } catch (saveErr) {
-    //     console.error('Failed to save provisioning error to user:', saveErr.message);
-    //   }
-    //   console.error('Yeastar extension creation failed', err.message);
-    // }
-
-    // No plan assignment here - will be done after email verification
 
     if (referredBy) {
       const referrer = await User.findById(referredBy);

@@ -83,6 +83,12 @@ const contactSchema = new Schema(
             },
         ],
 
+        status: {
+            type: String,
+            enum: ["interested", "notInterested", "called", "notValid", "contacted", "win", "lost"],
+        },
+
+
         isLead: {
             type: Boolean,
             default: false,
