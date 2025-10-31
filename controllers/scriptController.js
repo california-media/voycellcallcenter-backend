@@ -109,42 +109,81 @@ exports.generateScriptTag = async (req, res) => {
 
     await user.save();
 
-    // === 4️⃣ Check if token already exists for this user ===
-    const existingTokens = await ScriptToken.find({ userId }).lean();
+    // // === 4️⃣ Check if token already exists for this user ===
+    // const existingTokens = await ScriptToken.find({ userId }).lean();
 
-    let tokenDoc = null;
-    let token;
+    // let tokenDoc = null;
+    // let token;
 
-    if (existingTokens.length > 0) {
-      // ✅ Check if same domain already has a token
-      tokenDoc = existingTokens.find(
-        (t) =>
-          (t.allowedOrigin || "").trim().toLowerCase() === allowedOrigin
-      );
+    // if (existingTokens.length > 0) {
+    //   // ✅ Check if same domain already has a token
+    //   tokenDoc = existingTokens.find(
+    //     (t) =>
+    //       (t.allowedOrigin || "").trim().toLowerCase() === allowedOrigin
+    //   );
 
-      if (tokenDoc) {
-        // ✅ SAME DOMAIN → reuse existing token
-        token = tokenDoc.token;
-      } else {
-        // 🚀 DIFFERENT DOMAIN → create new token
-        token = crypto.randomBytes(16).toString("hex");
-        await ScriptToken.create({
-          token,
-          userId,
+    //   if (tokenDoc) {
+    //     // ✅ SAME DOMAIN → reuse existing token
+    //     token = tokenDoc.token;
+    //   } else {
+    //     // 🚀 DIFFERENT DOMAIN → create new token
+    //     token = crypto.randomBytes(16).toString("hex");
+    //     await ScriptToken.create({
+    //       token,
+    //       userId,
+    //       extensionNumber: user.extensionNumber,
+    //       allowedOrigin: allowedOrigin,
+    //     });
+    //   }
+    // } else {
+    //   // 🆕 FIRST TIME → create new token
+    //   token = crypto.randomBytes(16).toString("hex");
+    //   await ScriptToken.create({
+    //     token,
+    //     userId,
+    //     extensionNumber: user.extensionNumber,
+    //     allowedOrigin: allowedOrigin,
+    //   });
+    // }
+
+    // === 4️⃣ Stable-token policy: always reuse an existing token for the user ===
+    // Try to find any existing token for the user (prefer the most recent)
+    let tokenDoc = await ScriptToken.findOne({ userId }).sort({ createdAt: -1 });
+
+    // If a token exists => reuse it (do NOT create a new token)
+    // Also update the tokenDoc.allowedOrigin if caller provided allowedOrigin (overwrite)
+    if (tokenDoc) {
+      token = tokenDoc.token;
+
+      // If allowedOrigin provided and different, update the token record so it becomes valid for new origin
+      const normalizedNewOrigin = allowedOrigin || "";
+      const existingOrigin = (tokenDoc.allowedOrigin || "").trim().toLowerCase();
+      if (normalizedNewOrigin && existingOrigin !== normalizedNewOrigin) {
+        await ScriptToken.findByIdAndUpdate(tokenDoc._id, {
+          allowedOrigin: normalizedNewOrigin,
+          extensionNumber: user.extensionNumber, // keep extension current
+          updatedAt: new Date(),
+        });
+      } else if (!tokenDoc.extensionNumber || tokenDoc.extensionNumber !== user.extensionNumber) {
+        // keep extensionNumber in sync if changed
+        await ScriptToken.findByIdAndUpdate(tokenDoc._id, {
           extensionNumber: user.extensionNumber,
-          allowedOrigin: allowedOrigin,
+          updatedAt: new Date(),
         });
       }
     } else {
-      // 🆕 FIRST TIME → create new token
+      // No token for this user yet → create one and save allowedOrigin (may be empty)
       token = crypto.randomBytes(16).toString("hex");
       await ScriptToken.create({
         token,
         userId,
         extensionNumber: user.extensionNumber,
-        allowedOrigin: allowedOrigin,
+        allowedOrigin: allowedOrigin || "",
       });
+      // load tokenDoc for consistency (optional)
+      tokenDoc = await ScriptToken.findOne({ token }).lean();
     }
+
 
     // === 5️⃣ Build script URL (no .js) ===
     const scriptUrl = `${FRONTEND_BASE.replace(
