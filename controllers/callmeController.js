@@ -538,6 +538,7 @@ exports.serveCallmeJS = async (req, res) => {
 })();
 `;
 
-  res.setHeader("Content-Type", "application/javascript");
-  res.send(js);
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.status(200).send(js);
 };
