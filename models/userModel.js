@@ -87,11 +87,18 @@ const userSchema = new Schema(
     popupSettings: {
       themeColor: { type: String, default: "#4CAF50" },
       popupHeading: { type: String, default: "📞 Request a Call Back" },
+      headingColor: { type: String, default: "#4CAF50" },
+      floatingButtonColor: { type: String, default: "#4CAF50" },
       popupText: {
         type: String,
         default: "Enter your phone number and we’ll call you back in 30 seconds!",
       },
       calltoaction: { type: String, default: "📞 Call Me" },
+      // Add this near popupSettings in userSchema
+      allowedOrigin: {
+        type: String,
+        default: "", // store the website URL (origin) where the script is allowed, e.g. "https://example.com"
+      },
     },
 
 

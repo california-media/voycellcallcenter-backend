@@ -270,6 +270,8 @@ exports.serveCallmeJS = async (req, res) => {
     popupHeading: popupHeadingQuery = "📞 Request a Call Back",
     popupText: popupTextQuery = "Enter your phone number and we’ll call you back in 30 seconds!",
     calltoaction: calltoactionQuery = "📞 Call Me Now",
+    headingColor: headingColorQuery = "#4CAF50",
+    floatingButtonColor: floatingButtonColorQuery = "#4CAF50",
   } = req.query;
 
   // Decode extension (client supplies base64 via ?ext=...)
@@ -303,6 +305,41 @@ exports.serveCallmeJS = async (req, res) => {
     return res.status(404).send("// User not found for this token");
   }
 
+ function requestOriginMatches(req, allowedOrigin) {
+  if (!allowedOrigin) return true; // if no restriction set at all
+
+  console.log(allowedOrigin);
+  
+
+  const allowed = allowedOrigin.trim().replace(/\/+$/, "").toLowerCase();
+
+  const referer = (req.get("referer") || req.get("referrer") || "")
+    .split("#")[0]
+    .split("?")[0]
+    .trim()
+    .toLowerCase();
+
+  const originHeader = (req.get("origin") || "").trim().toLowerCase();
+
+  // If no origin or referer at all, block (e.g., file://)
+  if (!originHeader && !referer) {
+    return false; // 🚫 disallow if no headers
+  }
+
+  if (originHeader && originHeader.startsWith(allowed)) return true;
+  if (referer && referer.startsWith(allowed)) return true;
+
+  return false; // 🚫 disallow all other cases
+}
+
+
+  if (tokenDoc.allowedOrigin && !requestOriginMatches(req, tokenDoc.allowedOrigin)) {
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    return res
+      .status(403)
+      .send(`// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOrigin}`);
+  }
+
 
   // const user = await User.findById(userId);
   // const decodedExt = user.extensionNumber;
@@ -317,6 +354,8 @@ exports.serveCallmeJS = async (req, res) => {
   const popupHeading = (popupSettings.popupHeading && popupSettings.popupHeading.trim()) ? popupSettings.popupHeading : popupHeadingQuery;
   const popupText = (popupSettings.popupText && popupSettings.popupText.trim()) ? popupSettings.popupText : popupTextQuery;
   const calltoaction = (popupSettings.calltoaction && popupSettings.calltoaction.trim()) ? popupSettings.calltoaction : calltoactionQuery;
+  const headingColor = (popupSettings.headingColor && popupSettings.headingColor.trim()) ? popupSettings.headingColor : headingColorQuery;
+  const floatingButtonColor = (popupSettings.floatingButtonColor && popupSettings.floatingButtonColor.trim()) ? popupSettings.floatingButtonColor : floatingButtonColorQuery;
 
   // Resolve API_BASE_URL safely: prefer env var, else use same origin as the server that serves this script
   const API_BASE_URL = process.env.API_BASE_URL || (req.protocol + "://" + req.get("host"));
@@ -329,6 +368,8 @@ exports.serveCallmeJS = async (req, res) => {
   const CALLER_EXTENSION = ${JSON.stringify(decodedExt || "")};
   const THEME_COLOR = ${JSON.stringify(themeColor)};
   const POPUP_HEADING = ${JSON.stringify(popupHeading)};
+  const HEADING_COLOR = ${JSON.stringify(headingColor)};
+  const FLOATING_BUTTON_COLOR = ${JSON.stringify(floatingButtonColor)};
   const POPUP_TEXT = ${JSON.stringify(popupText)};
   const CALL_TO_ACTION = ${JSON.stringify(calltoaction)};
   const API_URL = ${JSON.stringify(apiUrl)};
@@ -371,11 +412,11 @@ exports.serveCallmeJS = async (req, res) => {
 
     const container = document.createElement('div');
     container.innerHTML = \`
-      <button id="callme-float" class="callme-btn" aria-label="Request call">📞</button>
+      <button id="callme-float" class="callme-btn" aria-label="Request call" style="background:\${FLOATING_BUTTON_COLOR}">📞</button>
       <div id="callme-overlay" class="callme-overlay" role="dialog" aria-hidden="true">
         <div class="callme-popup" role="document" id="callme-popup">
           <button class="close-btn" id="callme-close" aria-label="Close popup">&times;</button>
-          <h3>\${POPUP_HEADING}</h3>
+          <h3 style="color:\${HEADING_COLOR}">\${POPUP_HEADING}</h3>
           <p>\${POPUP_TEXT}</p>
 
           <div id="callme-form">
