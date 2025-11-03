@@ -41,7 +41,7 @@ const userSchema = new Schema(
 
     role: {
       type: String,
-      enum: ["user", "companyAdmin", "superadmin"],
+      enum: ["user", "companyAdmin", "superadmin"],  /// user here is calling agent, not modifying to prevent breaking stuff
       default: "user",
     },
 

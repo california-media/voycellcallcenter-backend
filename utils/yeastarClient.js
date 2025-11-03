@@ -424,11 +424,11 @@ async function createYeastarExtensionForUser(user) {
   const secret = generateSecret();
 
   const url = `${YEASTAR_BASE_URL}/extension/create?access_token=${token}`;
-  console.log("Creating Yeastar extension:", extensionNumber);
+  console.log("Creating Yeastar extension:", extensionNumber, user?.email);
 
   const body = {
     number: extensionNumber.toString(),
-    first_name: user.firstname || user?.email || "Voycell User", // ✅ added
+    first_name: user.firstname || user?.email + " Voycell User" || "Voycell User", // ✅ added
     last_name: user.lastname || "", // ✅ added
     caller_id_name:
       `${user.firstname || ""} ${user.lastname || ""}`.trim() || "User",

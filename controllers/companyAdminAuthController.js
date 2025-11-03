@@ -40,6 +40,8 @@ const disallowedEmailDomains = [
   "lycos.com",
 ];
 
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+
 // Requires: User and ReferralLog models in scope.
 // Put this near top of your controller file:
 async function addOrUpdateReferral(referrerId, referredUser) {
@@ -52,9 +54,9 @@ async function addOrUpdateReferral(referrerId, referredUser) {
   // Normalize phone objects from referredUser
   const phoneObjs = Array.isArray(referredUser.phonenumbers)
     ? referredUser.phonenumbers.map((p) => ({
-      countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
-      number: (p.number || "").toString().replace(/^\+/, ""),
-    }))
+        countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
+        number: (p.number || "").toString().replace(/^\+/, ""),
+      }))
     : [];
 
   const referredIdStr = referredUser._id.toString();
@@ -173,22 +175,6 @@ const signupWithEmail = async (req, res) => {
       verifyToken = "",
     } = req.body;
 
-    // === BLOCK PUBLIC EMAIL PROVIDERS ===
-    const emailDomain = email.split("@")[1]?.toLowerCase();
-    if (!emailDomain) {
-      return res.status(400).json({
-        status: "error",
-        message: "Invalid email format",
-      });
-    }
-
-    if (disallowedEmailDomains.includes(emailDomain)) {
-      return res.status(400).json({
-        status: "error",
-        message: `Registration using ${emailDomain} is not allowed. Please use your company or custom domain email.`,
-      });
-    }
-
     const referralCodeParam = req.body.referralCode || req.query.ref || "";
 
     // === PART 1: Email Verification Flow ===
@@ -219,8 +205,7 @@ const signupWithEmail = async (req, res) => {
         );
 
         const nameForExtension =
-          `${user.firstname || ""} ${user.lastname || ""}`.trim() ||
-          user.email;
+          `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email;
 
         // Attempt to create Yeastar extension
         const { extensionNumber, secret, result } =
@@ -300,6 +285,23 @@ const signupWithEmail = async (req, res) => {
     }
 
     // === PART 2: Initial Signup (Before Verification) ===
+
+    // === BLOCK PUBLIC EMAIL PROVIDERS ===
+    const emailDomain = email.split("@")[1]?.toLowerCase();
+    if (!emailDomain) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid email format",
+      });
+    }
+
+    if (disallowedEmailDomains.includes(emailDomain)) {
+      return res.status(400).json({
+        status: "error",
+        message: `Registration using ${emailDomain} is not allowed. Please use your company or custom domain email.`,
+      });
+    }
+
     if (!password || !email) {
       return res.status(400).json({
         status: "error",
@@ -377,14 +379,14 @@ const signupWithEmail = async (req, res) => {
       }
     }
 
-    let referUrl = `https://demo.contacts.management/register?ref=${newUser.referralCode}`;
+    let referUrl = `${FRONTEND_URL}/register?ref=${newUser.referralCode}`;
 
     let verificationLink = "";
 
     if (referralCodeParam) {
-      verificationLink = `https://demo.contacts.management/user-verification?verificationToken=${newUser.emailVerificationToken}&ref=${referralCodeParam}`;
+      verificationLink = `${FRONTEND_URL}/user-verification?verificationToken=${newUser.emailVerificationToken}&ref=${referralCodeParam}`;
     } else {
-      verificationLink = `https://demo.contacts.management/user-verification?verificationToken=${newUser.emailVerificationToken}`;
+      verificationLink = `${FRONTEND_URL}/user-verification?verificationToken=${newUser.emailVerificationToken}`;
     }
 
     // Send verification email
@@ -448,7 +450,7 @@ const resendVerificationLink = async (req, res) => {
     await user.save();
 
     // Build link and send email
-    const verificationLink = `https://demo.contacts.management/user-verification?verificationToken=${user.emailVerificationToken}`;
+    const verificationLink = `${FRONTEND_URL}/user-verification?verificationToken=${user.emailVerificationToken}`;
     await sendVerificationEmail(user.email, verificationLink);
 
     return res.status(200).json({
@@ -632,7 +634,7 @@ const signupWithPhoneNumber = async (req, res) => {
     user.serialNumber = serialNumber;
     user.isVerified = true;
     user.signupMethod = "phoneNumber";
-    user.role = "user";
+    user.role = "companyAdmin";
     user.password = password;
     user.firstname = firstname;
     user.lastname = lastname;
@@ -813,7 +815,7 @@ const signupWithPhoneNumber = async (req, res) => {
     await user.save();
 
     const token = createTokenforUser(user);
-    const referUrl = `https://demo.contacts.management/register?ref=${user.referralCode}`;
+    const referUrl = `${FRONTEND_URL}/register?ref=${user.referralCode}`;
 
     return res.status(201).json({
       status: "success",
