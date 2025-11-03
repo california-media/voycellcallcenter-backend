@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const User = require("../models/userModel");
 const sendEmail = require("../utils/sendEmailResetPassword");
-
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 exports.forgotPassword = async (req, res) => {
   try {
     // 1) Normalize & validate incoming email (CHANGED)
@@ -31,7 +31,7 @@ exports.forgotPassword = async (req, res) => {
     await user.save();
     const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:4004";
     // Reset link (unchanged)
-    const resetLink = `${API_BASE_URL + "/reset-password"}?token=${token}`;
+    const resetLink = `${FRONTEND_URL + "/reset-password"}?token=${token}`;
     console.log("resetLink:", resetLink);
 
     // HTML (unchanged from your original)
