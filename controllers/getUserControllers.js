@@ -69,53 +69,53 @@ const YEASTAR_SDK_ACCESS_KEY = process.env.YEASTAR_SDK_ACCESS_KEY?.trim();
 /**
  * Get Yeastar login signature for user
  */
-async function getYeastarSignature(extensionNumber) {
-  try {
-    const accessToken = await getValidToken();
+// async function getYeastarSignature(extensionNumber) {
+//   try {
+//     const accessToken = await getValidToken();
 
-    console.log(
-      "🔑 Requesting login signature for extension:",
-      extensionNumber
-    );
+//     console.log(
+//       "🔑 Requesting login signature for extension to attach with user:",
+//       extensionNumber
+//     );
 
-    const signatureUrl = `${YEASTAR_BASE_URL}/sign/create?access_token=${accessToken}`;
-    const signResponse = await axios.post(signatureUrl, {
-      username: extensionNumber,
-      sign_type: "sdk",
-      expire_time: 0, // No expiration
-    });
+//     const signatureUrl = `${YEASTAR_BASE_URL}/sign/create?access_token=${accessToken}`;
+//     const signResponse = await axios.post(signatureUrl, {
+//       username: extensionNumber,
+//       sign_type: "sdk",
+//       expire_time: 0, // No expiration
+//     });
 
-    const signData = signResponse.data;
+//     const signData = signResponse.data;
 
-    if (signData.errcode !== 0) {
-      console.error("❌ Signature creation failed:", signData);
-      throw new Error(signData.errmsg || "Failed to create login signature");
-    }
+//     if (signData.errcode !== 0) {
+//       console.error("❌ Signature creation failed:", signData);
+//       throw new Error(signData.errmsg || "Failed to create login signature");
+//     }
 
-    const signature = signData.data?.sign;
+//     const signature = signData.data?.sign;
 
-    if (!signature) {
-      throw new Error("No signature returned from Yeastar");
-    }
+//     if (!signature) {
+//       throw new Error("No signature returned from Yeastar");
+//     }
 
-    // Extract base URL
-    const baseUrl = YEASTAR_BASE_URL || "";
-    const pbxURL = baseUrl.replace(/\/openapi\/v[0-9.]+$/i, "");
+//     // Extract base URL
+//     const baseUrl = YEASTAR_BASE_URL || "";
+//     const pbxURL = baseUrl.replace(/\/openapi\/v[0-9.]+$/i, "");
 
-    console.log(
-      "✅ Generated Yeastar login signature for extension:",
-      extensionNumber
-    );
+//     console.log(
+//       "✅ Generated Yeastar login signature for extension:",
+//       extensionNumber
+//     );
 
-    return {
-      signature,
-      pbxURL,
-    };
-  } catch (err) {
-    console.error("❌ Error generating Yeastar signature:", err.message);
-    return null;
-  }
-}
+//     return {
+//       signature,
+//       pbxURL,
+//     };
+//   } catch (err) {
+//     console.error("❌ Error generating Yeastar signature:", err.message);
+//     return null;
+//   }
+// }
 
 const getUserData = async (req, res) => {
   try {
@@ -163,21 +163,21 @@ const getUserData = async (req, res) => {
     })();
 
     // Fetch Yeastar signature if user has extension
-    let yeastarSignature = null;
-    let pbxURL = null;
+    // let yeastarSignature = null;
+    // let pbxURL = null;
 
-    if (user.extensionNumber && user.yeastarExtensionId) {
-      try {
-        const signatureData = await getYeastarSignature(user.extensionNumber);
-        if (signatureData) {
-          yeastarSignature = signatureData.signature;
-          pbxURL = signatureData.pbxURL;
-        }
-      } catch (err) {
-        console.error("❌ Failed to fetch Yeastar signature for user:", err);
-        // Don't fail the whole request if signature fetch fails
-      }
-    }
+    // if (user.extensionNumber && user.yeastarExtensionId) {
+    //   try {
+    //     const signatureData = await getYeastarSignature(user.extensionNumber);
+    //     if (signatureData) {
+    //       yeastarSignature = signatureData.signature;
+    //       pbxURL = signatureData.pbxURL;
+    //     }
+    //   } catch (err) {
+    //     console.error("❌ Failed to fetch Yeastar signature for user:", err);
+    //     // Don't fail the whole request if signature fetch fails
+    //   }
+    // }
 
     const data = {
       id: user._id,
@@ -214,8 +214,8 @@ const getUserData = async (req, res) => {
       sipSecret: user.sipSecret || null,
       yeastarProvisionStatus: user.yeastarProvisionStatus || "pending",
       yeastarProvisionError: user.yeastarProvisionError || "",
-      yeastarSignature: yeastarSignature,
-      pbxURL: pbxURL,
+      // yeastarSignature: yeastarSignature,
+      // pbxURL: pbxURL,
     };
 
     return res.json({
