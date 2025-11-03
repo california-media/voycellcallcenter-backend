@@ -80,8 +80,8 @@ exports.getPipelineOverview = async (req, res) => {
                     leads: {
                         $push: {
                             _id: "$_id",
-                            firstName: "$firstName",
-                            lastName: "$lastName",
+                            firstname: "$firstname",
+                            lastname: "$lastname",
                             email: "$emailAddresses",
                             company: "$company",
                             status: "$status",

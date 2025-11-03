@@ -456,8 +456,8 @@ const editProfile = async (req, res) => {
   try {
     const userId = req.user._id;
     const {
-      firstName,
-      lastName,
+      firstname,
+      lastname,
       email,
       linkedin,
       instagram,
@@ -468,7 +468,7 @@ const editProfile = async (req, res) => {
       phonenumbers = [],
     } = req.body;
 
-    console.log("📱 Incoming phonenumbers:", firstName, lastName);
+    console.log("📱 Incoming phonenumbers:", firstname, lastname);
 
     const user = await User.findById(userId);
     if (!user) {
@@ -477,8 +477,8 @@ const editProfile = async (req, res) => {
 
     const keys = Object.keys(req.body);
 
-    if (keys.includes("firstName")) user.firstName = firstName;
-    if (keys.includes("lastName")) user.lastName = lastName;
+    if (keys.includes("firstname")) user.firstname = firstname;
+    if (keys.includes("lastname")) user.lastname = lastname;
     if (keys.includes("linkedin")) user.linkedin = linkedin;
     if (keys.includes("instagram")) user.instagram = instagram;
     if (keys.includes("telegram")) user.telegram = telegram;
@@ -593,8 +593,8 @@ const editProfile = async (req, res) => {
       message: "Profile updated",
       data: {
         id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        firstname: user.firstname,
+        lastname: user.lastname,
         email: user.email,
         phonenumbers: user.phonenumbers,
         profileImageURL: user.profileImageURL,

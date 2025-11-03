@@ -18,8 +18,8 @@
 
 //         let {
 //             contact_id,
-//             firstName,
-//             lastName,
+//             firstname,
+//             lastname,
 //             company,
 //             designation,
 //             linkedin,
@@ -165,8 +165,8 @@
 //         if (isCreating) {
 //             // ---- CREATE NEW CONTACT / isLead ----
 //             contact = await Contact.create({
-//                 firstName,
-//                 lastName,
+//                 firstname,
+//                 lastname,
 //                 company,
 //                 designation,
 //                 linkedin,
@@ -188,7 +188,7 @@
 //                 action: isLead ? "isLead_created" : "contact_created",
 //                 type: "contact",
 //                 title: isLead ? "isLead Created" : "Contact Created",
-//                 description: `${firstName || ""} ${lastName || ""}`.trim(),
+//                 description: `${firstname || ""} ${lastname || ""}`.trim(),
 //             });
 //         } else {
 //             // ---- UPDATE EXISTING CONTACT / isLead ----
@@ -207,8 +207,8 @@
 //             const previsLead = existing.isLead;
 
 //             const updates = {
-//                 firstName,
-//                 lastName,
+//                 firstname,
+//                 lastname,
 //                 company,
 //                 designation,
 //                 linkedin,
@@ -239,14 +239,14 @@
 //                         action: "contact_converted_to_isLead",
 //                         type: "contact",
 //                         title: "Contact Converted to isLead",
-//                         description: `${contact.firstName || ""} ${contact.lastName || ""}`,
+//                         description: `${contact.firstname || ""} ${contact.lastname || ""}`,
 //                     });
 //                 } else {
 //                     await logActivityToContact(contact._id, {
 //                         action: "isLead_converted_to_contact",
 //                         type: "contact",
 //                         title: "isLead Converted to Contact",
-//                         description: `${contact.firstName || ""} ${contact.lastName || ""}`,
+//                         description: `${contact.firstname || ""} ${contact.lastname || ""}`,
 //                     });
 //                 }
 //             } else {
@@ -254,7 +254,7 @@
 //                     action: isLead ? "isLead_updated" : "contact_updated",
 //                     type: "contact",
 //                     title: isLead ? "isLead Updated" : "Contact Updated",
-//                     description: `${contact.firstName || ""} ${contact.lastName || ""}`,
+//                     description: `${contact.firstname || ""} ${contact.lastname || ""}`,
 //                 });
 //             }
 //         }
@@ -318,8 +318,8 @@ const addEditContactisLeads = async (req, res) => {
     // NOTE: read raw values from req.body (multer/form-data gives strings)
     const {
       contact_id,
-      firstName,
-      lastName,
+      firstname,
+      lastname,
       company,
       designation,
       linkedin,
@@ -408,8 +408,8 @@ const addEditContactisLeads = async (req, res) => {
 
     if (isCreating) {
       contact = await Contact.create({
-        firstName,
-        lastName,
+        firstname,
+        lastname,
         company,
         designation,
         linkedin,
@@ -440,7 +440,7 @@ const addEditContactisLeads = async (req, res) => {
         action: isLead ? "isLead_created" : "contact_created",
         type: "contact",
         title: isLead ? "Lead Created" : "Contact Created",
-        description: `${firstName || ""} ${lastName || ""}`.trim(),
+        description: `${firstname || ""} ${lastname || ""}`.trim(),
       });
     } else {
       const existing = await Contact.findOne({ _id: contact_id, createdBy: req.user._id });
@@ -449,8 +449,8 @@ const addEditContactisLeads = async (req, res) => {
       const prevIsLead = !!existing.isLead;
 
       const updates = {
-        firstName,
-        lastName,
+        firstname,
+        lastname,
         company,
         designation,
         linkedin,
@@ -480,14 +480,14 @@ const addEditContactisLeads = async (req, res) => {
           action: isLead ? "contact_converted_to_isLead" : "isLead_converted_to_contact",
           type: "contact",
           title: isLead ? "Contact Converted to Lead" : "Lead Converted to Contact",
-          description: `${contact.firstName || ""} ${contact.lastName || ""}`,
+          description: `${contact.firstname || ""} ${contact.lastname || ""}`,
         });
       } else {
         await logActivityToContact(contact._id, {
           action: isLead ? "isLead_updated" : "contact_updated",
           type: "contact",
           title: isLead ? "Lead Updated" : "Contact Updated",
-          description: `${contact.firstName || ""} ${contact.lastName || ""}`,
+          description: `${contact.firstname || ""} ${contact.lastname || ""}`,
         });
       }
     }

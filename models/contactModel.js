@@ -46,21 +46,21 @@ const contactSchema = new Schema(
             // type: mongoose.Schema.Types.ObjectId,
             unique: true,
         },
-        firstName: {
+        firstname: {
             type: String,
-            // default: "Dummy firstName",
+            // default: "Dummy firstname",
         },
-        lastName: {
+        lastname: {
             type: String,
-            // default: "Dummy lastName",
+            // default: "Dummy lastname",
         },
         company: {
             type: String,
-            // default: "Dummy lastName",
+            // default: "Dummy lastname",
         },
         designation: {
             type: String,
-            // default: "Dummy lastName",
+            // default: "Dummy lastname",
         },
         emailAddresses: {
             type: [String],
@@ -125,23 +125,23 @@ const contactSchema = new Schema(
 
         linkedin: {
             type: String,
-            // default: "Dummy firstName",
+            // default: "Dummy firstname",
         },
         instagram: {
             type: String,
-            // default: "Dummy firstName",
+            // default: "Dummy firstname",
         },
         telegram: {
             type: String,
-            // default: "Dummy firstName",
+            // default: "Dummy firstname",
         },
         twitter: {
             type: String,
-            // default: "Dummy firstName",
+            // default: "Dummy firstname",
         },
         facebook: {
             type: String,
-            // default: "Dummy firstName",
+            // default: "Dummy firstname",
         },
 
         tasks: [taskSchema],

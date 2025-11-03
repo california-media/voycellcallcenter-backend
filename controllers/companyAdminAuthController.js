@@ -1123,8 +1123,8 @@ const unifiedLogin = async (req, res) => {
         //   user = await User.create({
         //     email: appleEmail,
         //     provider: "apple",
-        //     firstname: appleUser.firstName || "Apple",
-        //     lastname: appleUser.lastName || "User",
+        //     firstname: appleUser.firstname || "Apple",
+        //     lastname: appleUser.lastname || "User",
         //   });
         // }
 
@@ -1133,15 +1133,15 @@ const unifiedLogin = async (req, res) => {
         //   user = await User.create({
         //     email: appleEmail,
         //     provider: "apple",
-        //     firstname: appleUser.firstName || "Apple",
-        //     lastname: appleUser.lastName || "User",
+        //     firstname: appleUser.firstname || "Apple",
+        //     lastname: appleUser.lastname || "User",
         //     serialNumber
         //   });
         // }
 
         if (!user) {
-          const firstname = appleUser.firstName || "Apple";
-          const lastname = appleUser.lastName || "User";
+          const firstname = appleUser.firstname || "Apple";
+          const lastname = appleUser.lastname || "User";
 
           const now = new Date();
 

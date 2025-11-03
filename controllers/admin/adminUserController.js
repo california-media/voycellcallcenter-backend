@@ -34,7 +34,7 @@ const disallowedEmailDomains = [
 
 exports.adminRegisterUser = async (req, res) => {
     try {
-        const { email, firstName = "", lastName = "" } = req.body;
+        const { email, firstname = "", lastname = "" } = req.body;
 
         if (!email) {
             return res.status(400).json({
@@ -73,8 +73,8 @@ exports.adminRegisterUser = async (req, res) => {
 
         const newUser = await User.create({
             email,
-            firstName,
-            lastName,
+            firstname,
+            lastname,
             isVerified: false,
             signupMethod: "email",
             role: "user",

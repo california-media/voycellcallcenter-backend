@@ -5,11 +5,11 @@ const { createTokenforUser } = require("../services/authentication");
 const userSchema = new Schema(
   {
 
-    firstName: {
+    firstname: {
       type: String,
       // default: "Dummy Firstname",
     },
-    lastName: {
+    lastname: {
       type: String,
       // default: "Dummy Lastname",
     },

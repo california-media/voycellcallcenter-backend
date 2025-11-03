@@ -32,8 +32,8 @@
 //       const regex = new RegExp(searchText, "i"); // Case-insensitive regex
 
 //       query.$or = [
-//         { firstName: regex },
-//         { lastName: regex },
+//         { firstname: regex },
+//         { lastname: regex },
 //         { emailAddresses: { $elemMatch: { $regex: regex } } },
 //         {
 //           phonenumbers: {
@@ -43,7 +43,7 @@
 //         {
 //           $expr: {
 //             $regexMatch: {
-//               input: { $concat: ["$firstName", " ", "$lastName"] },
+//               input: { $concat: ["$firstname", " ", "$lastname"] },
 //               regex: searchText, // plain string here, not RegExp
 //             },
 //           },
@@ -71,7 +71,7 @@
 //     // 📋 Fetch Data
 //     // -------------------------------
 //     const items = await Contact.find(query)
-//       .sort(sorted ? { firstName: 1, lastName: 1 } : { createdAt: -1, _id: -1 })
+//       .sort(sorted ? { firstname: 1, lastname: 1 } : { createdAt: -1, _id: -1 })
 //       .skip(skip)
 //       .limit(parseInt(limit))
 //       .select("-updatedAt -__v")
@@ -177,13 +177,13 @@ exports.getAllContactsOrLeads = async (req, res) => {
       const regexInsensitive = new RegExp(escaped, "i");
 
       const or = [
-        { firstName: { $regex: regexInsensitive } },
-        { lastName: { $regex: regexInsensitive } },
+        { firstname: { $regex: regexInsensitive } },
+        { lastname: { $regex: regexInsensitive } },
         { emailAddresses: { $elemMatch: { $regex: regexInsensitive } } },
         {
           $expr: {
             $regexMatch: {
-              input: { $toLower: { $concat: ["$firstName", " ", "$lastName"] } },
+              input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } },
               regex: raw.toLowerCase(),
             },
           },
@@ -219,7 +219,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
     const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
     const items = await Contact.find(query)
-      .sort(sorted ? { firstName: 1, lastName: 1 } : { createdAt: -1, _id: -1 })
+      .sort(sorted ? { firstname: 1, lastname: 1 } : { createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(perPage)
       .select("-__v -updatedAt -createdBy")
