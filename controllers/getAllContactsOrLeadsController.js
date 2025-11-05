@@ -127,7 +127,6 @@
 //   }
 // };
 
-
 const Contact = require("../models/contactModel");
 
 /**
@@ -163,9 +162,14 @@ exports.getAllContactsOrLeads = async (req, res) => {
 
     // Filter by tags
     if (Array.isArray(tag) && tag.length > 0) {
-      query["tags.tag"] = { $in: tag.map((t) => new RegExp(`^${escapeRegex(t)}$`, "i")) };
+      query["tags.tag"] = {
+        $in: tag.map((t) => new RegExp(`^${escapeRegex(t)}$`, "i")),
+      };
     } else if (typeof tag === "string" && tag.trim() !== "") {
-      query["tags.tag"] = { $regex: `^${escapeRegex(tag.trim())}$`, $options: "i" };
+      query["tags.tag"] = {
+        $regex: `^${escapeRegex(tag.trim())}$`,
+        $options: "i",
+      };
     }
 
     // -----------------------
@@ -183,7 +187,9 @@ exports.getAllContactsOrLeads = async (req, res) => {
         {
           $expr: {
             $regexMatch: {
-              input: { $toLower: { $concat: ["$firstname", " ", "$lastname"] } },
+              input: {
+                $toLower: { $concat: ["$firstname", " ", "$lastname"] },
+              },
               regex: raw.toLowerCase(),
             },
           },
@@ -203,8 +209,16 @@ exports.getAllContactsOrLeads = async (req, res) => {
             { "phoneNumbers.number": { $regex: phoneRegex } },
             { "phoneNumbers.countryCode": { $regex: phoneRegex } },
             // Match when number starts or ends with search digits
-            { "phoneNumbers.number": { $regex: new RegExp(`${escapeRegex(digitsOnly)}$`) } },
-            { "phoneNumbers.number": { $regex: new RegExp(`^${escapeRegex(digitsOnly)}`) } },
+            {
+              "phoneNumbers.number": {
+                $regex: new RegExp(`${escapeRegex(digitsOnly)}$`),
+              },
+            },
+            {
+              "phoneNumbers.number": {
+                $regex: new RegExp(`^${escapeRegex(digitsOnly)}`),
+              },
+            },
           ],
         });
       }
@@ -286,4 +300,78 @@ exports.getAllContactsOrLeads = async (req, res) => {
   }
 };
 
+/**
+ * Get a single contact or lead by ID
+ */
+exports.getSingleContactOrLead = async (req, res) => {
+  try {
+    const { contact_id } = req.body;
+    const createdBy = req.user._id;
 
+    if (!contact_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "contact_id is required",
+      });
+    }
+
+    const contact = await Contact.findOne({
+      _id: contact_id,
+      createdBy,
+    })
+      .select("-__v -updatedAt -createdBy")
+      .lean();
+
+    if (!contact) {
+      return res.status(404).json({
+        status: "error",
+        message: "Contact not found",
+      });
+    }
+
+    // Clean phone numbers
+    if (Array.isArray(contact.phoneNumbers)) {
+      contact.phoneNumbers = contact.phoneNumbers
+        .filter(
+          (p) =>
+            p &&
+            ((p.number && p.number.trim()) ||
+              (p.countryCode && p.countryCode.trim()))
+        )
+        .map((p) => ({
+          countryCode: p.countryCode?.trim() || "",
+          number: p.number?.trim() || "",
+        }));
+    } else {
+      contact.phoneNumbers = [];
+    }
+
+    // Clean emails
+    contact.emailAddresses = Array.isArray(contact.emailAddresses)
+      ? contact.emailAddresses.filter((e) => e && e.trim())
+      : [];
+
+    // Clean tags
+    contact.tags = Array.isArray(contact.tags)
+      ? contact.tags.map((t) => ({ tag: t.tag, emoji: t.emoji || "" }))
+      : [];
+
+    // Add contact_id alias
+    contact.contact_id = contact._id?.toString();
+
+    return res.status(200).json({
+      status: "success",
+      message: contact.isLead
+        ? "Lead fetched successfully"
+        : "Contact fetched successfully",
+      data: contact,
+    });
+  } catch (err) {
+    console.error("getSingleContactOrLead error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};

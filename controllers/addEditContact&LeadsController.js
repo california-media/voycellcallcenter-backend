@@ -313,7 +313,9 @@ const addEditContactisLeads = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user)
-      return res.status(401).json({ status: "error", message: "Unauthorized: User not found" });
+      return res
+        .status(401)
+        .json({ status: "error", message: "Unauthorized: User not found" });
 
     // NOTE: read raw values from req.body (multer/form-data gives strings)
     const {
@@ -341,10 +343,16 @@ const addEditContactisLeads = async (req, res) => {
     let cleanedEmails = [];
     if (emailAddresses) {
       try {
-        const parsed = typeof emailAddresses === "string" ? JSON.parse(emailAddresses) : emailAddresses;
-        cleanedEmails = Array.isArray(parsed) ? parsed.filter((e) => e && e.trim() !== "") : [parsed];
+        const parsed =
+          typeof emailAddresses === "string"
+            ? JSON.parse(emailAddresses)
+            : emailAddresses;
+        cleanedEmails = Array.isArray(parsed)
+          ? parsed.filter((e) => e && e.trim() !== "")
+          : [parsed];
       } catch {
-        cleanedEmails = typeof emailAddresses === "string" ? [emailAddresses.trim()] : [];
+        cleanedEmails =
+          typeof emailAddresses === "string" ? [emailAddresses.trim()] : [];
       }
     }
 
@@ -352,10 +360,16 @@ const addEditContactisLeads = async (req, res) => {
     let formattedPhones = [];
     if (phoneNumbers) {
       try {
-        const parsed = typeof phoneNumbers === "string" ? JSON.parse(phoneNumbers) : phoneNumbers;
+        const parsed =
+          typeof phoneNumbers === "string"
+            ? JSON.parse(phoneNumbers)
+            : phoneNumbers;
         formattedPhones = Array.isArray(parsed)
           ? parsed.map((p) => ({
-              countryCode: String(p.countryCode || p.countrycode || "").replace(/[^\d]/g, ""),
+              countryCode: String(p.countryCode || p.countrycode || "").replace(
+                /[^\d]/g,
+                ""
+              ),
               number: String(p.number || "").replace(/[^\d]/g, ""),
             }))
           : [];
@@ -368,17 +382,24 @@ const addEditContactisLeads = async (req, res) => {
     // ---------- Duplicate check ----------
     if (cleanedEmails.length > 0 || formattedPhones.length > 0) {
       const query = { createdBy: req.user._id, $or: [] };
-      if (contact_id && mongoose.Types.ObjectId.isValid(contact_id)) query._id = { $ne: contact_id };
-      if (cleanedEmails.length) query.$or.push({ emailAddresses: { $in: cleanedEmails } });
+      if (contact_id && mongoose.Types.ObjectId.isValid(contact_id))
+        query._id = { $ne: contact_id };
+      if (cleanedEmails.length)
+        query.$or.push({ emailAddresses: { $in: cleanedEmails } });
       formattedPhones.forEach((p) =>
-        query.$or.push({ phoneNumbers: { $elemMatch: { countryCode: p.countryCode, number: p.number } } })
+        query.$or.push({
+          phoneNumbers: {
+            $elemMatch: { countryCode: p.countryCode, number: p.number },
+          },
+        })
       );
       if (query.$or.length > 0) {
         const duplicate = await Contact.findOne(query);
         if (duplicate) {
           return res.status(400).json({
             status: "error",
-            message: "A contact or lead with the same phone or email already exists.",
+            message:
+              "A contact or lead with the same phone or email already exists.",
           });
         }
       }
@@ -443,8 +464,14 @@ const addEditContactisLeads = async (req, res) => {
         description: `${firstname || ""} ${lastname || ""}`.trim(),
       });
     } else {
-      const existing = await Contact.findOne({ _id: contact_id, createdBy: req.user._id });
-      if (!existing) return res.status(404).json({ status: "error", message: "Contact not found" });
+      const existing = await Contact.findOne({
+        _id: contact_id,
+        createdBy: req.user._id,
+      });
+      if (!existing)
+        return res
+          .status(404)
+          .json({ status: "error", message: "Contact not found" });
 
       const prevIsLead = !!existing.isLead;
 
@@ -477,9 +504,13 @@ const addEditContactisLeads = async (req, res) => {
       // Activity log
       if (prevIsLead !== Boolean(isLead)) {
         await logActivityToContact(contact._id, {
-          action: isLead ? "contact_converted_to_isLead" : "isLead_converted_to_contact",
+          action: isLead
+            ? "contact_converted_to_isLead"
+            : "isLead_converted_to_contact",
           type: "contact",
-          title: isLead ? "Contact Converted to Lead" : "Lead Converted to Contact",
+          title: isLead
+            ? "Contact Converted to Lead"
+            : "Lead Converted to Contact",
           description: `${contact.firstname || ""} ${contact.lastname || ""}`,
         });
       } else {
@@ -493,8 +524,7 @@ const addEditContactisLeads = async (req, res) => {
     }
 
     // ---------- Return fresh contact ----------
-    const freshContact = await Contact.findById(contact._id)
-      .lean();
+    const freshContact = await Contact.findById(contact._id).lean();
 
     const formatted = { ...freshContact, contact_id: freshContact._id };
     delete formatted._id;
@@ -504,7 +534,13 @@ const addEditContactisLeads = async (req, res) => {
 
     res.status(isCreating ? 201 : 200).json({
       status: "success",
-      message: isLead ? (isCreating ? "Lead Created" : "Lead Updated") : (isCreating ? "Contact Created" : "Contact Updated"),
+      message: isLead
+        ? isCreating
+          ? "Lead Created"
+          : "Lead Updated"
+        : isCreating
+        ? "Contact Created"
+        : "Contact Updated",
       data: formatted,
     });
   } catch (error) {
@@ -517,4 +553,45 @@ const addEditContactisLeads = async (req, res) => {
   }
 };
 
-module.exports = { addEditContactisLeads };
+const deleteContactOrLead = async (req, res) => {
+  try {
+    const { contact_id } = req.body;
+    const userId = req.user._id;
+
+    if (!contact_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "contact_id is required",
+      });
+    }
+
+    // Find and delete contact
+    const contact = await Contact.findOneAndDelete({
+      _id: contact_id,
+      createdBy: userId,
+    });
+
+    if (!contact) {
+      return res.status(404).json({
+        status: "error",
+        message: "Contact not found or unauthorized",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: contact.isLead
+        ? "Lead deleted successfully"
+        : "Contact deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting contact:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = { addEditContactisLeads, deleteContactOrLead };
