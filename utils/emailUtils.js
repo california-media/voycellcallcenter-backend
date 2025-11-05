@@ -1,24 +1,25 @@
+require("dotenv").config();
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-    service: "smtp", // Use your SMTP service
-    host: "smtp.titan.email", // SMTP server address
-    port: 465, // Port for secure connection
-    secure: true, // Use SSL/TLS
-    auth: {
-        user: "noreply@contacts.management",
-        pass: "bZ}JTus_PQ{qWvA", // App Password, not normal password
-        // user: "makvanayash12@gmail.com",
-        // pass: "fybb lnri tmrq otmg", // App Password, not normal password
-    },
+  host: process.env.MAIL_HOST,
+  port: Number(process.env.MAIL_PORT),
+  secure: process.env.MAIL_ENCRYPTION === "ssl", // Gmail on port 587 uses TLS (not SSL)
+  auth: {
+    user: process.env.MAIL_USERNAME,
+    pass: process.env.MAIL_PASSWORD,
+  },
+  tls: {
+    rejectUnauthorized: false, // important for Gmail on TLS
+  },
 });
 
 const sendVerificationEmail = async (email, link) => {
-    const mailOptions = {
-        from: '"VoyCell Call Center" <noreply@contacts.management>',
-        to: email,
-        subject: "voyCell : Verify Your E-mail",
-        html: `<html lang="en">
+  const mailOptions = {
+    from: '"VoyCell Call Center" <noreply@contacts.management>',
+    to: email,
+    subject: "voyCell : Verify Your E-mail",
+    html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -160,9 +161,9 @@ const sendVerificationEmail = async (email, link) => {
 </body>
 
 </html>`,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+  await transporter.sendMail(mailOptions);
 };
 
 // const sendHelpSupportReply = async (
@@ -411,7 +412,7 @@ const sendVerificationEmail = async (email, link) => {
 // };
 
 module.exports = {
-    sendVerificationEmail
-    //   sendHelpSupportReply,
-    //   sendHelpSupportReplyNotification,
+  sendVerificationEmail,
+  //   sendHelpSupportReply,
+  //   sendHelpSupportReplyNotification,
 };
