@@ -1,20 +1,19 @@
-const nodemailer = require('nodemailer');
+require("dotenv").config();
+const nodemailer = require("nodemailer");
 
 const sendEmail = async (to, subject, html) => {
   const transporter = nodemailer.createTransport({
-    service: 'smtp',
-    host: "smtp.titan.email", // SMTP server address
-    port: 465, // Port for secure connection
-    secure: true, // Use SSL/TLS
+    service: "smtp",
+    host: process.env.MAIL_HOST,
+    port: Number(process.env.MAIL_PORT),
+    secure: true, // Gmail on port 587 uses TLS (not SSL)
     auth: {
-      user: 'noreply@contacts.management', // your Gmail address
-      pass: 'bZ}JTus_PQ{qWvA'     // app password from Google
-      // user: "makvanayash12@gmail.com",
-      // pass: "fybb lnri tmrq otmg",
+      user: process.env.MAIL_USERNAME,
+      pass: process.env.MAIL_PASSWORD,
     },
     tls: {
-      rejectUnauthorized: false  // THIS LINE FIXES THE ERROR
-    }
+      rejectUnauthorized: false, // important for Gmail on TLS
+    },
   });
 
   //  from: '"Contacts Management" <noreply@contacts.management>',
@@ -26,7 +25,7 @@ const sendEmail = async (to, subject, html) => {
     from: '"VoyCell Call Center" <noreply@contacts.management>',
     to,
     subject,
-    html
+    html,
   });
 };
 
