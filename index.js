@@ -36,6 +36,10 @@ const emailPasswordResetRoutes = require("./routes/emailPasswordResetRoutes");
 const addEditContactLeadsRoutes = require("./routes/addEditContact&LeadsRoutes");
 const getAllContactsOrLeadsRoutes = require("./routes/getAllContactsOrLeadsRoutes");
 const contactAndLeadStatusPiplineRoutes = require("./routes/contactAndLeadStatusPiplineRoutes");
+const addeditTaskRoutes = require("./routes/taskRoutes");
+const addedittagRoutes = require("./routes/tagRoute");
+const accountConnect = require("./routes/accountConnectRoutes");
+const meetingRoutes = require("./routes/meetingRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -66,6 +70,21 @@ app.use("/email", emailPasswordResetRoutes);
 app.use("/addEditContactLeads", checkForAuthentication(), addEditContactLeadsRoutes);
 app.use("/getAllContactsOrLeads", checkForAuthentication(), getAllContactsOrLeadsRoutes);
 app.use("/contactAndLeadStatusPipline", checkForAuthentication(), contactAndLeadStatusPiplineRoutes);
+app.use("/task", checkForAuthentication(), addeditTaskRoutes);
+app.use("/tag", checkForAuthentication(), addedittagRoutes);
+app.use("/meeting", checkForAuthentication(), meetingRoutes);
+app.use(
+  "/connect",
+  (req, res, next) => {
+    const skipAuthPaths = ["/google-callback", "/microsoft-callback"];
+    if (skipAuthPaths.includes(req.path)) {
+      return next(); // No token required for callback
+    }
+    return checkForAuthentication()(req, res, next);
+  },
+  accountConnect
+);
+
 
 // Admin routes
 app.use("/admin/user/verify", adminUserVerifyRoutes);
@@ -103,7 +122,7 @@ const connectToDatabase = async () => {
     }
 
     console.log("MongoDB URL log:", process.env.MONGO_URL);
-    
+
     // Optimized settings for AWS Lambda
     const connection = await mongoose.connect(process.env.MONGO_URL, {
       maxPoolSize: 10, // Lower pool size for Lambda (not 200!)
@@ -166,7 +185,7 @@ const http = require("http");
 module.exports.handler = serverless(async (event, context) => {
   // CRITICAL: Prevent Lambda from waiting for connections to close
   context.callbackWaitsForEmptyEventLoop = false;
-  
+
   try {
     await connectToDatabase();
     return app(event, context);
@@ -178,63 +197,3 @@ module.exports.handler = serverless(async (event, context) => {
     };
   }
 });
-
-// (async () => {
-//   console.log("Connecting to MongoDB...");
-
-//   try {
-//     console.log("MongoDB URL log:", process.env.MONGO_URL);
-
-//     await mongoose.connect(process.env.MONGO_URL);
-//     console.log("MongoDB connected successfully");
-//     // app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
-//     const http = require("http");
-//     const { Server } = require("socket.io");
-//     const socketHandler = require("./socket/socketHandler"); // create this file
-
-//     const server = http.createServer(app);
-
-//     const io = new Server(server, {
-//       cors: {
-//         origin: "*", // or set to your frontend domain
-//         methods: ["GET", "POST"],
-//       },
-//     });
-
-//     // pass io to socket handler
-//     socketHandler(io);
-
-//     server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-//   } catch (err) {
-//     console.error("Database connection failed:", err);
-//   }
-// })();
-// module.exports.handler = serverless(app);
-
-// // let isConnected = false;
-
-// // const connectToDatabase = async () => {
-// //   if (isConnected) {
-// //     return;
-// //   }
-// //   try {
-// //     console.log("Console 7 MongoDB URL log:", process.env.MONGO_URL);
-// //     await mongoose.connect(process.env.MONGO_URL, {
-// //       useNewUrlParser: true,
-// //       useUnifiedTopology: true,
-
-// //     });
-// //     isConnected = true;
-// //     console.log("Console 8 MongoDB connected successfully");
-// //   } catch (err) {
-// //     console.error("Console 9 Database connection failed:", err);
-// //     throw err;
-// //   }
-// // };
-
-// // console.log("Console 10 last log before export");
-
-// // module.exports.handler = serverless(async (event, context) => {
-// //   await connectToDatabase();
-// //   return app(event, context);
-// // });

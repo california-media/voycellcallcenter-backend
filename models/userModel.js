@@ -27,6 +27,27 @@ const userSchema = new Schema(
       // default: null, // ✅ makes sure null is used instead of ""
     },
 
+    tags: [
+      {
+        _id: false,
+        tag_id: {
+          type: mongoose.Schema.Types.ObjectId,
+          default: () => new mongoose.Types.ObjectId(),
+        },
+        tag: {
+          type: String,
+          default: "VoyCell",
+        },
+        emoji: {
+          type: String, // URL to S3
+          default: "🏷️",
+        },
+        order: {
+          type: Number, // New field
+        },
+      },
+    ],
+
     emailVerificationToken: String,
     isVerified: {
       type: Boolean,
@@ -134,6 +155,15 @@ const userSchema = new Schema(
     //     return !this.provider || this.provider === "local";
     //   },
     // },
+
+    googleId: { type: String }, // ✅ Store Google user ID as String
+    googleEmail: String,
+    googleAccessToken: String,
+    googleRefreshToken: String,
+    googleConnected: {
+      type: Boolean,
+      default: false,
+    },
 
     password: {
       type: String,
