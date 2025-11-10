@@ -14,50 +14,6 @@ const api = axios.create({
 });
 
 /**
- * Fetch or refresh valid token
- */
-// async function getValidToken() {
-//   let tokenDoc = await YeastarToken.findOne().sort({ created_at: -1 });
-
-//   // ✅ if token still valid
-//   if (tokenDoc && !tokenDoc.isExpired) {
-//     return tokenDoc.access_token;
-//   }
-
-//   // 🧠 otherwise login again via /get_token
-//   console.log("🔐 Requesting new token from Yeastar...");
-
-//   const body = {
-//     username: USERNAME,
-//     password: PASSWORD,
-//   };
-
-//   const res = await api.post("/get_token", body);
-//   const data = res.data;
-
-//   const access_token =
-//     data?.access_token || data?.data?.access_token || data?.token;
-//   const refresh_token =
-//     data?.refresh_token || data?.data?.refresh_token || null;
-//   const expires_in = data?.expires_in || data?.data?.expires_in || 1800;
-
-//   if (!access_token) {
-//     throw new Error("Failed to retrieve access_token from Yeastar");
-//   }
-
-//   await YeastarToken.deleteMany({});
-//   await YeastarToken.create({
-//     access_token,
-//     refresh_token,
-//     expires_in,
-//     created_at: new Date(),
-//   });
-
-//   console.log("✅ Token stored successfully");
-//   return access_token;
-// }
-
-/**
  * Make a call via Yeastar PBX
  */
 async function makeCallHandler(req, res) {
