@@ -179,6 +179,7 @@ const getUserData = async (req, res) => {
     //   }
     // }
 
+    
     const data = {
       id: user._id,
       firstname: user.firstname,
@@ -200,6 +201,7 @@ const getUserData = async (req, res) => {
       isActive: user.isActive,
       lastSeen: user.lastSeen,
       phonenumbers: phonenumbersForResponse,
+      popupSettings: user.popupSettings || {},
 
       isVerified: user.isVerified,
       userInfo: user.userInfo || {
