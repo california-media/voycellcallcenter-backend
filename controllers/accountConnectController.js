@@ -243,9 +243,18 @@ exports.microsoftCallback = async (req, res) => {
     <body>
         <div class="success">Microsoft account connected Successfully! You can close this window.</div>
         <script>
+    try {
+        if (window.opener) {
             window.opener.postMessage(${JSON.stringify(resultData)}, '*');
-            window.close();
-        </script>
+        } else {
+            console.warn("No opener window found");
+        }
+    } catch (e) {
+        console.error("postMessage failed", e);
+    }
+    window.close();
+</script>
+
     </body>
     </html>
 `);

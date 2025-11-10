@@ -39,7 +39,14 @@ const contactAndLeadStatusPiplineRoutes = require("./routes/contactAndLeadStatus
 const addeditTaskRoutes = require("./routes/taskRoutes");
 const addedittagRoutes = require("./routes/tagRoute");
 const accountConnect = require("./routes/accountConnectRoutes");
+const disconnectAccountRoutes = require("./routes/disconnectAccountRoutes");
 const meetingRoutes = require("./routes/meetingRoutes");
+const hubSpotContactFetchRoutes = require("./routes/hubSpotContactFetchRoutes");
+const zohoContactFetchRoutes = require("./routes/zuhuContactFetchRoutes");
+const faqRoutes = require("./routes/faqRoutes");
+const fetchGoogleContacts = require("./routes/googleContactFatchRoutes");
+const saveBulkContactsRoutes = require("./routes/saveBulkContactsRoutes");
+
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -73,6 +80,7 @@ app.use("/contactAndLeadStatusPipline", checkForAuthentication(), contactAndLead
 app.use("/task", checkForAuthentication(), addeditTaskRoutes);
 app.use("/tag", checkForAuthentication(), addedittagRoutes);
 app.use("/meeting", checkForAuthentication(), meetingRoutes);
+app.use("/faq", faqRoutes);
 app.use(
   "/connect",
   (req, res, next) => {
@@ -84,7 +92,46 @@ app.use(
   },
   accountConnect
 );
+app.use("/disconnect", checkForAuthentication(), disconnectAccountRoutes);
+app.use(
+  "/save-bulk-contacts",
+  checkForAuthentication(),
+  saveBulkContactsRoutes
+);
+app.use(
+  "/fetch-google-contacts",
+  (req, res, next) => {
+    const skipAuthPaths = ["/google/callback"];
+    if (skipAuthPaths.includes(req.path)) {
+      return next(); // No token required for callback
+    }
+    return checkForAuthentication()(req, res, next);
+  },
+  fetchGoogleContacts
+);
+app.use(
+  "/fetch-hubspot-contacts",
+  (req, res, next) => {
+    const skipAuthPaths = ["/hubspot/callback"];
+    if (skipAuthPaths.includes(req.path)) {
+      return next(); // No token required for callback
+    }
+    return checkForAuthentication()(req, res, next);
+  },
+  hubSpotContactFetchRoutes
+);
 
+app.use(
+  "/fetch-zoho-contacts",
+  (req, res, next) => {
+    const skipAuthPaths = ["/zoho/callback"];
+    if (skipAuthPaths.includes(req.path)) {
+      return next(); // No token required for callback
+    }
+    return checkForAuthentication()(req, res, next);
+  },
+  zohoContactFetchRoutes
+);
 
 // Admin routes
 app.use("/admin/user/verify", adminUserVerifyRoutes);
