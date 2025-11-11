@@ -379,6 +379,33 @@ const addEditContactisLeads = async (req, res) => {
       }
     }
 
+    // ---------- Validation for BOTH creation and update ----------
+    const isCreating = !contact_id || contact_id === "0";
+
+    // Check if firstname is provided
+    if (!firstname || firstname.trim() === "") {
+      return res.status(400).json({
+        status: "error",
+        message: "First name is required",
+      });
+    }
+
+    // Check if at least one email is provided
+    if (!cleanedEmails || cleanedEmails.length === 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "At least one email address is required",
+      });
+    }
+
+    // Check if at least one phone number is provided
+    if (!formattedPhones || formattedPhones.length === 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "At least one phone number is required",
+      });
+    }
+
     // ---------- Duplicate check ----------
     if (cleanedEmails.length > 0 || formattedPhones.length > 0) {
       const query = { createdBy: req.user._id, $or: [] };
@@ -424,7 +451,6 @@ const addEditContactisLeads = async (req, res) => {
     if (req.file) contactImageURL = await uploadImageToS3(req.file);
 
     // ---------- Create or Update ----------
-    const isCreating = !contact_id || contact_id === "0";
     let contact;
 
     if (isCreating) {
@@ -594,4 +620,120 @@ const deleteContactOrLead = async (req, res) => {
   }
 };
 
-module.exports = { addEditContactisLeads, deleteContactOrLead };
+/**
+ * Toggle favorite status of a contact
+ * Simple endpoint that only updates isFavourite field
+ * No validation required - just flip the boolean
+ */
+const toggleContactFavorite = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized: User not found",
+      });
+    }
+
+    const { contact_id, isFavourite } = req.body;
+
+    if (!contact_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Contact ID is required",
+      });
+    }
+
+    // Find the contact
+    const contact = await Contact.findOne({
+      _id: contact_id,
+      createdBy: req.user._id,
+    });
+
+    if (!contact) {
+      return res.status(404).json({
+        status: "error",
+        message: "Contact not found or unauthorized",
+      });
+    }
+
+    // Update only the isFavourite field
+    contact.isFavourite = Boolean(isFavourite);
+    await contact.save();
+
+    res.status(200).json({
+      status: "success",
+      message: isFavourite
+        ? "Contact added to favorites"
+        : "Contact removed from favorites",
+      data: {
+        contact_id: contact._id,
+        isFavourite: contact.isFavourite,
+      },
+    });
+  } catch (error) {
+    console.error("Error toggling favorite:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Batch delete contacts
+ * Delete multiple contacts at once
+ */
+const batchDeleteContacts = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized: User not found",
+      });
+    }
+
+    const { contact_ids } = req.body;
+
+    if (
+      !contact_ids ||
+      !Array.isArray(contact_ids) ||
+      contact_ids.length === 0
+    ) {
+      return res.status(400).json({
+        status: "error",
+        message: "contact_ids array is required and must not be empty",
+      });
+    }
+
+    // Delete contacts that belong to this user
+    const result = await Contact.deleteMany({
+      _id: { $in: contact_ids },
+      createdBy: req.user._id,
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: `${result.deletedCount} contact(s) deleted successfully`,
+      data: {
+        deletedCount: result.deletedCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error batch deleting contacts:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = {
+  addEditContactisLeads,
+  deleteContactOrLead,
+  toggleContactFavorite,
+  batchDeleteContacts,
+};

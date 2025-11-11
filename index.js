@@ -18,7 +18,6 @@ const upload = multer({ storage });
 const mongoose = require("mongoose");
 const serverless = require("serverless-http");
 
-
 console.log("Connecting to MongoDB...");
 const { checkForAuthentication } = require("./middlewares/authentication");
 const checkRole = require("./middlewares/roleCheck");
@@ -60,7 +59,6 @@ console.log("Setting up Express app...");
 
 app.use(cors());
 
-
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -68,18 +66,39 @@ app.use(express.static(path.resolve("./public")));
 app.use("/user", userRoutes);
 // app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-
 console.log("Setting up routes...");
 app.use("/api/yeastar", express.json(), yeastarRoutes);
-app.use("/api/yeastar-login", express.json(), checkForAuthentication(), yeastarLoginRoutes);
+app.use(
+  "/api/yeastar-login",
+  express.json(),
+  checkForAuthentication(),
+  yeastarLoginRoutes
+);
 app.use("/api/script", scriptRoutes); // script generation (auth)
 app.use("/voycell_callback", callmeServeRoute); // serves callme.js (no auth)
-app.use("/editProfile", checkForAuthentication(), upload.single("profileImage"), editProfileRoutes);
+app.use(
+  "/editProfile",
+  checkForAuthentication(),
+  upload.single("profileImage"),
+  editProfileRoutes
+);
 app.use("/getUser", checkForAuthentication(), getUserRoutes);
 app.use("/email", emailPasswordResetRoutes);
-app.use("/addEditContactLeads", checkForAuthentication(), addEditContactLeadsRoutes);
-app.use("/getAllContactsOrLeads", checkForAuthentication(), getAllContactsOrLeadsRoutes);
-app.use("/contactAndLeadStatusPipline", checkForAuthentication(), contactAndLeadStatusPiplineRoutes);
+app.use(
+  "/addEditContactLeads",
+  checkForAuthentication(),
+  addEditContactLeadsRoutes
+);
+app.use(
+  "/getAllContactsOrLeads",
+  checkForAuthentication(),
+  getAllContactsOrLeadsRoutes
+);
+app.use(
+  "/contactAndLeadStatusPipline",
+  checkForAuthentication(),
+  contactAndLeadStatusPiplineRoutes
+);
 app.use("/task", checkForAuthentication(), addeditTaskRoutes);
 app.use("/tag", checkForAuthentication(), addedittagRoutes);
 app.use("/meeting", checkForAuthentication(), meetingRoutes);
@@ -187,7 +206,7 @@ const connectToDatabase = async () => {
     // Optimized settings for AWS Lambda
     const connection = await mongoose.connect(process.env.MONGO_URL, {
       maxPoolSize: 10, // Lower pool size for Lambda (not 200!)
-      minPoolSize: 1,  // Keep it minimal
+      minPoolSize: 1, // Keep it minimal
       serverSelectionTimeoutMS: 10000, // Increase timeout
       socketTimeoutMS: 45000, // Socket timeout
       connectTimeoutMS: 10000, // Connection timeout
@@ -213,7 +232,7 @@ const connectToDatabase = async () => {
 if (process.env.NODE_ENV === "serverless") {
   app.use((req, res, next) => {
     // This is crucial for Lambda
-    if (typeof context !== 'undefined') {
+    if (typeof context !== "undefined") {
       context.callbackWaitsForEmptyEventLoop = false;
     }
     next();
@@ -254,7 +273,7 @@ module.exports.handler = serverless(async (event, context) => {
     console.error("Lambda handler error:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Internal server error" })
+      body: JSON.stringify({ error: "Internal server error" }),
     };
   }
 });
