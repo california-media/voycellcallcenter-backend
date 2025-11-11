@@ -2,25 +2,25 @@ require("dotenv").config();
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-  service: "smtp",
-  host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT),
-  secure: true, // Gmail on port 587 uses TLS (not SSL)
-  auth: {
-    user: process.env.MAIL_USERNAME,
-    pass: process.env.MAIL_PASSWORD,
-  },
-  tls: {
-    rejectUnauthorized: false, // important for Gmail on TLS
-  },
+    service: "smtp",
+    host: process.env.MAIL_HOST,
+    port: Number(process.env.MAIL_PORT),
+    secure: true, // Gmail on port 587 uses TLS (not SSL)
+    auth: {
+        user: process.env.MAIL_USERNAME,
+        pass: process.env.MAIL_PASSWORD,
+    },
+    tls: {
+        rejectUnauthorized: false, // important for Gmail on TLS
+    },
 });
 
 const sendVerificationEmail = async (email, link) => {
-  const mailOptions = {
-    from: '"VoyCell Call Center" <noreply@contacts.management>',
-    to: email,
-    subject: "voyCell : Verify Your E-mail",
-    html: `<html lang="en">
+    const mailOptions = {
+        from: '"VoyCell Call Center" <noreply@contacts.management>',
+        to: email,
+        subject: "voyCell : Verify Your E-mail",
+        html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -162,9 +162,9 @@ const sendVerificationEmail = async (email, link) => {
 </body>
 
 </html>`,
-  };
+    };
 
-  await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
 };
 
 // const sendHelpSupportReply = async (
@@ -281,139 +281,138 @@ const sendVerificationEmail = async (email, link) => {
 //   await transporter.sendMail(mailOptions);
 // };
 
-// const sendHelpSupportReplyNotification = async (
-//   userEmail,
-//   userName,
-//   subject,
-//   adminMessage,
-//   ticketId
-// ) => {
-//   const ticketsPageUrl = `${
-//     process.env.FRONTEND_URL || "https://contacts.management"
-//   }/my-tickets?ticketId=${ticketId}`;
+const sendHelpSupportReplyNotification = async (
+    userEmail,
+    userName,
+    subject,
+    adminMessage,
+    ticketId
+) => {
+    const ticketsPageUrl = `${process.env.FRONTEND_URL || "https://contacts.management"
+        }/my-tickets?ticketId=${ticketId}`;
 
-//   const mailOptions = {
-//     from: '"Contacts Management Support" <noreply@contacts.management>',
-//     to: userEmail,
-//     subject: `New Reply: ${subject || "Your Support Request"}`,
-//     html: `<html lang="en">
+    const mailOptions = {
+        from: '"Contacts Management Support" <noreply@contacts.management>',
+        to: userEmail,
+        subject: `New Reply: ${subject || "Your Support Request"}`,
+        html: `<html lang="en">
 
-// <head>
-//     <meta charset="UTF-8">
-//     <title>New Reply - Contacts Management</title>
-//     <style>
-//         body {
-//             font-family: Arial, sans-serif;
-//             background-color: #ffffff;
-//             color: #2d313a;
-//             margin: 0;
-//             padding: 0;
-//         }
+<head>
+    <meta charset="UTF-8">
+    <title>New Reply - Contacts Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #ffffff;
+            color: #2d313a;
+            margin: 0;
+            padding: 0;
+        }
 
-//         .container {
-//             max-width: 600px;
-//             margin: 0 auto;
-//             padding: 20px;
-//         }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
 
-//         .notification-box {
-//             background-color: #e8f5e8;
-//             border-left: 4px solid #28a745;
-//             padding: 15px;
-//             margin: 20px 0;
-//         }
+        .notification-box {
+            background-color: #e8f5e8;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
 
-//         .message-box {
-//             background-color: #f8f9fa;
-//             border-left: 4px solid #007bff;
-//             padding: 15px;
-//             margin: 20px 0;
-//         }
+        .message-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+        }
 
-//         .cta-button {
-//             display: inline-block;
-//             background-color: #007bff;
-//             color: white;
-//             padding: 12px 24px;
-//             text-decoration: none;
-//             border-radius: 5px;
-//             margin: 20px 0;
-//             font-weight: bold;
-//         }
+        .cta-button {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
 
-//         .footer {
-//             text-align: center;
-//             font-size: 14px;
-//             color: #6c757d;
-//             margin-top: 30px;
-//         }
+        .footer {
+            text-align: center;
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 30px;
+        }
 
-//         .footer a {
-//             color: #007bff;
-//             text-decoration: none;
-//         }
-//     </style>
-// </head>
+        .footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+    </style>
+</head>
 
-// <body>
-//     <div class="container">
-//         <center>
-//             <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logoWithName.png"
-//                 alt="Contacts Management Logo" style="width:200px; display:block;">
-//         </center>
+<body>
+    <div class="container">
+        <center>
+            <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logoWithName.png"
+                alt="Contacts Management Logo" style="width:200px; display:block;">
+        </center>
 
-//         <p><strong>Hello ${userName || "Valued Customer"},</strong></p>
+        <p><strong>Hello ${userName || "Valued Customer"},</strong></p>
 
-//         <div class="notification-box">
-//             <h3 style="color: #28a745; margin-top: 0;">🎉 You've received a new reply!</h3>
-//             <p>Our support team has responded to your ticket: <strong>${subject}</strong></p>
-//         </div>
+        <div class="notification-box">
+            <h3 style="color: #28a745; margin-top: 0;">🎉 You've received a new reply!</h3>
+            <p>Our support team has responded to your ticket: <strong>${subject}</strong></p>
+        </div>
 
-//         <div class="message-box">
-//             <h4 style="color: #007bff; margin-top: 0;">Latest Reply:</h4>
-//             <p style="white-space: pre-wrap;">${adminMessage}</p>
-//         </div>
+        <div class="message-box">
+            <h4 style="color: #007bff; margin-top: 0;">Latest Reply:</h4>
+            <p style="white-space: pre-wrap;">${adminMessage}</p>
+        </div>
 
-//         <center>
-//             <a href="${ticketsPageUrl}" class="cta-button" style="color: white;">View Conversation & Reply</a>
-//         </center>
+        <center>
+            <a href="${ticketsPageUrl}" class="cta-button" style="color: white;">View Conversation & Reply</a>
+        </center>
 
-//         <p>Click the button above to view the full conversation and continue chatting with our support team.</p>
+        <p>Click the button above to view the full conversation and continue chatting with our support team.</p>
 
-//         <p>Best regards,<br>Contacts Management Support Team</p>
+        <p>Best regards,<br>Contacts Management Support Team</p>
 
-//         <div style="width:100%; overflow:hidden; margin-top: 30px;">
-//             <div style="float:left; width:110px; margin-right:10px;">
-//                 <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logo.png"
-//                     alt="Contacts Management Logo" style="width:100px; display:block;">
-//             </div>
-//             <div style="overflow:hidden;">
-//                 <span style="color:rgb(45,49,58); font-size:14px; letter-spacing:0.25px;">Be Extraordinary,</span><br>
-//                 <span>
-//                     <b>Contacts Management Support Team</b><br>
-//                     <a href="https://contacts.management" target="_blank" style="color:#007BFF; text-decoration:none;">
-//                         https://contacts.management
-//                     </a>
-//                 </span>
-//             </div>
-//         </div>
+        <div style="width:100%; overflow:hidden; margin-top: 30px;">
+            <div style="float:left; width:110px; margin-right:10px;">
+                <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logo.png"
+                    alt="Contacts Management Logo" style="width:100px; display:block;">
+            </div>
+            <div style="overflow:hidden;">
+                <span style="color:rgb(45,49,58); font-size:14px; letter-spacing:0.25px;">Be Extraordinary,</span><br>
+                <span>
+                    <b>Contacts Management Support Team</b><br>
+                    <a href="https://contacts.management" target="_blank" style="color:#007BFF; text-decoration:none;">
+                        https://contacts.management
+                    </a>
+                </span>
+            </div>
+        </div>
 
-//         <div class="footer">
-//             <p>Need additional help? Contact us at <a href="mailto:support@contacts.management">support@contacts.management</a></p>
-//             <p>Sent with ❤️ from Contacts Management</p>
-//             <p><a href="#" target="_blank">Privacy Policy</a></p>
-//         </div>
-//     </div>
-// </body>
+        <div class="footer">
+            <p>Need additional help? Contact us at <a href="mailto:support@contacts.management">support@contacts.management</a></p>
+            <p>Sent with ❤️ from Contacts Management</p>
+            <p><a href="#" target="_blank">Privacy Policy</a></p>
+        </div>
+    </div>
+</body>
 
-// </html>`,
-//   };
+</html>`,
+    };
 
-//   await transporter.sendMail(mailOptions);
-// };
+    await transporter.sendMail(mailOptions);
+};
 
 module.exports = {
-  sendVerificationEmail,
-  //   sendHelpSupportReply,
-  //   sendHelpSupportReplyNotification,
+    sendVerificationEmail,
+    //   sendHelpSupportReply,
+    sendHelpSupportReplyNotification,
 };

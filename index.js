@@ -46,12 +46,15 @@ const zohoContactFetchRoutes = require("./routes/zuhuContactFetchRoutes");
 const faqRoutes = require("./routes/faqRoutes");
 const fetchGoogleContacts = require("./routes/googleContactFatchRoutes");
 const saveBulkContactsRoutes = require("./routes/saveBulkContactsRoutes");
+const helpSupportRoutes = require("./routes/helpSupportRoutes");
 
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
 const adminUserRoutes = require("./routes/admin/adminUserRoutes");
 const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
+const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
+
 
 console.log("Setting up Express app...");
 
@@ -81,6 +84,12 @@ app.use("/task", checkForAuthentication(), addeditTaskRoutes);
 app.use("/tag", checkForAuthentication(), addedittagRoutes);
 app.use("/meeting", checkForAuthentication(), meetingRoutes);
 app.use("/faq", faqRoutes);
+app.use(
+  "/help-support",
+  checkForAuthentication(),
+  upload.single("helpAndSupportAttachments"),
+  helpSupportRoutes
+);
 app.use(
   "/connect",
   (req, res, next) => {
@@ -137,7 +146,12 @@ app.use(
 app.use("/admin/user/verify", adminUserVerifyRoutes);
 app.use("/admin/user", checkForAuthentication(), checkRole(["companyAdmin"]), adminUserRoutes);
 app.use("/admin", checkForAuthentication(), checkRole(["superadmin"]), getAdminDetailsRoutes);
-
+app.use(
+  "/admin/help-support",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  adminHelpSupportRoutes
+);
 
 app.use("/check", (req, res) => {
   res.json({ message: "API checkPage" });
