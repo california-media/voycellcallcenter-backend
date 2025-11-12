@@ -37,12 +37,16 @@ const redirectToGoogle = (req, res) => {
 
 const handleGoogleCallback = async (req, res) => {
   const { code } = req.query;
-  const useTestMode = req.user.stripe_test_mode || false;
+  // const useTestMode = req.user.stripe_test_mode || false;
   if (!code) {
     return res
       .status(400)
       .json({ status: "error", message: "Missing authorization code" });
   }
+  console.log("hello abc");
+
+  console.log(code);
+
 
   try {
     const { tokens } = await oauth2Client.getToken(code);
@@ -55,6 +59,8 @@ const handleGoogleCallback = async (req, res) => {
       pageSize: 1000,
       personFields: "names,emailAddresses,phoneNumbers",
     });
+
+
 
     const userId = req.query.state || null;
     if (!userId) {
@@ -175,8 +181,8 @@ const handleGoogleCallback = async (req, res) => {
         contact_id: _id,
         firstname,
         lastname,
-        emailaddresses: emailList,
-        phonenumbers: phoneList,
+        emailAddresses: emailList,
+        phoneNumbers: phoneList,
         // emailaddresses: Array.isArray(emailList) ? emailList : (emailList ? [emailList] : []),
         // phonenumbers: Array.isArray(phoneList) ? phoneList : (phoneList ? [phoneList] : []),
         company: "",
@@ -204,19 +210,19 @@ const handleGoogleCallback = async (req, res) => {
     // }
 
     // ✅ Apply plan rules before saving
-    let allowedContacts = contactsToInsert;
+    // let allowedContacts = contactsToInsert;
 
-    if (currentContactCount >= maxLimit) {
-      allowedContacts = []; // already at max
-    } else if (currentContactCount + contactsToInsert.length > maxLimit) {
-      const remainingSlots = maxLimit - currentContactCount;
-      allowedContacts = contactsToInsert.slice(0, remainingSlots); // trim
-    }
+    // if (currentContactCount >= maxLimit) {
+    //   allowedContacts = []; // already at max
+    // } else if (currentContactCount + contactsToInsert.length > maxLimit) {
+    //   const remainingSlots = maxLimit - currentContactCount;
+    //   allowedContacts = contactsToInsert.slice(0, remainingSlots); // trim
+    // }
 
     let savedContacts = [];
-    if (allowedContacts.length > 0) {
-      savedContacts = await Contact.insertMany(allowedContacts);
-    }
+    // if (allowedContacts.length > 0) {
+    // }
+    savedContacts = await Contact.insertMany(contactsToInsert);
 
     // return res.json({
     //   status: 'success',
@@ -233,8 +239,8 @@ const handleGoogleCallback = async (req, res) => {
       status: "success",
       message: "Google Contacts imported successfully",
       imported: savedContacts.length,
-      skipped: contactsToInsert.length - savedContacts.length,
-      totalContacts: currentContactCount + savedContacts.length,
+      // skipped: contactsToInsert.length - savedContacts.length,
+      // totalContacts: currentContactCount + savedContacts.length,
       contacts: savedContacts,
     };
 
@@ -246,28 +252,28 @@ const handleGoogleCallback = async (req, res) => {
     // `);
 
     return res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Google Connected</title>
-        <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                text-align: center; 
-                padding-top: 50px; 
-            }
-            .success { color: green; font-size: 18px; margin-bottom: 20px; }
-        </style>
-    </head>
-    <body>
-        <div class="success">Google Contact fetch Successfully! You can close this window.</div>
-        <script>
-            window.opener.postMessage(${JSON.stringify(resultData)}, '*');
-            window.close();
-        </script>
-    </body>
-    </html>
-`);
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Google Connected</title>
+            <style>
+                body { 
+                    font-family: Arial, sans-serif; 
+                    text-align: center; 
+                    padding-top: 50px; 
+                }
+                .success { color: green; font-size: 18px; margin-bottom: 20px; }
+            </style>
+        </head>
+        <body>
+            <div class="success">Google Contact fetch Successfully! You can close this window.</div>
+            <script>
+                window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+                window.close();
+            </script>
+        </body>
+        </html>
+    `);
   } catch (error) {
     // console.error('Google Contact Fetch Error:', error);
     // return res.status(500).json({
