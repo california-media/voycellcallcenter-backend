@@ -54,9 +54,9 @@ async function addOrUpdateReferral(referrerId, referredUser) {
   // Normalize phone objects from referredUser
   const phoneObjs = Array.isArray(referredUser.phonenumbers)
     ? referredUser.phonenumbers.map((p) => ({
-        countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
-        number: (p.number || "").toString().replace(/^\+/, ""),
-      }))
+      countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
+      number: (p.number || "").toString().replace(/^\+/, ""),
+    }))
     : [];
 
   const referredIdStr = referredUser._id.toString();
@@ -911,10 +911,17 @@ const unifiedLogin = async (req, res) => {
           });
         }
 
-        if(user.accountStatus === "deactivated") {
+        if (user.accountStatus === "deactivated") {
           return res.status(403).json({
             status: "error",
-            message: "Your account has been deactivated. Please contact support.",
+            message: "Your account deactivated. Please contact support.",
+          });
+        }
+
+        if (user.accountStatus === "suspended") {
+          return res.status(403).json({
+            status: "error",
+            message: "Your account suspended. Please contact support.",
           });
         }
 
