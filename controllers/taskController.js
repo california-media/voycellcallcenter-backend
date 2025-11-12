@@ -3,7 +3,84 @@ const Contact = require("../models/contactModel");
 const { logActivityToContact } = require("../utils/activityLogger"); // ✅ import activity logger
 
 /**
- * @route   POST /contacts/task
+ * @route   GET /task/getAll
+ * @desc    Get all tasks for a contact with optional sorting
+ * @access  Private
+ * @query   contact_id (required), sortBy (optional: 'ascending' or 'descending'), filterBy (optional: 'completed', 'incomplete', 'all')
+ */
+exports.getTasksForContact = async (req, res) => {
+  try {
+    const { contact_id, sortBy, filterBy } = req.query;
+
+    if (!contact_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "contact_id is required.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(contact_id)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid contact_id format.",
+      });
+    }
+
+    const contact = await Contact.findById(contact_id);
+    if (!contact) {
+      return res.status(404).json({
+        status: "error",
+        message: "Contact not found.",
+      });
+    }
+
+    let tasks = [...contact.tasks];
+
+    // Filter tasks based on completion status
+    if (filterBy === "completed") {
+      tasks = tasks.filter((task) => task.taskIsCompleted === true);
+    } else if (filterBy === "incomplete") {
+      tasks = tasks.filter((task) => task.taskIsCompleted === false);
+    }
+    // 'all' or no filterBy returns all tasks
+
+    // Sort tasks by creation date or due date
+    if (sortBy === "ascending") {
+      tasks.sort((a, b) => {
+        const dateA = a.taskDueDate || a.createdAt;
+        const dateB = b.taskDueDate || b.createdAt;
+        return new Date(dateA) - new Date(dateB);
+      });
+    } else if (sortBy === "descending") {
+      tasks.sort((a, b) => {
+        const dateA = a.taskDueDate || a.createdAt;
+        const dateB = b.taskDueDate || b.createdAt;
+        return new Date(dateB) - new Date(dateA);
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Tasks retrieved successfully.",
+      data: {
+        tasks,
+        totalTasks: tasks.length,
+        completedTasks: contact.tasks.filter((t) => t.taskIsCompleted).length,
+        incompleteTasks: contact.tasks.filter((t) => !t.taskIsCompleted).length,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getTasksForContact:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Server error. Please try again.",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @route   POST /task/addEdit
  * @desc    Add or update a task for a contact
  * @access  Private
  */
@@ -101,6 +178,23 @@ exports.addOrUpdateTask = async (req, res) => {
 
     await contact.save();
 
+    // Log activity
+    if (isUpdating) {
+      await logActivityToContact(contact_id, {
+        action: "task_updated",
+        type: "task",
+        title: "Task Updated",
+        description: taskDescription || "Task details updated",
+      });
+    } else {
+      await logActivityToContact(contact_id, {
+        action: "task_created",
+        type: "task",
+        title: "Task Created",
+        description: taskDescription || "New task added",
+      });
+    }
+
     return res.status(200).json({
       status: "success",
       message: isUpdating
@@ -118,8 +212,6 @@ exports.addOrUpdateTask = async (req, res) => {
   }
 };
 
-
-
 exports.deleteTask = async (req, res) => {
   const { contact_id, task_id } = req.body;
 
@@ -135,20 +227,21 @@ exports.deleteTask = async (req, res) => {
     // 1️⃣ Find contact first to get the task description before deleting
     const contact = await Contact.findOne({
       _id: contact_id,
-      createdBy: req.user._id,
       "tasks.task_id": task_id,
     });
 
     if (!contact) {
       return res.status(404).json({
         status: "error",
-        message: "Task not found in this contact or unauthorized access",
+        message: "Task not found in this contact",
       });
     }
 
     // 2️⃣ Extract the task description
-    const task = contact.tasks.find(t => t.task_id === task_id);
-    const taskDescription = task ? task.description || "No description" : "No description";
+    const task = contact.tasks.find((t) => t.task_id.toString() === task_id);
+    const taskDescription = task
+      ? task.taskDescription || "No description"
+      : "No description";
 
     // 3️⃣ Delete the task
     await Contact.updateOne(
@@ -169,7 +262,6 @@ exports.deleteTask = async (req, res) => {
       message: "Task Deleted",
       data: { task_id },
     });
-
   } catch (error) {
     console.error("Delete Task Error:", error);
     return res.status(500).json({
