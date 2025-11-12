@@ -145,19 +145,32 @@ exports.getAllContactsOrLeads = async (req, res) => {
       tag = "",
       sorted = false,
       isFavourite = false,
+      status = "",
     } = req.body;
 
     const createdBy = req.user._id;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const perPage = Math.max(1, parseInt(limit, 10) || 10);
     const skip = (pageNum - 1) * perPage;
+    console.log("status filter:", status);
 
     // Base query
     const query = { createdBy, isLead };
 
-    // Filter favourites
+    // Filter favourites - only filter if explicitly set to true
     if (isFavourite === true || String(isFavourite).toLowerCase() === "true") {
       query.isFavourite = true;
+    }
+    // Note: If isFavourite is false or null, we show all contacts (no filter)
+
+    // Filter by status - direct string matching
+    if (Array.isArray(status) && status.length > 0) {
+      // Simple $in with string values
+      query.status = { $in: status };
+      console.log("Status filter applied:", status);
+    } else if (typeof status === "string" && status.trim() !== "") {
+      query.status = status.trim();
+      console.log("Status query (string):", status.trim());
     }
 
     // Filter by tags
@@ -229,6 +242,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
     // -----------------------
     // Count & Fetch
     // -----------------------
+    console.log("Final query:", JSON.stringify(query, null, 2));
     const totalCount = await Contact.countDocuments(query);
     const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
@@ -238,6 +252,14 @@ exports.getAllContactsOrLeads = async (req, res) => {
       .limit(perPage)
       .select("-__v -updatedAt -createdBy")
       .lean();
+
+    console.log(`Found ${items.length} contacts, total count: ${totalCount}`);
+    if (items.length > 0) {
+      console.log(
+        "Sample contact statuses:",
+        items.slice(0, 3).map((i) => ({ name: i.firstname, status: i.status }))
+      );
+    }
 
     // -----------------------
     // Format Results

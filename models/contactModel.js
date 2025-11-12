@@ -94,6 +94,7 @@ const contactSchema = new Schema(
         "win",
         "lost",
       ],
+      default: "contacted",
     },
 
     isLead: {
@@ -188,5 +189,3 @@ const contactSchema = new Schema(
 
 const Contact = model("Contact", contactSchema);
 module.exports = Contact;
-
-
