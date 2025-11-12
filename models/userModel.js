@@ -80,6 +80,12 @@ const userSchema = new Schema(
       default: false, // user is inactive until login
     },
 
+    accountStatus: {
+      type: String,
+      enum: ["active", "deactivated"],
+      default: "active",
+    },
+
     lastSeen: { type: Date, default: null },
 
     userInfo: {
