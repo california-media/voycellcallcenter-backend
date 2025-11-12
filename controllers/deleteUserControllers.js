@@ -5,8 +5,8 @@ const deleteUser = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // Step 1: Find and delete the user
-    const user = await User.findByIdAndDelete(userId);
+    // Step 1: Fetch the user
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
         status: "error",
@@ -14,91 +14,79 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    const userEmail = user.email?.toLowerCase()?.trim();
-    const userPhones = user.phonenumbers?.map(p => ({
-      countryCode: p.countryCode?.trim(),
-      number: p.number?.trim(),
-    })) || [];
+    // If companyAdmin, delete all their users and contacts
+    if (user.role === "companyAdmin") {
+      // 1a. Find all users created by this company admin
+      const users = await User.find({ createdByWhichCompanyAdmin: userId });
 
-    // Step 2: Delete all contacts created by this user
-    await Contact.deleteMany({ createdBy: userId });
+      const userIds = users.map(u => u._id);
 
-    // Step 3: Delete contacts in other users' data where both email and phone match
-    if (userEmail || userPhones.length) {
-      const phoneConditions = userPhones.map(p => ({
-        "phonenumbers.countryCode": p.countryCode,
-        "phonenumbers.number": p.number,
-      }));
+      // 1b. Delete all contacts created by these users
+      await Contact.deleteMany({ createdBy: { $in: userIds } });
 
-      const deleteQuery = {
-        createdBy: { $ne: userId },
-        $or: [],
-      };
+      // 1c. Delete all these users
+      await User.deleteMany({ _id: { $in: userIds } });
 
-      if (userEmail) {
-        deleteQuery.$or.push({ email: userEmail });
-      }
+      // 1d. Delete all contacts created by the company admin
+      await Contact.deleteMany({ createdBy: userId });
 
-      if (phoneConditions.length) {
-        deleteQuery.$or.push({ $or: phoneConditions });
-      }
+      // 1e. Delete the company admin
+      await User.findByIdAndDelete(userId);
 
-      if (deleteQuery.$or.length > 0) {
-        await Contact.deleteMany(deleteQuery);
-      }
+      return res.status(200).json({
+        status: "success",
+        message: "Company admin, all associated users, and contacts deleted successfully",
+      });
     }
 
-    // Step 4: Remove this user from other users' iScanned arrays
-    if (userEmail || userPhones.length) {
-      const phoneMatchConditions = userPhones.map(p => ({
-        "iScanned.phonenumbers.countryCode": p.countryCode,
-        "iScanned.phonenumbers.number": p.number,
-      }));
+    // If normal user, delete only their account and contacts
+    if (user.role === "user") {
+      const userEmail = user.email?.toLowerCase()?.trim();
+      const userPhones = user.phonenumbers?.map(p => ({
+        countryCode: p.countryCode?.trim(),
+        number: p.number?.trim(),
+      })) || [];
 
-      const updateQuery = {
-        _id: { $ne: userId },
-        $or: [],
-      };
+      // Delete contacts created by this user
+      await Contact.deleteMany({ createdBy: userId });
 
-      if (userEmail) {
-        updateQuery.$or.push({ "iScanned.email": userEmail });
+      // Delete references in other users' contacts if email/phone match
+      if (userEmail || userPhones.length) {
+        const phoneConditions = userPhones.map(p => ({
+          "phonenumbers.countryCode": p.countryCode,
+          "phonenumbers.number": p.number,
+        }));
+
+        const deleteQuery = {
+          createdBy: { $ne: userId },
+          $or: [],
+        };
+
+        if (userEmail) deleteQuery.$or.push({ email: userEmail });
+        if (phoneConditions.length) deleteQuery.$or.push({ $or: phoneConditions });
+
+        if (deleteQuery.$or.length > 0) {
+          await Contact.deleteMany(deleteQuery);
+        }
       }
 
-      if (phoneMatchConditions.length) {
-        updateQuery.$or.push({ $or: phoneMatchConditions });
-      }
+      // Delete the user
+      await User.findByIdAndDelete(userId);
 
-      if (updateQuery.$or.length > 0) {
-        await User.updateMany(
-          updateQuery,
-          {
-            $pull: {
-              iScanned: {
-                $or: [
-                  userEmail ? { email: userEmail } : null,
-                  ...userPhones.map(p => ({
-                    phonenumbers: {
-                      $elemMatch: {
-                        countryCode: p.countryCode,
-                        number: p.number,
-                      },
-                    },
-                  })),
-                ].filter(Boolean),
-              },
-            },
-          }
-        );
-      }
+      return res.status(200).json({
+        status: "success",
+        message: "User and all associated contacts deleted successfully",
+      });
     }
 
-    res.status(200).json({
-      status: "success",
-      message: "User and all associated references deleted successfully",
+    // For superadmin or unknown role, do nothing
+    return res.status(403).json({
+      status: "error",
+      message: "Role not authorized for deletion",
     });
   } catch (error) {
     console.error("Error deleting user and references:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: "error",
       message: "Error deleting user and associated data",
     });

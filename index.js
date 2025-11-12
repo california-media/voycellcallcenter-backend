@@ -29,6 +29,7 @@ const yeastarRoutes = require("./routes/yeastarRoutes");
 const yeastarLoginRoutes = require("./routes/yeastarLoginRoutes");
 const scriptRoutes = require("./routes/scriptRoutes");
 const callmeServeRoute = require("./routes/callmeServeRoute");
+const getExtensionCallHistory = require("./routes/getYeasterCallHistoryRoutes");
 const editProfileRoutes = require("./routes/editProfileRoutes");
 const getUserRoutes = require("./routes/getUserRoutes");
 const emailPasswordResetRoutes = require("./routes/emailPasswordResetRoutes");
@@ -46,7 +47,8 @@ const faqRoutes = require("./routes/faqRoutes");
 const fetchGoogleContacts = require("./routes/googleContactFatchRoutes");
 const saveBulkContactsRoutes = require("./routes/saveBulkContactsRoutes");
 const helpSupportRoutes = require("./routes/helpSupportRoutes");
-
+const changePassword = require("./routes/changePasswordRoutes");
+const deleteUserRoutes = require("./routes/deleteUserRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -76,6 +78,7 @@ app.use(
 );
 app.use("/api/script", scriptRoutes); // script generation (auth)
 app.use("/voycell_callback", callmeServeRoute); // serves callme.js (no auth)
+app.use("/yeastar-call-history", getExtensionCallHistory);
 app.use(
   "/editProfile",
   checkForAuthentication(),
@@ -83,6 +86,8 @@ app.use(
   editProfileRoutes
 );
 app.use("/getUser", checkForAuthentication(), getUserRoutes);
+app.use("/changePassword", checkForAuthentication(), changePassword);
+app.use("/deleteUser", checkForAuthentication(), deleteUserRoutes);
 app.use("/email", emailPasswordResetRoutes);
 app.use(
   "/addEditContactLeads",
