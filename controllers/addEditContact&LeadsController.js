@@ -731,9 +731,190 @@ const batchDeleteContacts = async (req, res) => {
   }
 };
 
+/**
+ * Update first phone number or email address
+ * Allows quick inline editing of the primary contact method
+ */
+const updateFirstPhoneOrEmail = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized: User not found",
+      });
+    }
+
+    const { contact_id, field, value } = req.body;
+
+    if (!contact_id || !field || !value) {
+      return res.status(400).json({
+        status: "error",
+        message: "Contact ID, field, and value are required",
+      });
+    }
+
+    if (field !== "phone" && field !== "email") {
+      return res.status(400).json({
+        status: "error",
+        message: "Field must be either 'phone' or 'email'",
+      });
+    }
+
+    // Find the contact
+    const contact = await Contact.findOne({
+      _id: contact_id,
+      createdBy: req.user._id,
+    });
+
+    if (!contact) {
+      return res.status(404).json({
+        status: "error",
+        message: "Contact not found or unauthorized",
+      });
+    }
+
+    // Update based on field type
+    if (field === "phone") {
+      // Parse phone number - expecting format like "+1 1234567890" or "1234567890"
+      let countryCode = "";
+      let number = "";
+
+      const trimmedValue = value.trim();
+
+      // Check if it starts with +
+      if (trimmedValue.startsWith("+")) {
+        const parts = trimmedValue.slice(1).split(/\s+/);
+        if (parts.length >= 2) {
+          countryCode = parts[0].replace(/[^\d]/g, "");
+          number = parts.slice(1).join("").replace(/[^\d]/g, "");
+        } else {
+          // No space, try to split (assume first 1-3 digits are country code)
+          const allDigits = trimmedValue.slice(1).replace(/[^\d]/g, "");
+          if (allDigits.length > 3) {
+            countryCode = allDigits.slice(0, 2); // Assume 2-digit country code
+            number = allDigits.slice(2);
+          } else {
+            number = allDigits;
+            countryCode = "1"; // Default to US
+          }
+        }
+      } else {
+        // No country code, just number
+        number = trimmedValue.replace(/[^\d]/g, "");
+        countryCode = "1"; // Default to US
+      }
+
+      if (!number) {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid phone number format",
+        });
+      }
+
+      // Check if phone already exists for another contact
+      const duplicatePhone = await Contact.findOne({
+        _id: { $ne: contact_id },
+        createdBy: req.user._id,
+        phoneNumbers: {
+          $elemMatch: { countryCode, number },
+        },
+      });
+
+      if (duplicatePhone) {
+        return res.status(400).json({
+          status: "error",
+          message: "This phone number already exists for another contact",
+        });
+      }
+
+      // Update first phone number or add new if none exists
+      if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
+        contact.phoneNumbers[0] = { countryCode, number };
+      } else {
+        contact.phoneNumbers = [{ countryCode, number }];
+      }
+
+      await contact.save();
+
+      await logActivityToContact(contact._id, {
+        action: "contact_phone_updated",
+        type: "contact",
+        title: "Phone Number Updated",
+        description: `Phone updated to +${countryCode} ${number}`,
+      });
+
+      res.status(200).json({
+        status: "success",
+        message: "Phone number updated successfully",
+        data: {
+          contact_id: contact._id,
+          phone: `+${countryCode} ${number}`,
+        },
+      });
+    } else if (field === "email") {
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid email format",
+        });
+      }
+
+      // Check if email already exists for another contact
+      const duplicateEmail = await Contact.findOne({
+        _id: { $ne: contact_id },
+        createdBy: req.user._id,
+        emailAddresses: value,
+      });
+
+      if (duplicateEmail) {
+        return res.status(400).json({
+          status: "error",
+          message: "This email already exists for another contact",
+        });
+      }
+
+      // Update first email or add new if none exists
+      if (contact.emailAddresses && contact.emailAddresses.length > 0) {
+        contact.emailAddresses[0] = value;
+      } else {
+        contact.emailAddresses = [value];
+      }
+
+      await contact.save();
+
+      await logActivityToContact(contact._id, {
+        action: "contact_email_updated",
+        type: "contact",
+        title: "Email Updated",
+        description: `Email updated to ${value}`,
+      });
+
+      res.status(200).json({
+        status: "success",
+        message: "Email updated successfully",
+        data: {
+          contact_id: contact._id,
+          email: value,
+        },
+      });
+    }
+  } catch (error) {
+    console.error("Error updating phone/email:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   addEditContactisLeads,
   deleteContactOrLead,
   toggleContactFavorite,
   batchDeleteContacts,
+  updateFirstPhoneOrEmail,
 };

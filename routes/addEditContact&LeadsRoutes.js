@@ -4,6 +4,7 @@ const {
   deleteContactOrLead,
   toggleContactFavorite,
   batchDeleteContacts,
+  updateFirstPhoneOrEmail,
 } = require("../controllers/addEditContact&LeadsController");
 const multer = require("multer");
 
@@ -18,5 +19,6 @@ router.post("/", upload.single("contactImage"), addEditContactisLeads);
 router.post("/delete", deleteContactOrLead);
 router.put("/toggle-favorite", toggleContactFavorite);
 router.post("/batch-delete", batchDeleteContacts);
+router.put("/update-first-contact", updateFirstPhoneOrEmail);
 
 module.exports = router;
