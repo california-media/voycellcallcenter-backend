@@ -49,6 +49,7 @@ const saveBulkContactsRoutes = require("./routes/saveBulkContactsRoutes");
 const helpSupportRoutes = require("./routes/helpSupportRoutes");
 const changePassword = require("./routes/changePasswordRoutes");
 const deleteUserRoutes = require("./routes/deleteUserRoutes");
+const getProfileEventRoutes = require("./routes/getProfileEventRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -107,6 +108,7 @@ app.use(
 app.use("/task", checkForAuthentication(), addeditTaskRoutes);
 app.use("/tag", checkForAuthentication(), addedittagRoutes);
 app.use("/meeting", checkForAuthentication(), meetingRoutes);
+app.use("/getProfileEvent", checkForAuthentication(), getProfileEventRoutes);
 app.use("/faq", faqRoutes);
 app.use(
   "/help-support",

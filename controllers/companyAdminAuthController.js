@@ -911,6 +911,13 @@ const unifiedLogin = async (req, res) => {
           });
         }
 
+        if(user.accountStatus === "deactivated") {
+          return res.status(403).json({
+            status: "error",
+            message: "Your account has been deactivated. Please contact support.",
+          });
+        }
+
         // If logging in by phone AND we have both country & number, require OTP verification completed
         if (normNumber && normCountry && !user.isVerified) {
           return res.status(403).json({

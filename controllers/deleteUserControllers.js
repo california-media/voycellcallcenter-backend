@@ -14,83 +14,92 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    // If companyAdmin, delete all their users and contacts
+    // Prevent deactivation of superadmin
+    if (user.role === "superadmin") {
+      return res.status(403).json({
+        status: "error",
+        message: "Superadmin cannot be deactivated",
+      });
+    }
+
+    // Step 2: Handle companyAdmin case
     if (user.role === "companyAdmin") {
-      // 1a. Find all users created by this company admin
-      const users = await User.find({ createdByWhichCompanyAdmin: userId });
+      // Deactivate the company admin
+      await User.findByIdAndUpdate(userId, { accountStatus: "deactivated" });
 
-      const userIds = users.map(u => u._id);
-
-      // 1b. Delete all contacts created by these users
-      await Contact.deleteMany({ createdBy: { $in: userIds } });
-
-      // 1c. Delete all these users
-      await User.deleteMany({ _id: { $in: userIds } });
-
-      // 1d. Delete all contacts created by the company admin
-      await Contact.deleteMany({ createdBy: userId });
-
-      // 1e. Delete the company admin
-      await User.findByIdAndDelete(userId);
+      // Deactivate all users created by this company admin
+      await User.updateMany(
+        { createdByWhichCompanyAdmin: userId },
+        { accountStatus: "deactivated" }
+      );
 
       return res.status(200).json({
         status: "success",
-        message: "Company admin, all associated users, and contacts deleted successfully",
+        message:
+          "Company admin and all associated agents deactivated",
       });
     }
 
-    // If normal user, delete only their account and contacts
+    // Step 3: Handle normal user case
     if (user.role === "user") {
-      const userEmail = user.email?.toLowerCase()?.trim();
-      const userPhones = user.phonenumbers?.map(p => ({
-        countryCode: p.countryCode?.trim(),
-        number: p.number?.trim(),
-      })) || [];
-
-      // Delete contacts created by this user
-      await Contact.deleteMany({ createdBy: userId });
-
-      // Delete references in other users' contacts if email/phone match
-      if (userEmail || userPhones.length) {
-        const phoneConditions = userPhones.map(p => ({
-          "phonenumbers.countryCode": p.countryCode,
-          "phonenumbers.number": p.number,
-        }));
-
-        const deleteQuery = {
-          createdBy: { $ne: userId },
-          $or: [],
-        };
-
-        if (userEmail) deleteQuery.$or.push({ email: userEmail });
-        if (phoneConditions.length) deleteQuery.$or.push({ $or: phoneConditions });
-
-        if (deleteQuery.$or.length > 0) {
-          await Contact.deleteMany(deleteQuery);
-        }
-      }
-
-      // Delete the user
-      await User.findByIdAndDelete(userId);
+      await User.findByIdAndUpdate(userId, { accountStatus: "deactivated" });
 
       return res.status(200).json({
         status: "success",
-        message: "User and all associated contacts deleted successfully",
+        message: "User account has been deactivated successfully",
       });
     }
 
-    // For superadmin or unknown role, do nothing
-    return res.status(403).json({
+    // Fallback case (shouldn't occur normally)
+    return res.status(400).json({
       status: "error",
-      message: "Role not authorized for deletion",
+      message: "Invalid user role for deactivation",
     });
   } catch (error) {
-    console.error("Error deleting user and references:", error);
+    console.error("Error deactivating user:", error);
     return res.status(500).json({
       status: "error",
-      message: "Error deleting user and associated data",
+      message: "An error occurred while deactivating the account",
     });
   }
 };
 
-module.exports = { deleteUser };
+const activateUser = async (req, res) => {
+  try {
+    const userId = req.body.user_id;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.role === "companyAdmin") {
+      await User.findByIdAndUpdate(userId, { accountStatus: "active" });
+      await User.updateMany(
+        { createdByWhichCompanyAdmin: userId },
+        { accountStatus: "active" }
+      );
+      return res.status(200).json({
+        status: "success",
+        message:
+          "Company admin and all associated agents reactivated",
+      });
+    }
+
+    if (user.role === "user") {
+      await User.findByIdAndUpdate(userId, { accountStatus: "active" });
+      return res.status(200).json({
+        status: "success",
+        message: "User account reactivated",
+      });
+    }
+
+    return res
+      .status(403)
+      .json({ message: "Superadmin cannot be reactivated manually" });
+  } catch (error) {
+    console.error("Error activating user:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+
+module.exports = { deleteUser, activateUser };
