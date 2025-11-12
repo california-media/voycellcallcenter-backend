@@ -152,7 +152,6 @@ exports.getAllContactsOrLeads = async (req, res) => {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const perPage = Math.max(1, parseInt(limit, 10) || 10);
     const skip = (pageNum - 1) * perPage;
-    console.log("status filter:", status);
 
     // Base query
     const query = { createdBy, isLead };
@@ -242,7 +241,6 @@ exports.getAllContactsOrLeads = async (req, res) => {
     // -----------------------
     // Count & Fetch
     // -----------------------
-    console.log("Final query:", JSON.stringify(query, null, 2));
     const totalCount = await Contact.countDocuments(query);
     const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
@@ -252,14 +250,6 @@ exports.getAllContactsOrLeads = async (req, res) => {
       .limit(perPage)
       .select("-__v -updatedAt -createdBy")
       .lean();
-
-    console.log(`Found ${items.length} contacts, total count: ${totalCount}`);
-    if (items.length > 0) {
-      console.log(
-        "Sample contact statuses:",
-        items.slice(0, 3).map((i) => ({ name: i.firstname, status: i.status }))
-      );
-    }
 
     // -----------------------
     // Format Results
