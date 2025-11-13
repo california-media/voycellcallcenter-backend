@@ -661,6 +661,15 @@ const toggleContactFavorite = async (req, res) => {
     contact.isFavourite = Boolean(isFavourite);
     await contact.save();
 
+    await logActivityToContact(contact._id, {
+      action: isFavourite ? "contact favorited" : "contact unfavorited",
+      type: "contact",
+      title: isFavourite ? "Contact Favorited" : "Contact Unfavorited",
+      description: isFavourite
+        ? "Contact Added to Favorites"
+        : "Contact Removed from Favorites",
+    });
+
     res.status(200).json({
       status: "success",
       message: isFavourite

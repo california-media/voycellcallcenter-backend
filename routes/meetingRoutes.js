@@ -1,6 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const { addOrUpdateMeeting, deleteMeeting } = require("../controllers/meetingController");
+const {
+  getMeetingsForContact,
+  addOrUpdateMeeting,
+  deleteMeeting,
+} = require("../controllers/meetingController");
+
+router.get("/getAll", getMeetingsForContact);
 
 router.post("/addUpdateMeeting", addOrUpdateMeeting);
 

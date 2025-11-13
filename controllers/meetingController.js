@@ -5,6 +5,89 @@ const { createGoogleMeetEvent } = require("../utils/googleCalendar.js");
 const { logActivityToContact } = require("../utils/activityLogger");
 
 /**
+ * @route   GET /meeting/getAll
+ * @desc    Get all meetings for a contact with optional sorting
+ * @access  Private
+ * @query   contact_id (required), sortBy (optional: 'ascending' or 'descending'), filterBy (optional: 'online', 'offline', 'all')
+ */
+exports.getMeetingsForContact = async (req, res) => {
+  try {
+    const { contact_id, sortBy, filterBy } = req.query;
+
+    if (!contact_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "contact_id is required.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(contact_id)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid contact_id format.",
+      });
+    }
+
+    const contact = await Contact.findById(contact_id);
+    if (!contact) {
+      return res.status(404).json({
+        status: "error",
+        message: "Contact not found.",
+      });
+    }
+
+    let meetings = [...contact.meetings];
+
+    // Filter meetings based on type
+    if (filterBy === "online") {
+      meetings = meetings.filter((meeting) => meeting.meetingType === "online");
+    } else if (filterBy === "offline") {
+      meetings = meetings.filter(
+        (meeting) => meeting.meetingType === "offline"
+      );
+    }
+    // 'all' or no filterBy returns all meetings
+
+    // Sort meetings by start date
+    if (sortBy === "ascending") {
+      meetings.sort((a, b) => {
+        const dateA = a.meetingStartDate || a.createdAt;
+        const dateB = b.meetingStartDate || b.createdAt;
+        return new Date(dateA) - new Date(dateB);
+      });
+    } else if (sortBy === "descending") {
+      meetings.sort((a, b) => {
+        const dateA = a.meetingStartDate || a.createdAt;
+        const dateB = b.meetingStartDate || b.createdAt;
+        return new Date(dateB) - new Date(dateA);
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Meetings retrieved successfully.",
+      data: {
+        meetings,
+        totalMeetings: meetings.length,
+        onlineMeetings: contact.meetings.filter(
+          (m) => m.meetingType === "online"
+        ).length,
+        offlineMeetings: contact.meetings.filter(
+          (m) => m.meetingType === "offline"
+        ).length,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getMeetingsForContact:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Server error. Please try again.",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * @route   POST /contacts/meeting
  * @desc    Add or update a meeting (online or offline) for a contact
  * @access  Private
@@ -136,7 +219,8 @@ exports.addOrUpdateMeeting = async (req, res) => {
       meetingObj.createdAt = new Date();
 
       if (meetingTitle) meetingObj.meetingTitle = meetingTitle;
-      if (meetingDescription) meetingObj.meetingDescription = meetingDescription;
+      if (meetingDescription)
+        meetingObj.meetingDescription = meetingDescription;
       if (meetingStartDate) meetingObj.meetingStartDate = meetingStartDate;
       if (meetingStartTime) meetingObj.meetingStartTime = meetingStartTime;
       meetingObj.meetingType = meetingType || "offline";
@@ -170,6 +254,29 @@ exports.addOrUpdateMeeting = async (req, res) => {
     }
 
     await contact.save();
+
+    // Get the meeting title for activity logging
+    const activityMeetingTitle = isUpdating
+      ? contact.meetings.find((m) => m.meeting_id.toString() === meeting_id)
+          ?.meetingTitle
+      : meetingObj.meetingTitle;
+
+    // Log activity
+    if (isUpdating) {
+      await logActivityToContact(contact._id, {
+        action: "meeting_updated",
+        type: "meeting",
+        title: "Meeting Updated",
+        description: activityMeetingTitle || "Untitled Meeting",
+      });
+    } else {
+      await logActivityToContact(contact._id, {
+        action: "meeting_created",
+        type: "meeting",
+        title: "Meeting Created",
+        description: activityMeetingTitle || "Untitled Meeting",
+      });
+    }
 
     return res.status(200).json({
       status: "success",
@@ -214,7 +321,7 @@ exports.deleteMeeting = async (req, res) => {
     }
 
     // 2️⃣ Get the meeting title
-    const meeting = contact.meetings.find(m => m.meeting_id === meeting_id);
+    const meeting = contact.meetings.find((m) => m.meeting_id === meeting_id);
     const meetingTitle = meeting ? meeting.title : "Untitled Meeting";
 
     // 3️⃣ Delete the meeting
@@ -236,7 +343,6 @@ exports.deleteMeeting = async (req, res) => {
       message: "Meeting Deleted",
       data: { meeting_id },
     });
-
   } catch (error) {
     console.error("Delete Meeting Error:", error);
     return res.status(500).json({
