@@ -58,7 +58,6 @@ const adminUserRoutes = require("./routes/admin/adminUserRoutes");
 const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
 const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
 
-
 console.log("Setting up Express app...");
 
 app.use(cors());
@@ -81,7 +80,11 @@ app.use(
 app.use("/api/script", scriptRoutes); // script generation (auth)
 app.use("/voycell_callback", callmeServeRoute); // serves callme.js (no auth)
 app.use("/yeastar-call-history", getExtensionCallHistory);
-app.use("/integrations/token", checkForAuthentication(), getYeasterValidAccessTokenRoutes);
+app.use(
+  "/integrations/token",
+  checkForAuthentication(),
+  getYeasterValidAccessTokenRoutes
+);
 app.use(
   "/editProfile",
   checkForAuthentication(),
@@ -172,8 +175,18 @@ app.use(
 
 // Admin routes
 app.use("/admin/user/verify", adminUserVerifyRoutes);
-app.use("/admin/user", checkForAuthentication(), checkRole(["companyAdmin"]), adminUserRoutes);
-app.use("/admin", checkForAuthentication(), checkRole(["superadmin"]), getAdminDetailsRoutes);
+app.use(
+  "/admin/user",
+  checkForAuthentication(),
+  checkRole(["companyAdmin"]),
+  adminUserRoutes
+);
+app.use(
+  "/admin",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  getAdminDetailsRoutes
+);
 app.use(
   "/admin/help-support",
   checkForAuthentication(),

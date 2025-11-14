@@ -400,9 +400,7 @@
 //   }
 // };
 
-
 // module.exports = { editProfile };
-
 
 const path = require("path");
 const mongoose = require("mongoose");
@@ -472,7 +470,9 @@ const editProfile = async (req, res) => {
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ status: "error", message: "User not found" });
+      return res
+        .status(404)
+        .json({ status: "error", message: "User not found" });
     }
 
     const keys = Object.keys(req.body);
@@ -538,7 +538,9 @@ const editProfile = async (req, res) => {
           currentPhones.length === normalizedPhones.length &&
           currentPhones.every((cur, i) => {
             const newP = normalizedPhones[i];
-            return cur.countryCode === newP.countryCode && cur.number === newP.number;
+            return (
+              cur.countryCode === newP.countryCode && cur.number === newP.number
+            );
           });
 
         if (!sameNumbers) {
@@ -567,7 +569,6 @@ const editProfile = async (req, res) => {
         user.markModified("phonenumbers");
       }
     }
-
 
     // === Profile Image Handling ===
     if (keys.includes("profileImage")) {
@@ -613,6 +614,58 @@ const editProfile = async (req, res) => {
   }
 };
 
+// Update contact statuses
+const updateContactStatuses = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { contactStatuses } = req.body;
 
-module.exports = { editProfile };
+    // Validate that contactStatuses is an array
+    if (!Array.isArray(contactStatuses)) {
+      return res.status(400).json({
+        status: "error",
+        message: "contactStatuses must be an array",
+      });
+    }
 
+    // Validate each status has value and label
+    for (const status of contactStatuses) {
+      if (!status.value || !status.label) {
+        return res.status(400).json({
+          status: "error",
+          message: "Each status must have a value and label",
+        });
+      }
+    }
+
+    // Update user's contact statuses
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { contactStatuses },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Contact statuses updated successfully",
+      data: {
+        contactStatuses: user.contactStatuses,
+      },
+    });
+  } catch (error) {
+    console.error("Update Contact Statuses Error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Server error",
+    });
+  }
+};
+
+module.exports = { editProfile, updateContactStatuses };

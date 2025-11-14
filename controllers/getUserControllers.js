@@ -218,6 +218,7 @@ const getUserData = async (req, res) => {
       yeastarProvisionError: user.yeastarProvisionError || "",
       createdAt: user.createdAt,
       yestarBaseURL: YEASTAR_BASE_URL || null,
+      contactStatuses: user.contactStatuses || [],
       // yeastarSignature: yeastarSignature,
       // pbxURL: pbxURL,
     };

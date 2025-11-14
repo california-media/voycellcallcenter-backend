@@ -4,7 +4,6 @@ const { createTokenforUser } = require("../services/authentication");
 
 const userSchema = new Schema(
   {
-
     firstname: {
       type: String,
       // default: "Dummy Firstname",
@@ -62,7 +61,7 @@ const userSchema = new Schema(
 
     role: {
       type: String,
-      enum: ["user", "companyAdmin", "superadmin"],  /// user here is calling agent, not modifying to prevent breaking stuff
+      enum: ["user", "companyAdmin", "superadmin"], /// user here is calling agent, not modifying to prevent breaking stuff
       default: "user",
     },
 
@@ -118,7 +117,8 @@ const userSchema = new Schema(
       floatingButtonColor: { type: String, default: "#4CAF50" },
       popupText: {
         type: String,
-        default: "Enter your phone number and we’ll call you back in 30 seconds!",
+        default:
+          "Enter your phone number and we’ll call you back in 30 seconds!",
       },
       calltoaction: { type: String, default: "📞 Call Me" },
       // Add this near popupSettings in userSchema
@@ -127,7 +127,6 @@ const userSchema = new Schema(
         default: "", // store the website URL (origin) where the script is allowed, e.g. "https://example.com"
       },
     },
-
 
     extensionNumber: { type: String, default: null },
     yeastarExtensionId: { type: String, default: null }, // whatever PBX returns as id
@@ -178,7 +177,6 @@ const userSchema = new Schema(
         return this.isVerified && (!this.provider || this.provider === "local");
       },
     },
-
 
     linkedin: {
       type: String,
@@ -249,6 +247,23 @@ const userSchema = new Schema(
       type: Number,
       default: 0,
     },
+
+    // Contact Statuses for this user/company
+    contactStatuses: [
+      {
+        _id: false,
+        value: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        label: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+      },
+    ],
 
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date },
@@ -336,7 +351,7 @@ userSchema.static(
     const query = email
       ? { email }
       : // : { phonenumbers: { $in: [phonenumber] } }; // assuming you store phone numbers as array
-      { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
+        { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
 
     const user = await this.findOne(query);
     if (!user) throw new Error("User not found");
