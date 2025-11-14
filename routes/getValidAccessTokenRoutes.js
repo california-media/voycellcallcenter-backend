@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { getExtensionCallHistory } = require("../controllers/getYeasterCallHistoryController");
+const getValidAccessToken = require("../controllers/getValidAccessToken");
 
 // GET /api/yeastar/calls/:extension?startTime=&endTime=&page=&pageSize=
-router.get("/calls", getExtensionCallHistory);
+router.get("/", getValidAccessToken);
 
 module.exports = router;

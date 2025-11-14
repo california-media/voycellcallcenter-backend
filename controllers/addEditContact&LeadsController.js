@@ -292,6 +292,7 @@
 
 const mongoose = require("mongoose");
 const Contact = require("../models/contactModel");
+// const Lead = require("../models/leadModel");
 const User = require("../models/userModel");
 const s3 = require("../utils/s3");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
@@ -308,6 +309,272 @@ const parseBoolean = (val) => {
   }
   return false;
 };
+
+// ✅ Unified add/edit for Contact and Lead
+// const addEditContactisLeads = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id);
+//     if (!user)
+//       return res
+//         .status(401)
+//         .json({ status: "error", message: "Unauthorized: User not found" });
+
+//     // ---------- Extract request fields ----------
+//     const {
+//       contact_id,
+//       firstname,
+//       lastname,
+//       company,
+//       designation,
+//       linkedin,
+//       instagram,
+//       telegram,
+//       twitter,
+//       facebook,
+//       emailAddresses,
+//       phoneNumbers,
+//       notes,
+//       website,
+//       category, // <-- new field
+//     } = req.body;
+
+//     const isLead = parseBoolean(req.body.isLead);
+//     const isFavourite = parseBoolean(req.body.isFavourite);
+
+//     // ---------- Parse emailAddresses ----------
+//     let cleanedEmails = [];
+//     if (emailAddresses) {
+//       try {
+//         const parsed =
+//           typeof emailAddresses === "string"
+//             ? JSON.parse(emailAddresses)
+//             : emailAddresses;
+//         cleanedEmails = Array.isArray(parsed)
+//           ? parsed.filter((e) => e && e.trim() !== "")
+//           : [parsed];
+//       } catch {
+//         cleanedEmails =
+//           typeof emailAddresses === "string" ? [emailAddresses.trim()] : [];
+//       }
+//     }
+
+//     // ---------- Parse phoneNumbers ----------
+//     let formattedPhones = [];
+//     if (phoneNumbers) {
+//       try {
+//         const parsed =
+//           typeof phoneNumbers === "string"
+//             ? JSON.parse(phoneNumbers)
+//             : phoneNumbers;
+//         formattedPhones = Array.isArray(parsed)
+//           ? parsed.map((p) => ({
+//               countryCode: String(p.countryCode || p.countrycode || "").replace(
+//                 /[^\d]/g,
+//                 ""
+//               ),
+//               number: String(p.number || "").replace(/[^\d]/g, ""),
+//             }))
+//           : [];
+//       } catch (err) {
+//         console.error("Phone parse error:", err);
+//       }
+//     }
+
+//     // ---------- Basic validations ----------
+//     if (!firstname || firstname.trim() === "")
+//       return res
+//         .status(400)
+//         .json({ status: "error", message: "First name is required" });
+
+//     if (!cleanedEmails?.length)
+//       return res
+//         .status(400)
+//         .json({ status: "error", message: "At least one email address required" });
+
+//     if (!formattedPhones?.length)
+//       return res
+//         .status(400)
+//         .json({ status: "error", message: "At least one phone number required" });
+
+//     if (!category || !["contact", "lead"].includes(category.toLowerCase()))
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Category must be either 'contact' or 'lead'",
+//       });
+
+//     // ---------- Upload image to S3 if provided ----------
+//     const uploadImageToS3 = async (file) => {
+//       const ext = path.extname(file.originalname);
+//       const name = path.basename(file.originalname, ext);
+//       const fileName = `contactImages/${name}_${Date.now()}${ext}`;
+//       const params = {
+//         Bucket: process.env.AWS_BUCKET_NAME,
+//         Key: fileName,
+//         Body: file.buffer,
+//         ContentType: file.mimetype,
+//       };
+//       await s3.send(new PutObjectCommand(params));
+//       return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+//     };
+
+//     let contactImageURL = "";
+//     if (req.file) contactImageURL = await uploadImageToS3(req.file);
+
+//     const isCreating = !contact_id || contact_id === "0";
+//     const currentModel =
+//       category.toLowerCase() === "lead" ? Lead : Contact;
+//     const oppositeModel =
+//       category.toLowerCase() === "lead" ? Contact : Lead;
+
+//     let contact;
+
+//     // =========================================================
+//     // =============== CREATE NEW CONTACT/LEAD =================
+//     // =========================================================
+//     if (isCreating) {
+//       contact = await currentModel.create({
+//         firstname,
+//         lastname,
+//         company,
+//         designation,
+//         linkedin,
+//         instagram,
+//         telegram,
+//         twitter,
+//         facebook,
+//         emailAddresses: cleanedEmails,
+//         phoneNumbers: formattedPhones,
+//         contactImageURL,
+//         isFavourite,
+//         notes,
+//         website,
+//         isLead: category === "lead",
+//         createdBy: req.user._id,
+//       });
+
+//       contact.contact_id = contact._id; // maintain reference
+//       await contact.save();
+
+//       await logActivityToContact(contact._id, {
+//         action: category === "lead" ? "lead_created" : "contact_created",
+//         type: "contact",
+//         title: category === "lead" ? "Lead Created" : "Contact Created",
+//         description: `${firstname || ""} ${lastname || ""}`.trim(),
+//       });
+//     }
+
+//     // =========================================================
+//     // =============== UPDATE EXISTING CONTACT =================
+//     // =========================================================
+//     else {
+//       let existing =
+//         (await Contact.findOne({ contact_id })) ||
+//         (await Lead.findOne({ contact_id }));
+
+//       if (!existing)
+//         return res
+//           .status(404)
+//           .json({ status: "error", message: "Record not found" });
+
+//       const prevCategory = existing.isLead ? "lead" : "contact";
+//       const newCategory = category.toLowerCase();
+
+//       const updates = {
+//         firstname,
+//         lastname,
+//         company,
+//         designation,
+//         linkedin,
+//         instagram,
+//         telegram,
+//         twitter,
+//         facebook,
+//         emailAddresses: cleanedEmails,
+//         phoneNumbers: formattedPhones,
+//         contactImageURL: contactImageURL || existing.contactImageURL,
+//         isFavourite,
+//         notes,
+//         website,
+//         isLead: newCategory === "lead",
+//       };
+
+//       // If category changed → Move document between collections
+//       if (prevCategory !== newCategory) {
+//         // 1️⃣ Remove from old collection
+//         await existing.deleteOne();
+
+//         // 2️⃣ Create in new collection but retain the same contact_id
+//         contact = newCategory === "lead"
+//           ? new Lead({ ...updates, contact_id, createdBy: req.user._id })
+//           : new Contact({ ...updates, contact_id, createdBy: req.user._id });
+
+//         await contact.save();
+
+//         await logActivityToContact(contact.contact_id, {
+//           action:
+//             newCategory === "lead"
+//               ? "contact_converted_to_lead"
+//               : "lead_converted_to_contact",
+//           type: "contact",
+//           title:
+//             newCategory === "lead"
+//               ? "Contact Converted to Lead"
+//               : "Lead Converted to Contact",
+//           description: `${firstname || ""} ${lastname || ""}`.trim(),
+//         });
+//       } else {
+//         // Update within same collection
+//         contact = await currentModel.findOneAndUpdate(
+//           { contact_id },
+//           updates,
+//           { new: true }
+//         );
+
+//         await logActivityToContact(contact.contact_id, {
+//           action:
+//             newCategory === "lead" ? "lead_updated" : "contact_updated",
+//           type: "contact",
+//           title:
+//             newCategory === "lead" ? "Lead Updated" : "Contact Updated",
+//           description: `${firstname || ""} ${lastname || ""}`.trim(),
+//         });
+//       }
+//     }
+
+//     // ---------- Final Response ----------
+//     const freshContact = await currentModel
+//       .findOne({ contact_id: contact.contact_id })
+//       .lean();
+
+//     const formatted = {
+//       ...freshContact,
+//       contact_id: freshContact.contact_id,
+//     };
+//     delete formatted.__v;
+//     delete formatted.updatedAt;
+//     delete formatted.createdBy;
+
+//     res.status(isCreating ? 201 : 200).json({
+//       status: "success",
+//       message:
+//         category === "lead"
+//           ? isCreating
+//             ? "Lead Created"
+//             : "Lead Updated"
+//           : isCreating
+//           ? "Contact Created"
+//           : "Contact Updated",
+//       data: formatted,
+//     });
+//   } catch (error) {
+//     console.error("Error in addEditContactisLeads:", error);
+//     res.status(500).json({
+//       status: "error",
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
 
 const addEditContactisLeads = async (req, res) => {
   try {
@@ -366,12 +633,12 @@ const addEditContactisLeads = async (req, res) => {
             : phoneNumbers;
         formattedPhones = Array.isArray(parsed)
           ? parsed.map((p) => ({
-              countryCode: String(p.countryCode || p.countrycode || "").replace(
-                /[^\d]/g,
-                ""
-              ),
-              number: String(p.number || "").replace(/[^\d]/g, ""),
-            }))
+            countryCode: String(p.countryCode || p.countrycode || "").replace(
+              /[^\d]/g,
+              ""
+            ),
+            number: String(p.number || "").replace(/[^\d]/g, ""),
+          }))
           : [];
       } catch (err) {
         console.error("Phone parse error:", err);
@@ -565,8 +832,8 @@ const addEditContactisLeads = async (req, res) => {
           ? "Lead Created"
           : "Lead Updated"
         : isCreating
-        ? "Contact Created"
-        : "Contact Updated",
+          ? "Contact Created"
+          : "Contact Updated",
       data: formatted,
     });
   } catch (error) {

@@ -216,6 +216,8 @@ const getUserData = async (req, res) => {
       sipSecret: user.sipSecret || null,
       yeastarProvisionStatus: user.yeastarProvisionStatus || "pending",
       yeastarProvisionError: user.yeastarProvisionError || "",
+      createdAt: user.createdAt,
+      yestarBaseURL: YEASTAR_BASE_URL || null,
       // yeastarSignature: yeastarSignature,
       // pbxURL: pbxURL,
     };
