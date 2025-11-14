@@ -9,11 +9,11 @@ const pipelineSchema = new Schema(
         },
         previousStatus: {
             type: String,
-            enum: ["interested", "notInterested", "called", "notValid", "contacted", "win", "lost", null],
+            // enum: ["interested", "notInterested", "called", "notValid", "contacted", "win", "lost", null],
         },
         currentStatus: {
             type: String,
-            enum: ["interested", "contacted", "win", "lost"],
+            // enum: ["interested", "contacted", "win", "lost"],
             required: true,
         },
         changedBy: {
