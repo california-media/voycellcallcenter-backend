@@ -51,6 +51,8 @@ const helpSupportRoutes = require("./routes/helpSupportRoutes");
 const changePassword = require("./routes/changePasswordRoutes");
 const deleteUserRoutes = require("./routes/deleteUserRoutes");
 const getProfileEventRoutes = require("./routes/getProfileEventRoutes");
+const apiKeyRoutes = require("./routes/apiKeyRoutes");
+
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -172,7 +174,7 @@ app.use(
   },
   zohoContactFetchRoutes
 );
-
+app.use("/api-key", checkForAuthentication(), apiKeyRoutes);
 // Admin routes
 app.use("/admin/user/verify", adminUserVerifyRoutes);
 app.use(
