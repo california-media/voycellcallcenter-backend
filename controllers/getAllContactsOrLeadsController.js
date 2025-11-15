@@ -166,10 +166,8 @@ exports.getAllContactsOrLeads = async (req, res) => {
     if (Array.isArray(status) && status.length > 0) {
       // Simple $in with string values
       query.status = { $in: status };
-      console.log("Status filter applied:", status);
     } else if (typeof status === "string" && status.trim() !== "") {
       query.status = status.trim();
-      console.log("Status query (string):", status.trim());
     }
 
     // Filter by tags

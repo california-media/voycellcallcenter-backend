@@ -234,14 +234,12 @@
 //   }
 // }
 
-
 // module.exports = {
 //   getValidToken,
 //   createYeastarExtensionForUser,
 //   getYeastarExtensions,
 //   findNextAvailableExtension,
 // };
-
 
 const axios = require("axios");
 const moment = require("moment");
@@ -270,7 +268,9 @@ async function loginToYeastar() {
 
       // Store new token in DB
       await YeastarToken.deleteMany({});
-      const expiry = moment().add(data.expires_in || 1800, "seconds").toDate();
+      const expiry = moment()
+        .add(data.expires_in || 1800, "seconds")
+        .toDate();
 
       await YeastarToken.create({
         access_token: data.access_token,
@@ -305,7 +305,9 @@ async function refreshYeastarToken(oldRefreshToken) {
     if (data.access_token) {
       console.log("✅ Yeastar token refreshed successfully.");
 
-      const expiry = moment().add(data.expires_in || 1800, "seconds").toDate();
+      const expiry = moment()
+        .add(data.expires_in || 1800, "seconds")
+        .toDate();
 
       await YeastarToken.deleteMany({});
       await YeastarToken.create({
@@ -319,7 +321,10 @@ async function refreshYeastarToken(oldRefreshToken) {
 
     throw new Error("Refresh token failed");
   } catch (err) {
-    console.error("❌ Yeastar refresh failed:", err.response?.data || err.message);
+    console.error(
+      "❌ Yeastar refresh failed:",
+      err.response?.data || err.message
+    );
     throw err;
   }
 }
@@ -391,7 +396,10 @@ async function getYeastarExtensions() {
     console.error("❌ Unexpected getYeastarExtensions response:", data);
     throw new Error(data.errmsg || "Failed to get extensions");
   } catch (err) {
-    console.error("❌ getYeastarExtensions error:", err.response?.data || err.message);
+    console.error(
+      "❌ getYeastarExtensions error:",
+      err.response?.data || err.message
+    );
     throw err;
   }
 }
@@ -401,7 +409,9 @@ async function getYeastarExtensions() {
  */
 async function findNextAvailableExtension(start = 1001) {
   const existing = await getYeastarExtensions();
-  const numbers = existing.map((ext) => parseInt(ext.number || ext.extension, 10));
+  const numbers = existing.map((ext) =>
+    parseInt(ext.number || ext.extension, 10)
+  );
   let next = start;
   while (numbers.includes(next)) next++;
   return next.toString();
@@ -411,8 +421,12 @@ async function findNextAvailableExtension(start = 1001) {
  * 🔑 Generate random SIP secret
  */
 function generateSecret(length = 12) {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  return Array.from(
+    { length },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join("");
 }
 
 /**
@@ -428,8 +442,16 @@ async function createYeastarExtensionForUser(user) {
 
   const body = {
     number: extensionNumber.toString(),
-    first_name: user.firstname || user?.email + " Voycell User" || "Voycell User", // ✅ added
-    last_name: user.lastname || "", // ✅ added
+    first_name:
+      user.firstname + " Voycell" || user?.email + " Voycell" || "Voycell", // ✅ added
+    last_name:
+      user?.role === "user"
+        ? "agent"
+        : user?.role === "companyAdmin"
+        ? "companyAdmin"
+        : user?.role === "superadmin"
+        ? "superadmin"
+        : "",
     caller_id_name:
       `${user.firstname || ""} ${user.lastname || ""}`.trim() || "User",
     reg_name: extensionNumber.toString(),
@@ -458,7 +480,39 @@ async function createYeastarExtensionForUser(user) {
     console.error("❌ Yeastar extension creation failed:", data);
     throw new Error(data.errmsg || "Yeastar extension creation failed");
   } catch (err) {
-    console.error("❌ Yeastar extension creation failed:", err.response?.data || err.message);
+    console.error(
+      "❌ Yeastar extension creation failed:",
+      err.response?.data || err.message
+    );
+    throw err;
+  }
+}
+
+/**
+ * 🗑️ Delete Yeastar extension
+ */
+async function deleteYeastarExtension(extensionId) {
+  const token = await getValidToken();
+  const url = `${YEASTAR_BASE_URL}/extension/delete?id=${extensionId}&access_token=${token}`;
+
+  console.log("Deleting Yeastar extension:", extensionId);
+
+  try {
+    const res = await axios.get(url);
+    const data = res.data;
+
+    if (data.errcode === 0) {
+      console.log("✅ Yeastar extension deleted successfully:", extensionId);
+      return { success: true, result: data };
+    }
+
+    console.error("❌ Yeastar extension deletion failed:", data);
+    throw new Error(data.errmsg || "Yeastar extension deletion failed");
+  } catch (err) {
+    console.error(
+      "❌ Yeastar extension deletion error:",
+      err.response?.data || err.message
+    );
     throw err;
   }
 }
@@ -468,4 +522,5 @@ module.exports = {
   createYeastarExtensionForUser,
   getYeastarExtensions,
   findNextAvailableExtension,
+  deleteYeastarExtension,
 };

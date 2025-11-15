@@ -39,6 +39,34 @@ const meetingSchema = new Schema(
   { timestamps: true, _id: false }
 );
 
+const attachmentSchema = new Schema(
+  {
+    attachment_id: {
+      type: mongoose.Types.ObjectId,
+      default: () => new mongoose.Types.ObjectId(),
+    },
+    fileName: {
+      type: String,
+      required: true,
+    },
+    fileURL: {
+      type: String,
+      required: true,
+    },
+    fileSize: {
+      type: Number, // in bytes
+    },
+    fileType: {
+      type: String, // MIME type
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const contactSchema = new Schema(
   {
     contact_id: {
@@ -155,6 +183,8 @@ const contactSchema = new Schema(
     tasks: [taskSchema],
 
     meetings: [meetingSchema],
+
+    attachments: [attachmentSchema],
 
     activities: [
       {

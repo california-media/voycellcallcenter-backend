@@ -2,25 +2,26 @@ require("dotenv").config();
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-    service: "smtp",
-    host: process.env.MAIL_HOST,
-    port: Number(process.env.MAIL_PORT),
-    secure: true, // Gmail on port 587 uses TLS (not SSL)
-    auth: {
-        user: process.env.MAIL_USERNAME,
-        pass: process.env.MAIL_PASSWORD,
-    },
-    tls: {
-        rejectUnauthorized: false, // important for Gmail on TLS
-    },
+  service: "smtp",
+  host: process.env.MAIL_HOST,
+  port: Number(process.env.MAIL_PORT),
+  secure: true, // Gmail on port 587 uses TLS (not SSL)
+  auth: {
+    user: process.env.MAIL_USERNAME,
+    pass: process.env.MAIL_PASSWORD,
+  },
+  tls: {
+    rejectUnauthorized: false, // important for Gmail on TLS
+  },
 });
 
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const sendVerificationEmail = async (email, link) => {
-    const mailOptions = {
-        from: '"VoyCell Call Center" <noreply@contacts.management>',
-        to: email,
-        subject: "voyCell : Verify Your E-mail",
-        html: `<html lang="en">
+  const mailOptions = {
+    from: '"VoyCell Call Center" <noreply@contacts.management>',
+    to: email,
+    subject: "voyCell : Verify Your E-mail",
+    html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -79,7 +80,7 @@ const sendVerificationEmail = async (email, link) => {
 <body>
     <div class="container">
 
-        <center> <img src="https://voycell-call-center-admin-frontend.vercel.app/assets/img/voycell-logo.webp"
+        <center> <img src="${FRONTEND_URL}/assets/img/voycell-logo.webp"
                     alt="VoyCell Call Center Logo" style="width:200px; display:block;"></center>
         <p><strong>Hello,</strong></p>
         
@@ -103,7 +104,7 @@ const sendVerificationEmail = async (email, link) => {
 
             <!-- Left Column (Image) -->
             <div style="float:left; width:110px; margin-right:10px;">
-                <img src="https://voycell-call-center-admin-frontend.vercel.app/assets/img/voycell-logo.webp"
+                <img src="${FRONTEND_URL}/assets/img/voycell-logo.webp"
                     alt="VoyCell Call Center logo" style="width:100px; display:block;">
             </div>
 
@@ -115,8 +116,8 @@ const sendVerificationEmail = async (email, link) => {
 
                 <span>
                     <b>VoyCell Call Center Team</b><br>
-                    <a href="https://contacts.management" target="_blank" style="color:#007BFF; text-decoration:none;">
-                        https://contacts.management
+                    <a href="${FRONTEND_URL}" target="_blank" style="color:#007BFF; text-decoration:none;">
+                       ${FRONTEND_URL}
                     </a>
                 </span>
 
@@ -162,9 +163,9 @@ const sendVerificationEmail = async (email, link) => {
 </body>
 
 </html>`,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+  await transporter.sendMail(mailOptions);
 };
 
 // const sendHelpSupportReply = async (
@@ -282,20 +283,21 @@ const sendVerificationEmail = async (email, link) => {
 // };
 
 const sendHelpSupportReplyNotification = async (
-    userEmail,
-    userName,
-    subject,
-    adminMessage,
-    ticketId
+  userEmail,
+  userName,
+  subject,
+  adminMessage,
+  ticketId
 ) => {
-    const ticketsPageUrl = `${process.env.FRONTEND_URL || "https://contacts.management"
-        }/my-tickets?ticketId=${ticketId}`;
+  const ticketsPageUrl = `${
+    process.env.FRONTEND_URL || "https://contacts.management"
+  }/my-tickets?ticketId=${ticketId}`;
 
-    const mailOptions = {
-        from: '"Contacts Management Support" <noreply@contacts.management>',
-        to: userEmail,
-        subject: `New Reply: ${subject || "Your Support Request"}`,
-        html: `<html lang="en">
+  const mailOptions = {
+    from: '"Contacts Management Support" <noreply@contacts.management>',
+    to: userEmail,
+    subject: `New Reply: ${subject || "Your Support Request"}`,
+    html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -406,13 +408,13 @@ const sendHelpSupportReplyNotification = async (
 </body>
 
 </html>`,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+  await transporter.sendMail(mailOptions);
 };
 
 module.exports = {
-    sendVerificationEmail,
-    //   sendHelpSupportReply,
-    sendHelpSupportReplyNotification,
+  sendVerificationEmail,
+  //   sendHelpSupportReply,
+  sendHelpSupportReplyNotification,
 };

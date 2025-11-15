@@ -602,6 +602,7 @@ const addEditContactisLeads = async (req, res) => {
       website,
     } = req.body;
 
+    console.log("isLead:", req.body.isLead, "category:", req.body.category);
     // parse booleans safely
     const isLead = parseBoolean(req.body.isLead);
     const isFavourite = parseBoolean(req.body.isFavourite);
@@ -633,12 +634,12 @@ const addEditContactisLeads = async (req, res) => {
             : phoneNumbers;
         formattedPhones = Array.isArray(parsed)
           ? parsed.map((p) => ({
-            countryCode: String(p.countryCode || p.countrycode || "").replace(
-              /[^\d]/g,
-              ""
-            ),
-            number: String(p.number || "").replace(/[^\d]/g, ""),
-          }))
+              countryCode: String(p.countryCode || p.countrycode || "").replace(
+                /[^\d]/g,
+                ""
+              ),
+              number: String(p.number || "").replace(/[^\d]/g, ""),
+            }))
           : [];
       } catch (err) {
         console.error("Phone parse error:", err);
@@ -832,8 +833,8 @@ const addEditContactisLeads = async (req, res) => {
           ? "Lead Created"
           : "Lead Updated"
         : isCreating
-          ? "Contact Created"
-          : "Contact Updated",
+        ? "Contact Created"
+        : "Contact Updated",
       data: formatted,
     });
   } catch (error) {
@@ -1187,10 +1188,140 @@ const updateFirstPhoneOrEmail = async (req, res) => {
   }
 };
 
+/**
+ * ======================================================
+ * UPDATE ATTACHMENTS API
+ * ======================================================
+ * Replaces the entire attachments array for a contact/lead
+ * Similar to how tags are managed
+ */
+const updateAttachments = async (req, res) => {
+  try {
+    const { contact_id } = req.body;
+
+    if (!contact_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "contact_id is required",
+      });
+    }
+
+    // Find the contact
+    const contact = await Contact.findOne({
+      _id: contact_id,
+      createdBy: req.user._id,
+    });
+
+    if (!contact) {
+      return res.status(404).json({
+        status: "error",
+        message: "Contact not found or unauthorized",
+      });
+    }
+
+    // Upload files to S3
+    const uploadFileToS3 = async (file) => {
+      const ext = path.extname(file.originalname);
+      const name = path.basename(file.originalname, ext);
+      const fileName = `attachments/${Date.now()}_${name}${ext}`;
+
+      const params = {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: fileName,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      };
+
+      try {
+        await s3.send(new PutObjectCommand(params));
+        const fileURL = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+        return fileURL;
+      } catch (error) {
+        console.error(`S3 upload failed for ${file.originalname}:`, error);
+        throw new Error("File upload failed");
+      }
+    };
+
+    // Process uploaded files
+    const newAttachments = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        try {
+          const fileURL = await uploadFileToS3(file);
+          const attachment = {
+            attachment_id: new mongoose.Types.ObjectId(),
+            fileName: file.originalname,
+            fileURL,
+            fileSize: file.size,
+            fileType: file.mimetype,
+            uploadedAt: new Date(),
+          };
+          newAttachments.push(attachment);
+        } catch (error) {
+          console.error(`Failed to upload file ${file.originalname}:`, error);
+        }
+      }
+    }
+
+    // Parse existing attachments from request body if provided
+    let existingAttachments = [];
+    if (req.body.existingAttachments) {
+      try {
+        existingAttachments =
+          typeof req.body.existingAttachments === "string"
+            ? JSON.parse(req.body.existingAttachments)
+            : req.body.existingAttachments;
+
+        // Ensure it's an array
+        if (!Array.isArray(existingAttachments)) {
+          existingAttachments = [];
+        }
+      } catch (error) {
+        console.error("Error parsing existingAttachments:", error);
+        existingAttachments = [];
+      }
+    }
+
+    // Combine existing and new attachments
+    const allAttachments = [...existingAttachments, ...newAttachments];
+
+    // Update contact with new attachments array
+    contact.attachments = allAttachments;
+    await contact.save();
+
+    // Log activity
+    await logActivityToContact(contact._id, {
+      action: "attachments_updated",
+      type: "contact",
+      title: "Attachments Updated",
+      description: `Updated attachments (${allAttachments.length} total, ${newAttachments.length} newly added)`,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Attachments updated successfully",
+      data: {
+        contact_id: contact._id,
+        attachments: contact.attachments,
+        newAttachmentsCount: newAttachments.length,
+        totalAttachmentsCount: allAttachments.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating attachments:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   addEditContactisLeads,
   deleteContactOrLead,
   toggleContactFavorite,
   batchDeleteContacts,
   updateFirstPhoneOrEmail,
+  updateAttachments,
 };
