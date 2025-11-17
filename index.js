@@ -6,7 +6,6 @@ console.log("Environment Variables Loaded:");
 const express = require("express");
 const app = express();
 const cors = require("cors");
-
 const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
@@ -52,7 +51,6 @@ const changePassword = require("./routes/changePasswordRoutes");
 const deleteUserRoutes = require("./routes/deleteUserRoutes");
 const getProfileEventRoutes = require("./routes/getProfileEventRoutes");
 const apiKeyRoutes = require("./routes/apiKeyRoutes");
-
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -277,7 +275,7 @@ const http = require("http");
       const server = http.createServer(app);
 
       server.listen(PORT, () =>
-        console.log(`🚀 Server running on http://localhost:${PORT}`)
+        console.log(`🚀 Server running on http://localhost:${PORT}`,"env", process.env.NODE_ENV)
       );
     }
   } catch (err) {

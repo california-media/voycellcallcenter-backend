@@ -1,10 +1,14 @@
 // deleteContactsCollection.js
 
 import mongoose from "mongoose";
+import dotenv from "dotenv";
+dotenv.config();
 
-const uri = "mongodb+srv://voycellcallcenterdb:voycellcallcenterdb@cluster0.lrzweyr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"; // Replace with your actual MongoDB connection string
+const uri = process.env.MONGO_URL; // <-- Read from .env
 
 async function deleteContactsCollection() {
+console.log("MongoDB URL log:", uri);
+
   try {
     await mongoose.connect(uri);
     console.log("✅ Connected to MongoDB");

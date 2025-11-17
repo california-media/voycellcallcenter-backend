@@ -122,7 +122,7 @@ const contactSchema = new Schema(
       //   "win",
       //   "lost",
       // ],
-      default: "contacted",
+      // default: "contacted",
     },
 
     isLead: {
