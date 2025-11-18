@@ -1245,15 +1245,20 @@ const updateAttachments = async (req, res) => {
     // Process uploaded files
     const newAttachments = [];
     if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
         try {
           const fileURL = await uploadFileToS3(file);
+          // Get description for this file
+          const description = req.body[`description_${i}`] || "";
+
           const attachment = {
             attachment_id: new mongoose.Types.ObjectId(),
             fileName: file.originalname,
             fileURL,
             fileSize: file.size,
             fileType: file.mimetype,
+            description: description,
             uploadedAt: new Date(),
           };
           newAttachments.push(attachment);

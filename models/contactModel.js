@@ -59,6 +59,10 @@ const attachmentSchema = new Schema(
     fileType: {
       type: String, // MIME type
     },
+    description: {
+      type: String,
+      default: "",
+    },
     uploadedAt: {
       type: Date,
       default: Date.now,
