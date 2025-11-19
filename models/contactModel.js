@@ -196,16 +196,17 @@ const contactSchema = new Schema(
         action: { type: String, required: true },
         type: {
           type: String,
-          required: true,
-          enum: [
-            "contact",
-            "task",
-            "meeting",
-            "tag",
-            "email",
-            "whatsapp",
-            "call",
-          ], // Optional but safer
+          required: true
+          // enum: [
+          //   "contact",
+          //   "task",
+          //   "meeting",
+          //   "tag",
+          //   "email",
+          //   "lead",
+          //   "whatsapp",
+          //   "call",
+          // ], // Optional but safer
         },
         title: { type: String },
         description: { type: String },

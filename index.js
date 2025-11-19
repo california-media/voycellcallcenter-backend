@@ -79,7 +79,7 @@ app.use(
 );
 app.use("/api/script", scriptRoutes); // script generation (auth)
 app.use("/voycell_callback", callmeServeRoute); // serves callme.js (no auth)
-app.use("/yeastar-call-history", getExtensionCallHistory);
+app.use("/call", checkForAuthentication(), getExtensionCallHistory);
 app.use(
   "/integrations/token",
   checkForAuthentication(),
