@@ -296,6 +296,8 @@ exports.getAllContactsOrLeads = async (req, res) => {
     // -----------------------
     // Response
     // -----------------------
+    console.log(data);
+
     return res.status(200).json({
       status: "success",
       message: category === "lead"

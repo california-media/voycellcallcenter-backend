@@ -108,6 +108,7 @@ const addEditContactisLeads = async (req, res) => {
 
       const created = await currentModel.create({
         ...req.body,
+        _id: newID,
         contact_id: newID,
         emailAddresses: emails,
         phoneNumbers: phones,
