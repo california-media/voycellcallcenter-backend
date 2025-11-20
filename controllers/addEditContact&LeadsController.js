@@ -112,7 +112,7 @@ const addEditContactisLeads = async (req, res) => {
         emailAddresses: emails,
         phoneNumbers: phones,
         contactImageURL: finalImageURL || "",
-        status: isLeadReq ? "interested" : "",
+        status: isLeadReq ? "interested" : "contacted",
         isLead: isLeadReq,
         company,
         designation,

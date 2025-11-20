@@ -289,6 +289,7 @@ exports.getCompanyCallHistory = async (req, res) => {
         });
     }
 };
+
 exports.callRecordingDownload = async (req, res) => {
     try {
         const { record_file } = req.body;
@@ -301,20 +302,29 @@ exports.callRecordingDownload = async (req, res) => {
             });
         }
 
-        // Yeastar download URL
-        const url = `${YEASTAR_BASE_URL}/recording/download?access_token=${token}&file=${encodeURIComponent(record_file)}`;
+        // ---- STEP 1 ----
+        // Correct API URL based on your working Postman request
+        const url1 = `${YEASTAR_BASE_URL}/recording/download?access_token=${token}&file=${encodeURIComponent(record_file)}`;
 
-        // Download WAV file as binary
-        const response = await axios.post(url, {}, { responseType: "arraybuffer" });
+        const step1 = await axios.get(url1);
+        console.log(step1);
 
-        // Convert to base64 (WAV)
-        const base64Wav = Buffer.from(response.data).toString("base64");
+        if (!step1.data.download_resource_url) {
+            return res.status(500).json({
+                status: "error",
+                message: "Yeastar did not return download_resource_url",
+                yeastarResponse: step1.data
+            });
+        }
+
+        const downloadPath = step1.data.download_resource_url;
+        const url2 = `https://cmedia.ras.yeastar.com${downloadPath}?access_token=${token}`;
 
         return res.json({
             status: "success",
             fileName: record_file,
             mimeType: "audio/wav",
-            base64: base64Wav,
+            fileUrl: url2
         });
 
     } catch (err) {
