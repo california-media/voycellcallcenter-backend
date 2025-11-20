@@ -10,12 +10,19 @@ const { logActivityToContact } = require("../utils/activityLogger"); // ✅ impo
  */
 exports.getTasksForContact = async (req, res) => {
   try {
-    const { contact_id, sortBy, filterBy } = req.query;
+    const { contact_id, sortBy, filterBy, category } = req.query;
 
     if (!contact_id) {
       return res.status(400).json({
         status: "error",
         message: "contact_id is required.",
+      });
+    }
+
+    if (!category || (category !== "lead" && category !== "contact")) {
+      return res.status(400).json({
+        status: "error",
+        message: "Valid category is required ('lead' or 'contact').",
       });
     }
 
@@ -26,7 +33,9 @@ exports.getTasksForContact = async (req, res) => {
       });
     }
 
-    const contact = await Contact.findById(contact_id);
+    const Model = category === "lead" ? Lead : Contact;
+
+    const contact = await Model.findById(contact_id);
     if (!contact) {
       return res.status(404).json({
         status: "error",
@@ -93,6 +102,7 @@ exports.addOrUpdateTask = async (req, res) => {
       taskDueDate,
       taskDueTime,
       taskIsCompleted,
+      category,
     } = req.body;
 
     if (!contact_id) {
@@ -102,7 +112,10 @@ exports.addOrUpdateTask = async (req, res) => {
       });
     }
 
-    const contact = await Contact.findById(contact_id);
+    const Model = category === "lead" ? Lead : Contact;
+
+
+    const contact = await Model.findById(contact_id);
     if (!contact) {
       return res.status(404).json({
         status: "error",
@@ -180,14 +193,14 @@ exports.addOrUpdateTask = async (req, res) => {
 
     // Log activity
     if (isUpdating) {
-      await logActivityToContact(contact_id, {
+      await logActivityToContact(category, contact_id, {
         action: "task_updated",
         type: "task",
         title: "Task Updated",
         description: taskDescription || "Task details updated",
       });
     } else {
-      await logActivityToContact(contact_id, {
+      await logActivityToContact(category, contact_id, {
         action: "task_created",
         type: "task",
         title: "Task Created",
@@ -213,7 +226,7 @@ exports.addOrUpdateTask = async (req, res) => {
 };
 
 exports.deleteTask = async (req, res) => {
-  const { contact_id, task_id } = req.body;
+  const { contact_id, task_id, category } = req.body;
 
   // Validate contactId
   if (!mongoose.Types.ObjectId.isValid(contact_id)) {
@@ -224,8 +237,9 @@ exports.deleteTask = async (req, res) => {
   }
 
   try {
+    const Model = category === "lead" ? Lead : Contact;
     // 1️⃣ Find contact first to get the task description before deleting
-    const contact = await Contact.findOne({
+    const contact = await Model.findOne({
       _id: contact_id,
       "tasks.task_id": task_id,
     });
@@ -244,13 +258,13 @@ exports.deleteTask = async (req, res) => {
       : "No description";
 
     // 3️⃣ Delete the task
-    await Contact.updateOne(
+    await Model.updateOne(
       { _id: contact_id },
       { $pull: { tasks: { task_id } } }
     );
 
     // 4️⃣ Log the activity
-    await logActivityToContact(contact_id, {
+    await logActivityToContact(category, contact_id, {
       action: "task_deleted",
       type: "task",
       title: "Task Deleted",

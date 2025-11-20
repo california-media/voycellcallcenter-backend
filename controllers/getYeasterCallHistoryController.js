@@ -289,3 +289,40 @@ exports.getCompanyCallHistory = async (req, res) => {
         });
     }
 };
+exports.callRecordingDownload = async (req, res) => {
+    try {
+        const { record_file } = req.body;
+        const token = await getValidToken();
+
+        if (!record_file) {
+            return res.status(400).json({
+                status: "error",
+                message: "record_file is required",
+            });
+        }
+
+        // Yeastar download URL
+        const url = `${YEASTAR_BASE_URL}/recording/download?access_token=${token}&file=${encodeURIComponent(record_file)}`;
+
+        // Download WAV file as binary
+        const response = await axios.post(url, {}, { responseType: "arraybuffer" });
+
+        // Convert to base64 (WAV)
+        const base64Wav = Buffer.from(response.data).toString("base64");
+
+        return res.json({
+            status: "success",
+            fileName: record_file,
+            mimeType: "audio/wav",
+            base64: base64Wav,
+        });
+
+    } catch (err) {
+        console.error("❌ Call Recording Download Error:", err);
+        return res.status(500).json({
+            status: "error",
+            message: "Failed to download recording",
+            error: err.message,
+        });
+    }
+};

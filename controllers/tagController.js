@@ -2,12 +2,18 @@ const mongoose = require("mongoose");
 const User = require("../models/userModel");
 const Contact = require("../models/contactModel");
 const Lead = require("../models/leadModel");
+const { logActivityToContact } = require("../utils/activityLogger"); // ✅ import activity logger
+
 
 const updateContactTags = async (req, res) => {
     try {
         const user_id = req.user._id;
         const contact_id = req.body.contact_id;
         const { tags } = req.body;
+        const category = req.body.category;
+        console.log(contact_id);
+
+        // ✅ Validate category
 
         if (category && category !== "contact" && category !== "lead") {
             return res.status(400).json({
@@ -15,9 +21,18 @@ const updateContactTags = async (req, res) => {
                 message: "category must be either 'contact' or 'lead' if provided",
             });
         }
+        console.log(user_id);
+
+        const Model = category === "lead" ? Lead : Contact;
+        console.log(category);
+
+        console.log(Model);
 
         // ✅ Validate contact
-        const contact = await Contact.findOne({ contact_id: contact_id, createdBy: user_id });
+        const contact = await Model.findOne({
+            contact_id: new mongoose.Types.ObjectId(contact_id),
+            createdBy: user_id
+        });
         console.log(contact);
 
         if (!contact)
@@ -109,6 +124,13 @@ const updateContactTags = async (req, res) => {
 
         // ✅ Save to contact
         contact.tags = matchedTags;
+        await logActivityToContact(category, contact._id, {
+            action: "tags_updated",
+            type: "tag",
+            title: "Tags Updated",
+            description: `Tags updated to: ${matchedTags.map(t => t.tag).join(", ")}`,
+        });
+
         await contact.save();
 
         return res.status(200).json({
@@ -277,6 +299,13 @@ const getTagWithContact = async (req, res) => {
                 { arrayFilters: [{ "elem.tag_id": new mongoose.Types.ObjectId(tag_id) }] }
             );
 
+            // Update all leads that have this tag with new order
+            await Lead.updateMany(
+                { createdBy: req.user._id, "tags.tag_id": tag_id },
+                { $set: { "tags.$[elem].order": newOrderPosition + 1 } },
+                { arrayFilters: [{ "elem.tag_id": new mongoose.Types.ObjectId(tag_id) }] }
+            );
+
             console.log(`Tag ${tag_id} moved to order ${newOrderPosition + 1}`);
 
             // Fetch updated data again
@@ -294,12 +323,20 @@ const getTagWithContact = async (req, res) => {
                     "_id firstname lastname emailaddresses phonenumbers contactImageURL tags.order"
                 );
 
+                const leads = await Lead.find({
+                    createdBy: req.user._id,
+                    "tags.tag_id": tag.tag_id,
+                }).select(
+                    "_id firstname lastname emailaddresses phonenumbers leadImageURL tags.order"
+                );
+
                 return {
                     tag_id: tag.tag_id,
                     tag: tag.tag,
                     emoji: tag.emoji,
                     order: tag.order || null,
                     contacts,
+                    leads,
                 };
             })
         );

@@ -1,5 +1,6 @@
 const Contact = require("../models/contactModel");
 const User = require("../models/userModel");
+const Lead = require("../models/leadModel");
 
 const getProfileEvents = async (req, res) => {
     try {
@@ -14,7 +15,23 @@ const getProfileEvents = async (req, res) => {
             });
         }
 
-        const contacts = await Contact.find({ createdBy: userId });
+        const category = req.body.category;
+
+        if (!category) {
+            return res.status(400).json({
+                status: "error",
+                message: "Category is required",
+            });
+        }
+
+        var Model;
+        if (category === "lead") {
+            Model = Lead;
+        } else {
+            Model = Contact;
+        }
+
+        const contacts = await Model.find({ createdBy: userId });
 
 
         const events = [];

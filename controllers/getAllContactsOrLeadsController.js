@@ -128,7 +128,7 @@
 // };
 
 const Contact = require("../models/contactModel");
-
+const Lead = require("../models/leadModel");
 /**
  * Escape string for RegExp
  */
@@ -139,6 +139,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
   try {
     const {
       isLead = false,
+      category,
       page = 1,
       limit = 10,
       search = "",
@@ -153,8 +154,15 @@ exports.getAllContactsOrLeads = async (req, res) => {
     const perPage = Math.max(1, parseInt(limit, 10) || 10);
     const skip = (pageNum - 1) * perPage;
 
+    var Model;
+    if (category === "lead") {
+      Model = Lead;
+    } else {
+      Model = Contact;
+    }
+
     // Base query
-    const query = { createdBy, isLead };
+    const query = { createdBy };
 
     // Filter favourites - only filter if explicitly set to true
     if (isFavourite === true || String(isFavourite).toLowerCase() === "true") {
@@ -239,10 +247,10 @@ exports.getAllContactsOrLeads = async (req, res) => {
     // -----------------------
     // Count & Fetch
     // -----------------------
-    const totalCount = await Contact.countDocuments(query);
+    const totalCount = await Model.countDocuments(query);
     const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
-    const items = await Contact.find(query)
+    const items = await Model.find(query)
       .sort(sorted ? { firstname: 1, lastname: 1 } : { createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(perPage)
@@ -290,7 +298,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
     // -----------------------
     return res.status(200).json({
       status: "success",
-      message: isLead
+      message: category === "lead"
         ? "Leads fetched successfully"
         : "Contacts fetched successfully",
       data,

@@ -56,7 +56,7 @@ const addEditContactisLeads = async (req, res) => {
 
     const isLeadReq = category.toLowerCase() === "lead";
     const currentModel = isLeadReq ? Lead : Contact;
-
+    const user_id = req.user._id;
     // Parse arrays
     const emails = Array.isArray(emailAddresses)
       ? emailAddresses
@@ -122,6 +122,7 @@ const addEditContactisLeads = async (req, res) => {
         twitter,
         facebook,
         website,
+        createdBy: user_id,
         activities: [
           {
             action: isLeadReq ? "lead_created" : "contact_created",
@@ -232,7 +233,7 @@ const addEditContactisLeads = async (req, res) => {
         twitter: twitter || old.twitter,
         facebook: facebook || old.facebook,
         website: website || old.website,
-
+        createdBy: old.createdBy,
         isLead: isLeadReq,
         status: newStatus,
         contactImageURL: finalImageURL || old.contactImageURL,

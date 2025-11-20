@@ -75,9 +75,10 @@ const contactSchema = new Schema(
   {
     contact_id: {
       type: Schema.Types.ObjectId,
-      // type: mongoose.Schema.Types.ObjectId,
       unique: true,
+      default: () => new mongoose.Types.ObjectId()   // ← ADD THIS
     },
+
     firstname: {
       type: String,
       // default: "Dummy firstname",
