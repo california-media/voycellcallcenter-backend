@@ -13,8 +13,7 @@ const { logActivityToContact } = require("../utils/activityLogger");
  */
 exports.getMeetingsForContact = async (req, res) => {
   try {
-    const { contact_id, sortBy, filterBy, category } = req.body;
-
+    const { contact_id, sortBy, filterBy, category } = req.query;
     if (!contact_id) {
       return res.status(400).json({
         status: "error",

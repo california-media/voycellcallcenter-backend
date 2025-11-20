@@ -26,14 +26,12 @@ const updateContactTags = async (req, res) => {
         const Model = category === "lead" ? Lead : Contact;
         console.log(category);
 
-        console.log(Model);
 
         // ✅ Validate contact
         const contact = await Model.findOne({
             contact_id: new mongoose.Types.ObjectId(contact_id),
             createdBy: user_id
         });
-        console.log(contact);
 
         if (!contact)
             return res.status(404).json({ status: "error", message: "Contact not found" });
