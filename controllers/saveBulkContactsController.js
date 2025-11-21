@@ -2,6 +2,7 @@ const Contact = require("../models/contactModel");
 const User = require("../models/userModel");
 const mongoose = require("mongoose");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
+const Lead = require("../models/leadModel");
 
 const saveBulkContacts = async (req, res) => {
   try {
@@ -14,7 +15,8 @@ const saveBulkContacts = async (req, res) => {
       });
     }
     const { contacts, isLead = false, category = "contact" } = req.body;
-    console.log("isLEad:", isLead, "category:", category);
+
+    const currentModel = category === "lead" ? Lead : Contact;
     if (!Array.isArray(contacts) || contacts.length === 0) {
       return res.status(400).json({
         status: "error",
@@ -23,7 +25,7 @@ const saveBulkContacts = async (req, res) => {
     }
 
     // Determine if contacts should be marked as leads
-    const shouldBeLeads = isLead === true && category === "lead";
+    const shouldBeLeads =  category === "lead";
 
     // Allow both camelCase (schema) and lowercase (incoming)
     const allowedFields = [
@@ -158,7 +160,7 @@ const saveBulkContacts = async (req, res) => {
       );
 
       // Query existing contacts for this user within this batch
-      const existingContactsBatch = await Contact.find({
+      const existingContactsBatch = await currentModel.find({
         createdBy: req.user._id,
         $or: [
           {
@@ -306,7 +308,7 @@ const saveBulkContacts = async (req, res) => {
 
       // Execute bulkWrite for this batch
       if (bulkOps.length > 0) {
-        await Contact.bulkWrite(bulkOps, { ordered: false });
+        await currentModel.bulkWrite(bulkOps, { ordered: false });
       }
     }
 
