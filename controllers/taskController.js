@@ -12,7 +12,7 @@ const Lead = require("../models/leadModel");
 exports.getTasksForContact = async (req, res) => {
   try {
     const { contact_id, sortBy, filterBy, category } = req.query;
-
+    console.log("sortBy",sortBy);
     if (!contact_id) {
       return res.status(400).json({
         status: "error",
@@ -55,13 +55,13 @@ exports.getTasksForContact = async (req, res) => {
     // 'all' or no filterBy returns all tasks
 
     // Sort tasks by creation date or due date
-    if (sortBy === "ascending") {
+    if (sortBy.toLowerCase() === "ascending") {
       tasks.sort((a, b) => {
         const dateA = a.taskDueDate || a.createdAt;
         const dateB = b.taskDueDate || b.createdAt;
         return new Date(dateA) - new Date(dateB);
       });
-    } else if (sortBy === "descending") {
+    } else if (sortBy.toLowerCase() === "descending") {
       tasks.sort((a, b) => {
         const dateA = a.taskDueDate || a.createdAt;
         const dateB = b.taskDueDate || b.createdAt;
