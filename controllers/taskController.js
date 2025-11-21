@@ -12,7 +12,6 @@ const Lead = require("../models/leadModel");
 exports.getTasksForContact = async (req, res) => {
   try {
     const { contact_id, sortBy, filterBy, category } = req.query;
-    console.log("sortBy",sortBy);
     if (!contact_id) {
       return res.status(400).json({
         status: "error",
