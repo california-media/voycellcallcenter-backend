@@ -119,15 +119,15 @@ const contactSchema = new Schema(
 
     status: {
       type: String,
-      enum: [
-        "interested",
-        "notInterested",
-        "called",
-        "notValid",
-        "contacted",
-        "win",
-        "lost",
-      ],
+      // enum: [
+      //   "interested",
+      //   "notInterested",
+      //   "called",
+      //   "notValid",
+      //   "contacted",
+      //   "win",
+      //   "lost",
+      // ],
       default: "contacted",
     },
     
