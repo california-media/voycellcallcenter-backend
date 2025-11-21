@@ -120,7 +120,7 @@ exports.changeStatus = async (req, res) => {
 
       // Remove contact completely
       await Contact.findByIdAndDelete(contact_id);
-
+      console.log(`🔄 Contact ${contact_id} converted to Lead ${lead._id}`);
       // Create first pipeline
       await Pipeline.create({
         lead_id: contact_id,
@@ -129,9 +129,9 @@ exports.changeStatus = async (req, res) => {
         changedBy: userId,
         note,
       });
-      await logActivityToContact(category, contact_id, {
-        action: `${category}_status_changed`,
-        type: category,
+      await logActivityToContact("lead", lead.contact_id, {
+        action: `lead_status_changed`,
+        type: "lead",
         title: "Status Updated",
         description: `Status updated to ${newStatus}`,
       });
@@ -161,9 +161,9 @@ exports.changeStatus = async (req, res) => {
         changedBy: userId,
         note,
       });
-      await logActivityToContact(category, contact_id, {
-        action: `${category}_status_changed`,
-        type: category,
+      await logActivityToContact("lead", lead._id, {
+        action: `lead_status_changed`,
+        type: "lead",
         title: "Status Updated",
         description: `Status updated to ${newStatus}`,
       });
