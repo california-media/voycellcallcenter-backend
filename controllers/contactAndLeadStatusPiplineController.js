@@ -2,6 +2,7 @@ const Lead = require("../models/leadModel");
 const Contact = require("../models/contactModel");
 const Pipeline = require("../models/Pipeline");
 const User = require("../models/userModel");
+const { logActivityToContact } = require("../utils/activityLogger");
 
 // 🟢 1️⃣ Change status — convert to lead + create pipeline
 // exports.changeStatus = async (req, res) => {
@@ -55,7 +56,7 @@ const User = require("../models/userModel");
 
 exports.changeStatus = async (req, res) => {
   try {
-    const { contact_id, newStatus, note } = req.body;
+    const { contact_id, newStatus, note, category } = req.body;
     const userId = req.user?._id;
 
     if (!newStatus) {
@@ -128,6 +129,12 @@ exports.changeStatus = async (req, res) => {
         changedBy: userId,
         note,
       });
+      await logActivityToContact(category, contact_id, {
+        action: `${category}_status_changed`,
+        type: category,
+        title: "Status Updated",
+        description: `Status updated to ${newStatus}`,
+      });
 
       return res.status(200).json({
         message: "Contact converted to Lead successfully",
@@ -154,7 +161,12 @@ exports.changeStatus = async (req, res) => {
         changedBy: userId,
         note,
       });
-
+      await logActivityToContact(category, contact_id, {
+        action: `${category}_status_changed`,
+        type: category,
+        title: "Status Updated",
+        description: `Status updated to ${newStatus}`,
+      });
       return res.status(200).json({
         message: "Lead status updated successfully",
         status: "success",
