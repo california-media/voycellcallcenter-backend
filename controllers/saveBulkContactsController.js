@@ -46,7 +46,6 @@ const saveBulkContacts = async (req, res) => {
     ];
 
     const newContacts = [];
-    const updatedContacts = [];
     const skippedContacts = [];
 
     // preprocess contact: normalize keys to schema names: emailAddresses, phoneNumbers
@@ -159,8 +158,9 @@ const saveBulkContacts = async (req, res) => {
         (c) => c.normalized.emailAddresses || []
       );
 
-      // Query existing contacts for this user within this batch
-      const existingContactsBatch = await currentModel.find({
+      // Query existing contacts/leads for this user within this batch
+      // Check BOTH Contact and Lead models to prevent duplicates across categories
+      const queryCondition = {
         createdBy: req.user._id,
         $or: [
           {
@@ -174,7 +174,18 @@ const saveBulkContacts = async (req, res) => {
             },
           },
         ],
-      }).lean();
+      };
+
+      const [existingContacts, existingLeads] = await Promise.all([
+        Contact.find(queryCondition).lean(),
+        Lead.find(queryCondition).lean(),
+      ]);
+
+      // Combine both results for duplicate checking
+      const existingContactsBatch = [
+        ...existingContacts,
+        ...existingLeads,
+      ];
 
       // Build lookup maps
       const emailMap = new Map();
@@ -256,53 +267,11 @@ const saveBulkContacts = async (req, res) => {
             insertOne: { document: newContact },
           });
         } else {
-          // existing doc found -> compute new phone/email additions
-          const existingPhones = existing.phoneNumbers || [];
-          const existingEmails = existing.emailAddresses || [];
-
-          const newPhones = (phoneNumbers || []).filter(
-            (p) =>
-              !existingPhones.some(
-                (ep) =>
-                  ep.number === p.number && ep.countryCode === p.countryCode
-              )
-          );
-          const newEmails = (emailAddresses || []).filter(
-            (e) => !existingEmails.includes(e)
-          );
-
-          const hasNewData = newPhones.length > 0 || newEmails.length > 0;
-          if (!hasNewData) {
-            skippedContacts.push(raw);
-            continue;
-          }
-
-          bulkOps.push({
-            updateOne: {
-              filter: { _id: existing._id },
-              update: {
-                $addToSet: {
-                  phoneNumbers: { $each: newPhones },
-                  emailAddresses: { $each: newEmails },
-                },
-                $set: {
-                  firstname: firstname || existing.firstname,
-                  lastname: lastname || existing.lastname,
-                  company: company || existing.company,
-                  designation: designation || existing.designation,
-                  linkedin: linkedin || existing.linkedin,
-                  instagram: instagram || existing.instagram,
-                  telegram: telegram || existing.telegram,
-                  twitter: twitter || existing.twitter,
-                  facebook: facebook || existing.facebook,
-                  ...(status && { status }),
-                  ...(shouldBeLeads && { isLead: true }),
-                },
-              },
-            },
+          // Duplicate found in either Contact or Lead model - skip it
+          skippedContacts.push({
+            ...raw,
+            reason: `Duplicate found: ${existing.firstname} ${existing.lastname} already exists as ${existing.isLead ? 'Lead' : 'Contact'}`,
           });
-
-          updatedContacts.push({ ...existing, ...normalized });
         }
       }
 
@@ -314,10 +283,9 @@ const saveBulkContacts = async (req, res) => {
 
     return res.status(201).json({
       status: "success",
-      message: `Processed ${contacts.length} contact(s): ${newContacts.length} added, ${updatedContacts.length} updated, ${skippedContacts.length} skipped.`,
+      message: `Processed ${contacts.length} contact(s): ${newContacts.length} added, ${skippedContacts.length} skipped (duplicates found in contacts or leads).`,
       data: {
         added: newContacts,
-        updated: updatedContacts,
         skipped: skippedContacts,
       },
     });
