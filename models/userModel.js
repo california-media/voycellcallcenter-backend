@@ -276,6 +276,34 @@ const userSchema = new Schema(
       ],
     },
 
+    // Lead Statuses for this user/company
+    leadStatuses: {
+      type: [
+        {
+          _id: false,
+          value: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          label: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+        },
+      ],
+      default: [
+        { value: "interested", label: "Interested" },
+        { value: "notInterested", label: "Not Interested" },
+        { value: "called", label: "Called" },
+        { value: "notValid", label: "Not Valid" },
+        { value: "contacted", label: "Contacted" },
+        { value: "win", label: "Win" },
+        { value: "lost", label: "Lost" },
+      ],
+    },
+
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date },
   },

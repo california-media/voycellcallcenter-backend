@@ -618,18 +618,23 @@ const editProfile = async (req, res) => {
 const updateContactStatuses = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { contactStatuses } = req.body;
+    const { contactStatuses, category } = req.body;
 
-    // Validate that contactStatuses is an array
-    if (!Array.isArray(contactStatuses)) {
+    // Determine which field to update based on category
+    const fieldToUpdate =
+      category === "lead" ? "leadStatuses" : "contactStatuses";
+    const statusesData = contactStatuses; // Keep the same param name for backward compatibility
+
+    // Validate that statuses is an array
+    if (!Array.isArray(statusesData)) {
       return res.status(400).json({
         status: "error",
-        message: "contactStatuses must be an array",
+        message: `${fieldToUpdate} must be an array`,
       });
     }
 
     // Validate each status has value and label
-    for (const status of contactStatuses) {
+    for (const status of statusesData) {
       if (!status.value || !status.label) {
         return res.status(400).json({
           status: "error",
@@ -638,12 +643,13 @@ const updateContactStatuses = async (req, res) => {
       }
     }
 
-    // Update user's contact statuses
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { contactStatuses },
-      { new: true }
-    );
+    // Update user's statuses (contact or lead based on category)
+    const updateData = {};
+    updateData[fieldToUpdate] = statusesData;
+
+    const user = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+    });
 
     if (!user) {
       return res.status(404).json({
@@ -654,9 +660,12 @@ const updateContactStatuses = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Contact statuses updated successfully",
+      message: `${
+        category === "lead" ? "Lead" : "Contact"
+      } statuses updated successfully`,
       data: {
         contactStatuses: user.contactStatuses,
+        leadStatuses: user.leadStatuses,
       },
     });
   } catch (error) {

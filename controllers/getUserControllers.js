@@ -219,6 +219,7 @@ const getUserData = async (req, res) => {
       createdAt: user.createdAt,
       yestarBaseURL: YEASTAR_BASE_URL || null,
       contactStatuses: user.contactStatuses || [],
+      leadStatuses: user.leadStatuses || [],
       // yeastarSignature: yeastarSignature,
       // pbxURL: pbxURL,
     };
