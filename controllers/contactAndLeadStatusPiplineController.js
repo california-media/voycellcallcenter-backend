@@ -76,7 +76,6 @@ exports.changeStatus = async (req, res) => {
     =========================================================
     */
     if (contact && !lead) {
-
       // If status is NOT interested → normal status update inside contact model
       if (newStatus !== "interested") {
         contact.status = newStatus;
@@ -91,6 +90,7 @@ exports.changeStatus = async (req, res) => {
 
       // If status = interested → convert to lead
       lead = await Lead.create({
+        _id: contact._id, // keep same ID
         contact_id: contact._id, // keep same ID
         firstname: contact.firstname,
         lastname: contact.lastname,
@@ -170,14 +170,11 @@ exports.changeStatus = async (req, res) => {
     return res.status(404).json({
       message: "Record not found",
     });
-
   } catch (error) {
     console.error("changeStatus ERROR:", error);
     res.status(500).json({ message: "Internal server error", error });
   }
 };
-
-
 
 // 🟣 2️⃣ Get pipeline for a specific lead
 exports.getPipeline = async (req, res) => {

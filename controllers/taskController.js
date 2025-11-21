@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Contact = require("../models/contactModel");
 const { logActivityToContact } = require("../utils/activityLogger"); // ✅ import activity logger
+const Lead = require("../models/leadModel");
 
 /**
  * @route   GET /task/getAll

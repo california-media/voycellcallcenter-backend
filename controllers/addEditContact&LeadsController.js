@@ -51,7 +51,7 @@ const addEditContactisLeads = async (req, res) => {
       telegram,
       twitter,
       facebook,
-      website
+      website,
     } = req.body;
 
     const isLeadReq = category.toLowerCase() === "lead";
@@ -113,7 +113,7 @@ const addEditContactisLeads = async (req, res) => {
         emailAddresses: emails,
         phoneNumbers: phones,
         contactImageURL: finalImageURL || "",
-        status: isLeadReq ? "interested" : "contacted",
+        status: isLeadReq ? "interested" : "",
         isLead: isLeadReq,
         company,
         designation,
@@ -255,7 +255,6 @@ const addEditContactisLeads = async (req, res) => {
         ],
       });
 
-
       return res.status(200).json({
         status: "success",
         message: `Converted to ${category} successfully`,
@@ -322,8 +321,10 @@ const addEditContactisLeads = async (req, res) => {
     // ... repeat for other simple fields
 
     // Explicitly handle arrays - use the parsed array if it's not null/undefined
-    if (req.body.emailAddresses !== undefined) updatePayload.emailAddresses = emails;
-    if (req.body.phoneNumbers !== undefined) updatePayload.phoneNumbers = phones;
+    if (req.body.emailAddresses !== undefined)
+      updatePayload.emailAddresses = emails;
+    if (req.body.phoneNumbers !== undefined)
+      updatePayload.phoneNumbers = phones;
 
     // 3. Conditional update for the image URL
     if (finalImageURL) {
@@ -336,7 +337,9 @@ const addEditContactisLeads = async (req, res) => {
     // 4. Prepare activity
     const activity = {
       action: isLeadReq ? "lead_updated" : "contact_updated",
-      title: `${firstname || existing.firstname} ${lastname || existing.lastname}`,
+      title: `${firstname || existing.firstname} ${
+        lastname || existing.lastname
+      }`,
       type: isLeadReq ? "lead" : "contact",
       description: isLeadReq ? "Lead Updated" : "Contact Updated",
     };
@@ -349,7 +352,12 @@ const addEditContactisLeads = async (req, res) => {
     );
 
     if (!updated) {
-      return res.status(404).json({ status: "error", message: "Record not found after update attempt" });
+      return res
+        .status(404)
+        .json({
+          status: "error",
+          message: "Record not found after update attempt",
+        });
     }
 
     return res.status(200).json({
@@ -382,35 +390,9 @@ const deleteContactOrLead = async (req, res) => {
       });
     }
 
-    if (category == "contact") {
-      // Find and delete contact
-      const contact = await Contact.findOneAndDelete({
-        _id: contact_id,
-        createdBy: userId,
-      });
-
-      if (!contact) {
-        return res.status(404).json({
-          status: "error",
-          message: "Contact not found or unauthorized",
-        });
-      }
-    }
-    else if (category == "lead") {
-      // Find and delete lead
-      const lead = await Lead.findOneAndDelete({
-        _id: contact_id,
-        createdBy: userId,
-      });
-      if (!lead) {
-        return res.status(404).json({
-          status: "error",
-          message: "Lead not found or unauthorized",
-        });
-      }
-    } else {
-      // Try to find in contacts first
-      let contact =
+    // If category is not provided, try both models
+    if (!category) {
+      const record =
         (await Contact.findOneAndDelete({
           _id: contact_id,
           createdBy: userId,
@@ -419,12 +401,36 @@ const deleteContactOrLead = async (req, res) => {
           _id: contact_id,
           createdBy: userId,
         }));
-      if (!contact) {
+
+      if (!record) {
         return res.status(404).json({
           status: "error",
           message: "Record not found or unauthorized",
         });
       }
+
+      return res.status(200).json({
+        status: "success",
+        message: "Record deleted",
+      });
+    }
+
+    // Determine which model to use based on category
+    const isLeadReq = category.toLowerCase() === "lead";
+    const currentModel = isLeadReq ? Lead : Contact;
+    const itemType = isLeadReq ? "Lead" : "Contact";
+
+    // Find and delete record
+    const record = await currentModel.findOneAndDelete({
+      _id: contact_id,
+      createdBy: userId,
+    });
+
+    if (!record) {
+      return res.status(404).json({
+        status: "error",
+        message: `${itemType} not found or unauthorized`,
+      });
     }
 
     res.status(200).json({
@@ -432,7 +438,7 @@ const deleteContactOrLead = async (req, res) => {
       message: "Record deleted",
     });
   } catch (error) {
-    console.error("Error deleting contact:", error);
+    console.error("Error deleting record:", error);
     res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -472,119 +478,110 @@ const toggleContactFavorite = async (req, res) => {
       });
     }
 
-    if (category == "lead") {
-      // Find the lead
-      const lead = await Lead.findOne({
-        _id: contact_id,
-        createdBy: req.user._id,
-      });
-      if (!lead) {
-        return res.status(404).json({
-          status: "error",
-          message: "Lead not found or unauthorized",
-        });
-      }
-      // Update only the isFavourite field
-      lead.isFavourite = Boolean(isFavourite);
-      await lead.save();
-      await logActivityToContact(lead._id, {
-        action: isFavourite ? "lead favorited" : "lead unfavorited",
-        type: "lead",
-        title: isFavourite ? "Lead Favorited" : "Lead Unfavorited",
-        description: isFavourite
-          ? "Lead Added to Favorites"
-          : "Lead Removed from Favorites",
-      });
-
-      return res.status(200).json({
-        status: "success",
-        message: isFavourite
-          ? "Lead added to favorites"
-          : "Lead removed from favorites",
-        data: {
-          contact_id: lead.contact_id,
-          isFavourite: lead.isFavourite,
-        },
-      });
-    } else if (category == "contact") {
-      // Find the contact
-      const contact = await Contact.findOne({
-        _id: contact_id,
-        createdBy: req.user._id,
-      });
-
-      if (!contact) {
-        return res.status(404).json({
-          status: "error",
-          message: "Contact not found or unauthorized",
-        });
-      }
-
-      // Update only the isFavourite field
-      contact.isFavourite = Boolean(isFavourite);
-      await contact.save();
-
-      await logActivityToContact(contact._id, {
-        action: isFavourite ? "contact favorited" : "contact unfavorited",
-        type: "contact",
-        title: isFavourite ? "Contact Favorited" : "Contact Unfavorited",
-        description: isFavourite
-          ? "Contact Added to Favorites"
-          : "Contact Removed from Favorites",
-      });
-
-      res.status(200).json({
-        status: "success",
-        message: isFavourite
-          ? "Contact added to favorites"
-          : "Contact removed from favorites",
-        data: {
-          contact_id: contact.contact_id,
-          isFavourite: contact.isFavourite,
-        },
-      });
-    } else {
-      // Try to find in contacts first
-      let contact =
-        (await Contact
-          .findOne({
-            _id: contact_id,
-            createdBy: req.user._id,
-          })) ||
+    // If category is not provided, try both models
+    if (!category) {
+      let record =
+        (await Contact.findOne({
+          _id: contact_id,
+          createdBy: req.user._id,
+        })) ||
         (await Lead.findOne({
           _id: contact_id,
           createdBy: req.user._id,
         }));
-      if (!contact) {
+
+      if (!record) {
         return res.status(404).json({
           status: "error",
           message: "Record not found or unauthorized",
         });
       }
+
+      const itemType = record.isLead ? "lead" : "contact";
+
       // Update only the isFavourite field
-      contact.isFavourite = Boolean(isFavourite);
-      await contact.save();
-      await logActivityToContact(contact._id, {
-        action: isFavourite ? "record favorited" : "record unfavorited",
-        type: contact.isLead ? "lead" : "contact",
-        title: isFavourite ? "Record Favorited" : "Record Unfavorited",
+      record.isFavourite = Boolean(isFavourite);
+      await record.save();
+
+      await logActivityToContact(itemType, record._id, {
+        action: isFavourite
+          ? `${itemType} favorited`
+          : `${itemType} unfavorited`,
+        type: itemType,
+        title: isFavourite
+          ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} Favorited`
+          : `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } Unfavorited`,
         description: isFavourite
-          ? "Record Added to Favorites"
-          : "Record Removed from Favorites",
+          ? `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } Added to Favorites`
+          : `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } Removed from Favorites`,
       });
-      res.status(200).json({
+
+      return res.status(200).json({
         status: "success",
         message: isFavourite
-          ? "Record added to favorites"
-          : "Record removed from favorites",
+          ? `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } added to favorites`
+          : `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } removed from favorites`,
         data: {
-          contact_id: contact.contact_id,
-          isFavourite: contact.isFavourite,
+          contact_id: record.contact_id,
+          isFavourite: record.isFavourite,
         },
       });
     }
 
+    // Determine which model to use based on category
+    const isLeadReq = category.toLowerCase() === "lead";
+    const currentModel = isLeadReq ? Lead : Contact;
+    const itemType = isLeadReq ? "lead" : "contact";
+    const ItemTypeCap = itemType.charAt(0).toUpperCase() + itemType.slice(1);
 
+    // Find the record
+    const record = await currentModel.findOne({
+      _id: contact_id,
+      createdBy: req.user._id,
+    });
+
+    if (!record) {
+      return res.status(404).json({
+        status: "error",
+        message: `${ItemTypeCap} not found or unauthorized`,
+      });
+    }
+
+    // Update only the isFavourite field
+    record.isFavourite = Boolean(isFavourite);
+    await record.save();
+
+    await logActivityToContact(itemType, record._id, {
+      action: isFavourite ? `${itemType} favorited` : `${itemType} unfavorited`,
+      type: itemType,
+      title: isFavourite
+        ? `${ItemTypeCap} Favorited`
+        : `${ItemTypeCap} Unfavorited`,
+      description: isFavourite
+        ? `${ItemTypeCap} Added to Favorites`
+        : `${ItemTypeCap} Removed from Favorites`,
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: isFavourite
+        ? `${ItemTypeCap} added to favorites`
+        : `${ItemTypeCap} removed from favorites`,
+      data: {
+        contact_id: record.contact_id,
+        isFavourite: record.isFavourite,
+      },
+    });
   } catch (error) {
     console.error("Error toggling favorite:", error);
     res.status(500).json({
@@ -609,7 +606,7 @@ const batchDeleteContacts = async (req, res) => {
       });
     }
 
-    const { contact_ids } = req.body;
+    const { contact_ids, category } = req.body;
 
     if (
       !contact_ids ||
@@ -622,21 +619,34 @@ const batchDeleteContacts = async (req, res) => {
       });
     }
 
-    // Delete contacts that belong to this user
-    const result = await Contact.deleteMany({
+    if (category && category !== "contact" && category !== "lead") {
+      return res.status(400).json({
+        status: "error",
+        message: "category must be either 'contact' or 'lead' if provided",
+      });
+    }
+
+    // Determine which model to use based on category
+    const isLeadReq = category && category.toLowerCase() === "lead";
+    const currentModel = isLeadReq ? Lead : Contact;
+
+    // Delete records that belong to this user
+    const result = await currentModel.deleteMany({
       _id: { $in: contact_ids },
       createdBy: req.user._id,
     });
 
+    const itemType = isLeadReq ? "lead" : "contact";
+
     res.status(200).json({
       status: "success",
-      message: `${result.deletedCount} contact(s) deleted successfully`,
+      message: `${result.deletedCount} ${itemType}(s) deleted successfully`,
       data: {
         deletedCount: result.deletedCount,
       },
     });
   } catch (error) {
-    console.error("Error batch deleting contacts:", error);
+    console.error("Error batch deleting records:", error);
     res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -659,7 +669,7 @@ const updateFirstPhoneOrEmail = async (req, res) => {
       });
     }
 
-    const { contact_id, field, value } = req.body;
+    const { contact_id, field, value, category } = req.body;
 
     if (!contact_id || !field || !value) {
       return res.status(400).json({
@@ -675,8 +685,20 @@ const updateFirstPhoneOrEmail = async (req, res) => {
       });
     }
 
-    // Find the contact
-    const contact = await Contact.findOne({
+    if (category && category !== "contact" && category !== "lead") {
+      return res.status(400).json({
+        status: "error",
+        message: "category must be either 'contact' or 'lead' if provided",
+      });
+    }
+
+    // Determine which model to use based on category
+    const isLeadReq = category && category.toLowerCase() === "lead";
+    const currentModel = isLeadReq ? Lead : Contact;
+    const itemType = isLeadReq ? "lead" : "contact";
+
+    // Find the record
+    const contact = await currentModel.findOne({
       _id: contact_id,
       createdBy: req.user._id,
     });
@@ -684,7 +706,9 @@ const updateFirstPhoneOrEmail = async (req, res) => {
     if (!contact) {
       return res.status(404).json({
         status: "error",
-        message: "Contact not found or unauthorized",
+        message: `${
+          itemType.charAt(0).toUpperCase() + itemType.slice(1)
+        } not found or unauthorized`,
       });
     }
 
@@ -726,19 +750,27 @@ const updateFirstPhoneOrEmail = async (req, res) => {
         });
       }
 
-      // Check if phone already exists for another contact
-      const duplicatePhone = await Contact.findOne({
-        _id: { $ne: contact_id },
-        createdBy: req.user._id,
-        phoneNumbers: {
-          $elemMatch: { countryCode, number },
-        },
-      });
+      // Check if phone already exists for another record in both models
+      const duplicatePhone =
+        (await Contact.findOne({
+          _id: { $ne: contact_id },
+          createdBy: req.user._id,
+          phoneNumbers: {
+            $elemMatch: { countryCode, number },
+          },
+        })) ||
+        (await Lead.findOne({
+          _id: { $ne: contact_id },
+          createdBy: req.user._id,
+          phoneNumbers: {
+            $elemMatch: { countryCode, number },
+          },
+        }));
 
       if (duplicatePhone) {
         return res.status(400).json({
           status: "error",
-          message: "This phone number already exists for another contact",
+          message: "This phone number already exists for another record",
         });
       }
 
@@ -751,9 +783,9 @@ const updateFirstPhoneOrEmail = async (req, res) => {
 
       await contact.save();
 
-      await logActivityToContact(contact._id, {
-        action: "contact_phone_updated",
-        type: "contact",
+      await logActivityToContact(itemType, contact._id, {
+        action: `${itemType}_phone_updated`,
+        type: itemType,
         title: "Phone Number Updated",
         description: `Phone updated to +${countryCode} ${number}`,
       });
@@ -776,17 +808,23 @@ const updateFirstPhoneOrEmail = async (req, res) => {
         });
       }
 
-      // Check if email already exists for another contact
-      const duplicateEmail = await Contact.findOne({
-        _id: { $ne: contact_id },
-        createdBy: req.user._id,
-        emailAddresses: value,
-      });
+      // Check if email already exists for another record in both models
+      const duplicateEmail =
+        (await Contact.findOne({
+          _id: { $ne: contact_id },
+          createdBy: req.user._id,
+          emailAddresses: value,
+        })) ||
+        (await Lead.findOne({
+          _id: { $ne: contact_id },
+          createdBy: req.user._id,
+          emailAddresses: value,
+        }));
 
       if (duplicateEmail) {
         return res.status(400).json({
           status: "error",
-          message: "This email already exists for another contact",
+          message: "This email already exists for another record",
         });
       }
 
@@ -799,9 +837,9 @@ const updateFirstPhoneOrEmail = async (req, res) => {
 
       await contact.save();
 
-      await logActivityToContact(contact._id, {
-        action: "contact_email_updated",
-        type: "contact",
+      await logActivityToContact(itemType, contact._id, {
+        action: `${itemType}_email_updated`,
+        type: itemType,
         title: "Email Updated",
         description: `Email updated to ${value}`,
       });
@@ -834,7 +872,7 @@ const updateFirstPhoneOrEmail = async (req, res) => {
  */
 const updateAttachments = async (req, res) => {
   try {
-    const { contact_id, category } = req.body;
+    const { contact_id } = req.body;
 
     if (!contact_id) {
       return res.status(400).json({
@@ -843,311 +881,112 @@ const updateAttachments = async (req, res) => {
       });
     }
 
-    if (category && category !== "contact" && category !== "lead") {
-      return res.status(400).json({
+    // Find the contact
+    const contact = await Lead.findOne({
+      _id: contact_id,
+      createdBy: req.user._id,
+    });
+
+    if (!contact) {
+      return res.status(404).json({
         status: "error",
-        message: "category must be either 'contact' or 'lead' if provided",
+        message: "Contact not found or unauthorized",
       });
     }
 
-    if (category == "lead") {
-      // Find the lead
-      const lead = await Lead.findOne({
-        _id: contact_id,
-        createdBy: req.user._id,
-      });
-      if (!lead) {
-        return res.status(404).json({
-          status: "error",
-          message: "Lead not found or unauthorized",
-        });
-      }
-      // Upload files to S3
-      const uploadFileToS3 = async (file) => {
-        const ext = path.extname(file.originalname);
-        const name = path.basename(file.originalname, ext);
-        const fileName = `attachments/${Date.now()}_${name}${ext}`;
-        const params = {
-          Bucket: process.env.AWS_BUCKET_NAME,
-          Key: fileName,
-          Body: file.buffer,
-          ContentType: file.mimetype,
-        };
-        try {
-          await s3.send(new PutObjectCommand(params));
-          const fileURL = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
-          return fileURL;
-        }
-        catch (error) {
-          console.error(`S3 upload failed for ${file.originalname}:`, error);
-          throw new Error("File upload failed");
-        }
-      };
-      // Process uploaded files
-      const newAttachments = [];
-      if (req.files && req.files.length > 0) {
-        for (const file of req.files) {
-          try {
-            const fileURL = await uploadFileToS3(file);
-            const attachment = {
-              attachment_id: new mongoose.Types.ObjectId(),
-              fileName: file.originalname,
-              fileURL,
-              fileSize: file.size,
-              fileType: file.mimetype,
-              uploadedAt: new Date(),
-            };
-            newAttachments.push(attachment);
-          } catch (error) {
-            console.error(`Failed to upload file ${file.originalname}:`, error);
-          }
-        }
-      }
-      // Parse existing attachments from request body if provided
-      let existingAttachments = [];
-      if (req.body.existingAttachments) {
-        try {
-          existingAttachments =
-            typeof req.body.existingAttachments === "string"
-              ? JSON.parse(req.body.existingAttachments)
-              : req.body.existingAttachments;
-          // Ensure it's an array
-          if (!Array.isArray(existingAttachments)) {
-            existingAttachments = [];
-          }
-        } catch (error) {
-          console.error("Error parsing existingAttachments:", error);
-          existingAttachments = [];
-        }
-      }
-      // Combine existing and new attachments
-      const allAttachments = [...existingAttachments, ...newAttachments];
-      // Update lead with new attachments array
-      lead.attachments = allAttachments;
-      await lead.save();
-      // Log activity
-      await logActivityToContact(lead._id, {
-        action: "attachments_updated",
-        type: "lead",
-        title: "Attachments Updated",
-        description: `Updated attachments (${allAttachments.length} total, ${newAttachments.length} newly added)`,
-      });
-      return res.status(200).json({
-        status: "success",
-        message: "Attachments updated successfully",
-        data: {
-          contact_id: lead.contact_id,
-          attachments: lead.attachments,
-          newAttachmentsCount: newAttachments.length,
-          totalAttachmentsCount: allAttachments.length,
-        },
-      });
-    } else if (category == "contact") {
-      const contact = await Contact.findOne({
-        _id: contact_id,
-        createdBy: req.user._id,
-      });
+    // Upload files to S3
+    const uploadFileToS3 = async (file) => {
+      const ext = path.extname(file.originalname);
+      const name = path.basename(file.originalname, ext);
+      const fileName = `attachments/${Date.now()}_${name}${ext}`;
 
-      if (!contact) {
-        return res.status(404).json({
-          status: "error",
-          message: "Contact not found or unauthorized",
-        });
-      }
-
-      // Upload files to S3
-      const uploadFileToS3 = async (file) => {
-        const ext = path.extname(file.originalname);
-        const name = path.basename(file.originalname, ext);
-        const fileName = `attachments/${Date.now()}_${name}${ext}`;
-
-        const params = {
-          Bucket: process.env.AWS_BUCKET_NAME,
-          Key: fileName,
-          Body: file.buffer,
-          ContentType: file.mimetype,
-        };
-
-        try {
-          await s3.send(new PutObjectCommand(params));
-          const fileURL = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
-          return fileURL;
-        } catch (error) {
-          console.error(`S3 upload failed for ${file.originalname}:`, error);
-          throw new Error("File upload failed");
-        }
+      const params = {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: fileName,
+        Body: file.buffer,
+        ContentType: file.mimetype,
       };
 
-      // Process uploaded files
-      const newAttachments = [];
-      if (req.files && req.files.length > 0) {
-        for (let i = 0; i < req.files.length; i++) {
-          const file = req.files[i];
-          try {
-            const fileURL = await uploadFileToS3(file);
-            // Get description for this file
-            const description = req.body[`description_${i}`] || "";
-
-            const attachment = {
-              attachment_id: new mongoose.Types.ObjectId(),
-              fileName: file.originalname,
-              fileURL,
-              fileSize: file.size,
-              fileType: file.mimetype,
-              description: description,
-              uploadedAt: new Date(),
-            };
-            newAttachments.push(attachment);
-          } catch (error) {
-            console.error(`Failed to upload file ${file.originalname}:`, error);
-          }
-        }
+      try {
+        await s3.send(new PutObjectCommand(params));
+        const fileURL = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+        return fileURL;
+      } catch (error) {
+        console.error(`S3 upload failed for ${file.originalname}:`, error);
+        throw new Error("File upload failed");
       }
+    };
 
-      // Parse existing attachments from request body if provided
-      let existingAttachments = [];
-      if (req.body.existingAttachments) {
+    // Process uploaded files
+    const newAttachments = [];
+    if (req.files && req.files.length > 0) {
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
         try {
-          existingAttachments =
-            typeof req.body.existingAttachments === "string"
-              ? JSON.parse(req.body.existingAttachments)
-              : req.body.existingAttachments;
+          const fileURL = await uploadFileToS3(file);
+          // Get description for this file
+          const description = req.body[`description_${i}`] || "";
 
-          // Ensure it's an array
-          if (!Array.isArray(existingAttachments)) {
-            existingAttachments = [];
-          }
+          const attachment = {
+            attachment_id: new mongoose.Types.ObjectId(),
+            fileName: file.originalname,
+            fileURL,
+            fileSize: file.size,
+            fileType: file.mimetype,
+            description: description,
+            uploadedAt: new Date(),
+          };
+          newAttachments.push(attachment);
         } catch (error) {
-          console.error("Error parsing existingAttachments:", error);
-          existingAttachments = [];
+          console.error(`Failed to upload file ${file.originalname}:`, error);
         }
       }
-
-      // Combine existing and new attachments
-      const allAttachments = [...existingAttachments, ...newAttachments];
-
-      // Update contact with new attachments array
-      contact.attachments = allAttachments;
-      await contact.save();
-
-      // Log activity
-      await logActivityToContact(contact._id, {
-        action: "attachments_updated",
-        type: "contact",
-        title: "Attachments Updated",
-        description: `Updated attachments (${allAttachments.length} total, ${newAttachments.length} newly added)`,
-      });
-
-      return res.status(200).json({
-        status: "success",
-        message: "Attachments updated successfully",
-        data: {
-          contact_id: contact.contact_id,
-          attachments: contact.attachments,
-          newAttachmentsCount: newAttachments.length,
-          totalAttachmentsCount: allAttachments.length,
-        },
-      });
-    } else {
-      // Try to find in contacts first
-      let contact =
-        (await Contact
-          .findOne({
-            _id: contact_id,
-            createdBy: req.user._id,
-          })) ||
-        (await Lead.findOne({
-          _id: contact_id,
-          createdBy: req.user._id,
-        }));
-      if (!contact) {
-        return res.status(404).json({
-          status: "error",
-          message: "Record not found or unauthorized",
-        });
-      }
-      // Upload files to S3
-      const uploadFileToS3 = async (file) => {
-        const ext = path.extname(file.originalname);
-        const name = path.basename(file.originalname, ext);
-        const fileName = `attachments/${Date.now()}_${name}${ext}`;
-        const params = {
-          Bucket: process.env.AWS_BUCKET_NAME,
-          Key: fileName,
-          Body: file.buffer,
-          ContentType: file.mimetype,
-        };
-        try {
-          await s3.send(new PutObjectCommand(params));
-          const fileURL = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
-          return fileURL;
-        }
-        catch (error) {
-          console.error(`S3 upload failed for ${file.originalname}:`, error);
-          throw new Error("File upload failed");
-        }
-      };
-      // Process uploaded files
-      const newAttachments = [];
-      if (req.files && req.files.length > 0) {
-        for (const file of req.files) {
-          try {
-            const fileURL = await uploadFileToS3(file);
-            const attachment = {
-              attachment_id: new mongoose.Types.ObjectId(),
-              fileName: file.originalname,
-              fileURL,
-              fileSize: file.size,
-              fileType: file.mimetype,
-              uploadedAt: new Date(),
-            };
-            newAttachments.push(attachment);
-          }
-          catch (error) {
-            console.error(`Failed to upload file ${file.originalname}:`, error);
-          }
-        }
-      }
-      // Parse existing attachments from request body if provided
-      let existingAttachments = [];
-      if (req.body.existingAttachments) {
-        try {
-          existingAttachments =
-            typeof req.body.existingAttachments === "string"
-              ? JSON.parse(req.body.existingAttachments)
-              : req.body.existingAttachments;
-          // Ensure it's an array
-          if (!Array.isArray(existingAttachments)) {
-            existingAttachments = [];
-          }
-        } catch (error) {
-          console.error("Error parsing existingAttachments:", error);
-          existingAttachments = [];
-        }
-      }
-      // Combine existing and new attachments
-      const allAttachments = [...existingAttachments, ...newAttachments];
-      // Update contact/lead with new attachments array
-      contact.attachments = allAttachments;
-      await contact.save();
-      // Log activity
-      await logActivityToContact(contact._id, {
-        action: "attachments_updated",
-        type: contact.isLead ? "lead" : "contact",
-        title: "Attachments Updated",
-        description: `Updated attachments (${allAttachments.length} total, ${newAttachments.length} newly added)`,
-      });
-      return res.status(200).json({
-        status: "success",
-        message: "Attachments updated successfully",
-        data: {
-          contact_id: contact.contact_id,
-          attachments: contact.attachments,
-          newAttachmentsCount: newAttachments.length,
-          totalAttachmentsCount: allAttachments.length,
-        },
-      });
     }
+
+    // Parse existing attachments from request body if provided
+    let existingAttachments = [];
+    if (req.body.existingAttachments) {
+      try {
+        existingAttachments =
+          typeof req.body.existingAttachments === "string"
+            ? JSON.parse(req.body.existingAttachments)
+            : req.body.existingAttachments;
+
+        // Ensure it's an array
+        if (!Array.isArray(existingAttachments)) {
+          existingAttachments = [];
+        }
+      } catch (error) {
+        console.error("Error parsing existingAttachments:", error);
+        existingAttachments = [];
+      }
+    }
+
+    // Combine existing and new attachments
+    const allAttachments = [...existingAttachments, ...newAttachments];
+
+    // Update contact with new attachments array
+    contact.attachments = allAttachments;
+    await contact.save();
+
+    // Log activity
+    await logActivityToContact("lead",contact._id, {
+      action: "attachments_updated",
+      type: "contact",
+      title: "Attachments Updated",
+      description: `Updated attachments (${allAttachments.length} total, ${newAttachments.length} newly added)`,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Attachments updated successfully",
+      data: {
+        contact_id: contact._id,
+        attachments: contact.attachments,
+        newAttachmentsCount: newAttachments.length,
+        totalAttachmentsCount: allAttachments.length,
+      },
+    });
   } catch (error) {
     console.error("Error updating attachments:", error);
     return res.status(500).json({

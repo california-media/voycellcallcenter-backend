@@ -138,7 +138,6 @@ const escapeRegex = (str = "") =>
 exports.getAllContactsOrLeads = async (req, res) => {
   try {
     const {
-      isLead = false,
       category,
       page = 1,
       limit = 10,
@@ -296,13 +295,13 @@ exports.getAllContactsOrLeads = async (req, res) => {
     // -----------------------
     // Response
     // -----------------------
-    console.log(data);
 
     return res.status(200).json({
       status: "success",
-      message: category === "lead"
-        ? "Leads fetched successfully"
-        : "Contacts fetched successfully",
+      message:
+        category === "lead"
+          ? "Leads fetched successfully"
+          : "Contacts fetched successfully",
       data,
       pagination: {
         currentPage: pageNum,
@@ -325,7 +324,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
  */
 exports.getSingleContactOrLead = async (req, res) => {
   try {
-    const { contact_id } = req.body;
+    const { contact_id, category } = req.body;
     const createdBy = req.user._id;
 
     if (!contact_id) {
@@ -335,7 +334,15 @@ exports.getSingleContactOrLead = async (req, res) => {
       });
     }
 
-    const contact = await Contact.findOne({
+    // Determine which model to use based on category
+    var Model;
+    if (category === "lead") {
+      Model = Lead;
+    } else {
+      Model = Contact;
+    }
+
+    const contact = await Model.findOne({
       _id: contact_id,
       createdBy,
     })
@@ -381,9 +388,10 @@ exports.getSingleContactOrLead = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: contact.isLead
-        ? "Lead fetched successfully"
-        : "Contact fetched successfully",
+      message:
+        category === "lead"
+          ? "Lead fetched successfully"
+          : "Contact fetched successfully",
       data: contact,
     });
   } catch (err) {
