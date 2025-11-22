@@ -824,46 +824,42 @@ exports.callRecordingDownload = async (req, res) => {
   }
 };
 
+/* The above code is a JavaScript function that retrieves the monthly call graph data based on the call
+history. Here is a breakdown of what the code does: */
+/* The above code is a JavaScript function that generates a monthly call graph based on call history
+data. Here is a breakdown of what the code does: */
 // exports.getMonthlyCallGraph = async (req, res) => {
 //   try {
-//     // AUTO GET CURRENT MONTH
 //     const now = new Date();
 //     const year = now.getFullYear();
 //     const monthIndex = now.getMonth() + 1;
 
 //     const monthStr = `${year}-${String(monthIndex).padStart(2, "0")}`;
 
-//     // START & END DATES (UTC SAFE)
 //     const startDate = new Date(Date.UTC(year, monthIndex - 1, 1, 0, 0, 0));
 //     const endDate = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0));
 
-//     console.log({ startDate, endDate });
-
-//     // FIXED FIELD NAME HERE 🔥🔥🔥
 //     const calls = await CallHistory.find({
 //       start_time: { $gte: startDate, $lt: endDate }
-//     }).select("start_time");
+//     }).select("start_time direction");
 
 //     const totalDays = new Date(year, monthIndex, 0).getDate();
 //     const daysArray = [];
 
+//     // 1️⃣ UPDATED STRUCTURE HERE
 //     for (let day = 1; day <= totalDays; day++) {
-//       // daysArray.push({
-//       //   date: `${year}-${String(monthIndex).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
-//       //   count: 0,
-//       // });
 //       daysArray.push({
 //         date: `${year}-${String(monthIndex).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
 //         inbound: 0,
-//         outbound: 0
+//         outbound: 0,
 //       });
 //     }
 
+//     // 2️⃣ UPDATED COUNTER HERE
 //     calls.forEach(call => {
 //       const d = new Date(call.start_time);
 //       const day = d.getUTCDate();
-//       // daysArray[day - 1].count++;
-//       console.log(call);
+
 //       if (call.direction === "Inbound") {
 //         daysArray[day - 1].inbound++;
 //       } else if (call.direction === "Outbound") {
@@ -887,58 +883,113 @@ exports.callRecordingDownload = async (req, res) => {
 //   }
 // };
 
-
 exports.getMonthlyCallGraph = async (req, res) => {
   try {
-    const now = new Date();
-    const year = now.getFullYear();
-    const monthIndex = now.getMonth() + 1;
+    const loginUserId = req.user._id;
 
-    const monthStr = `${year}-${String(monthIndex).padStart(2, "0")}`;
+    // 1️⃣ Fetch logged-in user
+    const loginUser = await User.findById(loginUserId).select(
+      "_id role createdByWhichCompanyAdmin"
+    );
 
-    const startDate = new Date(Date.UTC(year, monthIndex - 1, 1, 0, 0, 0));
-    const endDate = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0));
-
-    const calls = await CallHistory.find({
-      start_time: { $gte: startDate, $lt: endDate }
-    }).select("start_time direction");
-
-    const totalDays = new Date(year, monthIndex, 0).getDate();
-    const daysArray = [];
-
-    // 1️⃣ UPDATED STRUCTURE HERE
-    for (let day = 1; day <= totalDays; day++) {
-      daysArray.push({
-        date: `${year}-${String(monthIndex).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
-        inbound: 0,
-        outbound: 0,
+    if (!loginUser) {
+      return res.status(400).json({
+        status: "error",
+        message: "User not found",
       });
     }
 
-    // 2️⃣ UPDATED COUNTER HERE
-    calls.forEach(call => {
-      const d = new Date(call.start_time);
-      const day = d.getUTCDate();
+    // 2️⃣ Read Start / End Dates from request
+    let { startDate, endDate } = req.body;
 
-      if (call.direction === "Inbound") {
-        daysArray[day - 1].inbound++;
-      } else if (call.direction === "Outbound") {
-        daysArray[day - 1].outbound++;
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        status: "error",
+        message: "startDate and endDate are required format YYYY-MM-DD",
+      });
+    }
+
+    // Convert to real dates
+    startDate = new Date(startDate + "T00:00:00.000Z");
+    endDate = new Date(endDate + "T23:59:59.999Z");
+
+    // 3️⃣ Build userIds to search
+    let userIdsToSearch = [loginUserId];
+
+    if (loginUser.role === "companyAdmin") {
+      // include admin + all agents
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: loginUserId,
+      }).select("_id");
+
+      const agentIds = agents.map((x) => x._id);
+
+      userIdsToSearch = [...userIdsToSearch, ...agentIds];
+    }
+
+    // 4️⃣ Fetch calls
+    const calls = await CallHistory.find({
+      userId: { $in: userIdsToSearch },
+      start_time: { $gte: startDate, $lte: endDate },
+    }).select("start_time direction status");
+
+    // 5️⃣ Build days array
+    const daysArray = [];
+
+    const cursor = moment(startDate);
+    const lastDay = moment(endDate);
+
+    while (cursor.isSameOrBefore(lastDay, "day")) {
+      daysArray.push({
+        date: cursor.format("DD MMM YYYY"), // 👉 21 Oct 2025
+        inbound: 0,
+        outbound: 0,
+      });
+
+      cursor.add(1, "day");
+    }
+
+    // 6️⃣ Count daily values
+    calls.forEach((call) => {
+      const d = moment(call.start_time).format("DD MMM YYYY");
+
+      const dayIndex = daysArray.findIndex((x) => x.date === d);
+      if (dayIndex !== -1) {
+        if (call.direction === "Inbound") daysArray[dayIndex].inbound++;
+        if (call.direction === "Outbound") daysArray[dayIndex].outbound++;
       }
     });
 
+    // 7️⃣ Summary counts
+    const inboundTotal = calls.filter((c) => c.direction === "Inbound").length;
+    const outboundTotal = calls.filter((c) => c.direction === "Outbound").length;
+    const missedTotal = calls.filter(
+      (c) => c.status === "NO ANSWER" || c.status === "FAILED" || c.status === "BUSY"
+    ).length;
+
+    const totalCalls = calls.length;
+
     return res.json({
       status: "success",
-      month: monthStr,
-      days: daysArray
-    });
+      startDate: moment(startDate).format("DD MMM YYYY"),
+      endDate: moment(endDate).format("DD MMM YYYY"),
 
+      summary: {
+        inboundTotal,
+        outboundTotal,
+        missedTotal,
+        totalCalls,
+      },
+
+      role: loginUser.role,
+      days: daysArray,
+    });
   } catch (error) {
     console.error("Error:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
-      error: error.message
+      error: error.message,
     });
   }
 };
