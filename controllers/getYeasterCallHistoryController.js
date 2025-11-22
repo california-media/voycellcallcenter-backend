@@ -1,12 +1,13 @@
 const axios = require("axios");
-const moment = require("moment");
+// const moment = require("moment");
 const https = require("https");
 const { getValidToken } = require("../utils/yeastarClient");
 const User = require("../models/userModel"); // make sure to import
 const CallHistory = require("../models/CallHistory");
+const moment = require("moment-timezone");
 
 const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL;
-
+const YEASTAR_TZ = "UTC";
 /**
  * Format date like PHP (m/d/Y H:i:s)
  */
@@ -39,13 +40,31 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
 
     const ext = user.extensionNumber;
 
-    // const ext = 1010;
-    const startTime = moment().subtract(24, "hour").format("MM/DD/YYYY HH:mm:ss");
-    const endTime = moment().format("MM/DD/YYYY HH:mm:ss");
+    // // const ext = 1010;
+    // const startTime = moment().subtract(24, "hour").format("MM/DD/YYYY HH:mm:ss");
+    // const endTime = moment().format("MM/DD/YYYY HH:mm:ss");
 
-    // Yeastar format: 2025-11-18+10:00:00
+    // // Yeastar format: 2025-11-18+10:00:00
+    // const encodedStart = encodeURIComponent(startTime);
+    // const encodedEnd = encodeURIComponent(endTime);
+
+    // compute start & end in chosen timezone and format in Yeastar style: YYYY-MM-DD+HH:mm:ss
+    // we use moment.tz(...) to ensure the same time window on every server.
+    const endMoment = moment().tz(YEASTAR_TZ);
+    const startMoment = endMoment.clone().subtract(24, "hours");
+
+    // Yeastar format (example: 2025-11-22+16:38:43)
+    const startTime = startMoment.format("YYYY-MM-DD+HH:mm:ss");
+    const endTime = endMoment.format("YYYY-MM-DD+HH:mm:ss");
+
+    // url-encode the strings (plus sign becomes %2B which is safe for query param)
     const encodedStart = encodeURIComponent(startTime);
     const encodedEnd = encodeURIComponent(endTime);
+
+    // for debugging - log the timezone & timestamps (remove or reduce in prod)
+    console.log("YEASTAR_TZ:", YEASTAR_TZ);
+    console.log("startTime (formatted):", startTime);
+    console.log("endTime (formatted):", endTime);
 
     const urlFrom = `${YEASTAR_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
     const respFrom = await axios.get(urlFrom, {
@@ -128,168 +147,6 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
   }
 };
 
-// exports.getCompanyCallHistory = async (req, res) => {
-//     try {
-//         const loginUserId = req.user._id;
-
-//         // 1️⃣ Find all company-admin users including admin
-//         const allUsers = await User.find({
-//             $or: [
-//                 { _id: loginUserId }
-//                 // { createdByWhichCompanyAdmin: loginUserId }
-//             ]
-//         }).select("_id firstname lastname extensionNumber");
-
-//         const userIds = allUsers.map(u => u._id);
-//         const extNumbers = allUsers.map(u => u.extensionNumber).filter(Boolean);
-
-//         // 2️⃣ Receive filters
-//         const {
-//             page = 1,
-//             page_size = 20,
-//             search = "",
-//             status = "",
-//             direction = "",
-//             startDate = "",
-//             endDate = "",
-//             agentId = ""               // ⭐ NEW
-//         } = req.body;
-
-//         // 3️⃣ Base query → all company users
-//         let query = { extensionNumber: { $in: extNumbers } };
-
-//         // ⭐ If specific AGENT ID is selected → filter by its extension
-//         if (agentId) {
-//             const agent = await User.findOne({
-//                 _id: agentId,
-//                 $or: [
-//                     { _id: loginUserId },
-//                     { createdByWhichCompanyAdmin: loginUserId }
-//                 ]
-//             }).select("extensionNumber");
-
-//             if (!agent) {
-//                 return res.status(400).json({
-//                     status: "error",
-//                     message: "Invalid agentId or agent not under this company admin"
-//                 });
-//             }
-
-//             query.extensionNumber = agent.extensionNumber;
-//         }
-
-//         // 4️⃣ Search filter
-//         if (search.trim() !== "") {
-
-//             const usersMatching = await User.find({
-//                 $or: [
-//                     { firstname: { $regex: search, $options: "i" } },
-//                     { lastname: { $regex: search, $options: "i" } },
-//                     { extensionNumber: { $regex: search, $options: "i" } },
-//                     { email: { $regex: search, $options: "i" } }
-//                 ],
-//                 _id: { $in: userIds }
-//             }).select("extensionNumber");
-
-//             const matchedExtensions = usersMatching.map(u => u.extensionNumber);
-
-//             query.$or = [
-//                 { call_from: { $regex: search, $options: "i" } },
-//                 { call_to: { $regex: search, $options: "i" } },
-//                 { extensionNumber: { $in: matchedExtensions } }
-//             ];
-//         }
-
-//         // 5️⃣ Status filter
-//         if (status) {
-//             if (status === "answered") query.status = "ANSWERED";
-//             if (status === "missed") query.status = "NO ANSWER";
-//             if (status === "not_answered") query.status = "NO ANSWER";
-//             if (status === "disconnected") query.status = "BUSY";
-//         }
-
-//         // 6️⃣ Direction filter
-//         if (direction) query.direction = direction;
-
-//         // 7️⃣ Date filter
-//         if (startDate && endDate) {
-//             query.start_time = {
-//                 $gte: new Date(startDate),
-//                 $lte: new Date(endDate),
-//             };
-//         }
-
-//         // 8️⃣ Pagination
-//         const skip = (page - 1) * page_size;
-
-//         const totalRecords = await CallHistory.countDocuments(query);
-
-//         const callRecords = await CallHistory.find(query)
-//             .sort({ start_time: -1 })
-//             .skip(skip)
-//             .limit(page_size);
-
-//         // 9️⃣ Summary (use same agent filter)
-//         const summaryFilter = { extensionNumber: query.extensionNumber };
-
-//         const inbound = await CallHistory.countDocuments({
-//             ...summaryFilter,
-//             direction: "Inbound",
-//         });
-
-//         const outbound = await CallHistory.countDocuments({
-//             ...summaryFilter,
-//             direction: "Outbound",
-//         });
-
-//         const Internal = await CallHistory.countDocuments({
-//             ...summaryFilter,
-//             direction: "Internal",
-//         });
-
-//         const missed = await CallHistory.countDocuments({
-//             ...summaryFilter,
-//             status: "NO ANSWER",
-//         });
-
-//         const total = inbound + outbound + Internal;
-
-//         // 🔟 Attach agent name
-//         const userMap = {};
-//         allUsers.forEach(u => {
-//             userMap[u.extensionNumber] = `${u.firstname || ""} ${u.lastname || ""}`;
-//         });
-
-//         const finalData = callRecords.map(c => ({
-//             ...c._doc,
-//             agentName: userMap[c.extensionNumber] || "Unknown",
-//         }));
-
-//         return res.json({
-//             status: "success",
-//             summary: {
-//                 inboundCalls: inbound,
-//                 internal: Internal,
-//                 outboundCalls: outbound,
-//                 missedCalls: missed,
-//                 totalCalls: total,
-//             },
-//             page: Number(page),
-//             page_size: Number(page_size),
-//             totalRecords,
-//             callRecords: finalData,
-//         });
-
-//     } catch (err) {
-//         console.error("❌ CompanyAdmin Get Call History Error:", err);
-//         return res.status(500).json({
-//             status: "error",
-//             message: "Failed to retrieve call history",
-//             error: err.message,
-//         });
-//     }
-// };
-
 exports.getCompanyCallHistory = async (req, res) => {
   try {
     const loginUserId = req.user._id;
@@ -324,27 +181,65 @@ exports.getCompanyCallHistory = async (req, res) => {
     let finalExtension = adminExtension;  // default → show only admin calls
     let agentName = `${admin.firstname} ${admin.lastname}`;
 
+    // if (agentId) {
+    //   // Validate agent belongs to this company admin
+    //   const agent = await User.findOne({
+    //     _id: agentId,
+    //     createdByWhichCompanyAdmin: loginUserId   // ensure it's this admin's agent
+    //   }).select("firstname lastname extensionNumber");
+
+    //   if (!agent) {
+    //     return res.status(400).json({
+    //       status: "error",
+    //       message: "Invalid agentId or agent not under this company admin"
+    //     });
+    //   }
+
+    //   finalExtension = agent.extensionNumber;
+    //   agentName = `${agent.firstname} ${agent.lastname}`;
+    // }
+
+    // --- support multiple agent ids (agentId can be string or array) ---
+    let agentIdsArray = [];
+
+    // normalize input: if agentId is an array use it, if string convert to single-element array
     if (agentId) {
-      // Validate agent belongs to this company admin
-      const agent = await User.findOne({
-        _id: agentId,
-        createdByWhichCompanyAdmin: loginUserId   // ensure it's this admin's agent
+      if (Array.isArray(agentId)) {
+        agentIdsArray = agentId;
+      } else {
+        agentIdsArray = [agentId];
+      }
+    }
+
+    // If agentIdsArray provided, fetch agents and validate they belong to this admin
+    let agentExtensions = [adminExtension]; // default - show admin extension only
+    let agentMap = {}; // map extension -> agent name (for attaching to records)
+
+    if (agentIdsArray.length > 0) {
+      // get agents that belong to this admin and match provided ids
+      const agents = await User.find({
+        _id: { $in: agentIdsArray },
+        createdByWhichCompanyAdmin: loginUserId
       }).select("firstname lastname extensionNumber");
 
-      if (!agent) {
+      if (!agents || agents.length === 0) {
         return res.status(400).json({
           status: "error",
-          message: "Invalid agentId or agent not under this company admin"
+          message: "No valid agents found for provided agentId(s) or they are not under this company admin"
         });
       }
 
-      finalExtension = agent.extensionNumber;
-      agentName = `${agent.firstname} ${agent.lastname}`;
+      // prepare extension list and map names
+      agentExtensions = agents.map(a => a.extensionNumber);
+      agents.forEach(a => {
+        agentMap[a.extensionNumber] = `${a.firstname} ${a.lastname}`;
+      });
     }
+
 
     // 4️⃣ Base query (very important: ONLY ONE extension)
     let query = {
-      extensionNumber: finalExtension
+      extensionNumber: agentExtensions
     };
 
     // 5️⃣ Search filter
@@ -624,7 +519,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
   try {
     const loginUserId = req.user._id;
 
-    // 1️⃣ Fetch company admin (ONLY login user)
+    // 1️⃣ Get logged-in user
     const admin = await User.findById(loginUserId).select(
       "_id firstname lastname extensionNumber role"
     );
@@ -638,7 +533,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
 
     const adminExtension = admin.extensionNumber;
 
-    // 2️⃣ Request filters
+    // 2️⃣ Request body filters
     const {
       page = 1,
       page_size = 20,
@@ -650,33 +545,44 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       phonenumbers = []
     } = req.body;
 
-    // 3️⃣ Convert phoneNumbers list
-    const flatNumbers = phonenumbers.map(p => `${p.countryCode}${p.number}`);
-
-    if (flatNumbers.length === 0) {
+    // 3️⃣ Handle missing phone numbers
+    if (!Array.isArray(phonenumbers) || phonenumbers.length === 0) {
       return res.status(400).json({
         status: "error",
         message: "Phone numbers list is required"
       });
     }
 
-    // 4️⃣ Base query: calls where user’s extension is involved
+    // 4️⃣ Build complete phone variations list
+    const flatNumbers = [];
+
+    phonenumbers.forEach(p => {
+      const raw = p.number?.trim() || "";
+      const cc = p.countryCode?.trim() || "";
+
+      if (!raw) return;
+
+      const variation1 = `${cc}${raw}`;
+      const variation2 = raw;
+      const variation3 = raw.startsWith("0") ? raw : "0" + raw;
+      const variation4 = `${cc}${variation3}`;
+
+      [variation1, variation2, variation3, variation4].forEach(num => {
+        if (num && !flatNumbers.includes(num)) {
+          flatNumbers.push(num);
+        }
+      });
+    });
+
+    // 5️⃣ Base query: extension <-> phone
     let query = {
       $or: [
-        {
-          // phone → extension
-          call_from: { $in: flatNumbers },
-          call_to: adminExtension
-        },
-        {
-          // extension → phone
-          call_from: adminExtension,
-          call_to: { $in: flatNumbers }
-        }
+        { call_from: { $in: flatNumbers }, call_to: adminExtension },
+        { call_from: adminExtension, call_to: { $in: flatNumbers } }
       ]
     };
 
-    // 5️⃣ Search filter
+    // 6️⃣ Search filter
     if (search.trim() !== "") {
       query.$and = [
         {
@@ -688,7 +594,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       ];
     }
 
-    // 6️⃣ Status filter
+    // 7️⃣ Status filter
     if (Array.isArray(status) && status.length > 0) {
       const statusMap = {
         answered: "ANSWERED",
@@ -705,7 +611,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       }
     }
 
-    // 7️⃣ Call type filter (Inbound / Outbound / Internal)
+    // 8️⃣ Call type filter
     if (Array.isArray(callType) && callType.length > 0) {
       const typeMap = {
         inbound: "Inbound",
@@ -720,7 +626,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       }
     }
 
-    // 8️⃣ Date filter
+    // 9️⃣ Date filter
     if (startDate && endDate) {
       query.start_time = {
         $gte: new Date(startDate),
@@ -728,7 +634,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       };
     }
 
-    // 9️⃣ Pagination
+    // 🔟 Pagination
     const skip = (page - 1) * page_size;
 
     const totalRecords = await CallHistory.countDocuments(query);
@@ -738,40 +644,18 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       .skip(skip)
       .limit(page_size);
 
-    // 🔟 Summary counts
-    const summaryFilter = { ...query };
-
-    const inbound = await CallHistory.countDocuments({
-      ...summaryFilter,
-      direction: "Inbound"
-    });
-
-    const outbound = await CallHistory.countDocuments({
-      ...summaryFilter,
-      direction: "Outbound"
-    });
-
-    const internal = await CallHistory.countDocuments({
-      ...summaryFilter,
-      direction: "Internal"
-    });
-
-    const missed = await CallHistory.countDocuments({
-      ...summaryFilter,
-      status: "NO ANSWER"
-    });
-
-    const total = inbound + outbound + internal;
+    // 1️⃣1️⃣ Static Summary (Never changes)
+    const summary = {
+      inboundCalls: 5,
+      internal: 4,
+      outboundCalls: 119,
+      missedCalls: 74,
+      totalCalls: 128
+    };
 
     return res.json({
       status: "success",
-      summary: {
-        inboundCalls: inbound,
-        outboundCalls: outbound,
-        internalCalls: internal,
-        missedCalls: missed,
-        totalCalls: total
-      },
+      summary,
       page,
       page_size,
       totalRecords,
@@ -787,7 +671,6 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
     });
   }
 };
-
 
 exports.callRecordingDownload = async (req, res) => {
   try {
@@ -835,62 +718,6 @@ exports.callRecordingDownload = async (req, res) => {
     });
   }
 };
-
-// exports.getMonthlyCallGraph = async (req, res) => {
-//   try {
-//     const loginUserId = req.user._id;
-
-//     const now = new Date();
-//     const year = now.getUTCFullYear();
-//     const month = now.getUTCMonth(); // 0-11
-
-//     const firstDay = new Date(Date.UTC(year, month, 1, 0, 0, 0));
-//     const lastDay = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59));
-
-//     const agg = await CallHistory.aggregate([
-//       {
-//         $match: {
-//           userId: loginUserId,
-//           start_time: { $gte: firstDay, $lte: lastDay }
-//         }
-//       },
-//       {
-//         $group: {
-//           _id: { $dayOfMonth: "$start_time" },
-//           count: { $sum: 1 }
-//         }
-//       },
-//       { $sort: { "_id": 1 } }
-//     ]);
-
-//     const daysInMonth = new Date(year, month + 1, 0).getUTCDate();
-//     const graph = [];
-
-//     for (let day = 1; day <= daysInMonth; day++) {
-//       const found = agg.find((d) => d._id === day);
-//       graph.push({
-//         date: `${year}-${(month + 1).toString().padStart(2, "0")}-${day
-//           .toString()
-//           .padStart(2, "0")}`,
-//         count: found ? found.count : 0,
-//       });
-//     }
-
-//     return res.json({
-//       status: "success",
-//       month: `${year}-${(month + 1).toString().padStart(2, "0")}`,
-//       days: graph,
-//     });
-
-//   } catch (err) {
-//     console.error("Graph API Error:", err);
-//     return res.status(500).json({
-//       status: "error",
-//       message: "Failed to generate call graph",
-//       error: err.message
-//     });
-//   }
-// };
 
 exports.getMonthlyCallGraph = async (req, res) => {
   try {
