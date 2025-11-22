@@ -835,3 +835,111 @@ exports.callRecordingDownload = async (req, res) => {
     });
   }
 };
+
+// exports.getMonthlyCallGraph = async (req, res) => {
+//   try {
+//     const loginUserId = req.user._id;
+
+//     const now = new Date();
+//     const year = now.getUTCFullYear();
+//     const month = now.getUTCMonth(); // 0-11
+
+//     const firstDay = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+//     const lastDay = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59));
+
+//     const agg = await CallHistory.aggregate([
+//       {
+//         $match: {
+//           userId: loginUserId,
+//           start_time: { $gte: firstDay, $lte: lastDay }
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: { $dayOfMonth: "$start_time" },
+//           count: { $sum: 1 }
+//         }
+//       },
+//       { $sort: { "_id": 1 } }
+//     ]);
+
+//     const daysInMonth = new Date(year, month + 1, 0).getUTCDate();
+//     const graph = [];
+
+//     for (let day = 1; day <= daysInMonth; day++) {
+//       const found = agg.find((d) => d._id === day);
+//       graph.push({
+//         date: `${year}-${(month + 1).toString().padStart(2, "0")}-${day
+//           .toString()
+//           .padStart(2, "0")}`,
+//         count: found ? found.count : 0,
+//       });
+//     }
+
+//     return res.json({
+//       status: "success",
+//       month: `${year}-${(month + 1).toString().padStart(2, "0")}`,
+//       days: graph,
+//     });
+
+//   } catch (err) {
+//     console.error("Graph API Error:", err);
+//     return res.status(500).json({
+//       status: "error",
+//       message: "Failed to generate call graph",
+//       error: err.message
+//     });
+//   }
+// };
+
+exports.getMonthlyCallGraph = async (req, res) => {
+  try {
+    // AUTO GET CURRENT MONTH
+    const now = new Date();
+    const year = now.getFullYear();
+    const monthIndex = now.getMonth() + 1;
+
+    const monthStr = `${year}-${String(monthIndex).padStart(2, "0")}`;
+
+    // START & END DATES (UTC SAFE)
+    const startDate = new Date(Date.UTC(year, monthIndex - 1, 1, 0, 0, 0));
+    const endDate = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0));
+
+    console.log({ startDate, endDate });
+
+    // FIXED FIELD NAME HERE 🔥🔥🔥
+    const calls = await CallHistory.find({
+      start_time: { $gte: startDate, $lt: endDate }
+    }).select("start_time");
+
+    const totalDays = new Date(year, monthIndex, 0).getDate();
+    const daysArray = [];
+
+    for (let day = 1; day <= totalDays; day++) {
+      daysArray.push({
+        date: `${year}-${String(monthIndex).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+        count: 0,
+      });
+    }
+
+    calls.forEach(call => {
+      const d = new Date(call.start_time);
+      const day = d.getUTCDate();
+      daysArray[day - 1].count++;
+    });
+
+    return res.json({
+      status: "success",
+      month: monthStr,
+      days: daysArray
+    });
+
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
