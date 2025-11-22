@@ -7,7 +7,6 @@ const CallHistory = require("../models/CallHistory");
 const moment = require("moment-timezone");
 
 const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL;
-const YEASTAR_TZ = "UTC";
 /**
  * Format date like PHP (m/d/Y H:i:s)
  */
@@ -24,12 +23,135 @@ function formatDate(date, fallbackTime) {
   return m.format("MM/DD/YYYY HH:mm:ss");
 }
 
+// exports.fetchAndStoreCallHistory = async (req, res) => {
+//   try {
+//     const userId = req.user._id; // <-- token middleware should set this
+//     const token = await getValidToken();
+
+//     // ---- Get user details ----
+//     const user = await User.findById(userId);
+//     if (!user || !user.extensionNumber) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "User extension not found",
+//       });
+//     }
+
+//     const ext = user.extensionNumber;
+
+//     // // const ext = 1010;
+//     // const startTime = moment().subtract(24, "hour").format("MM/DD/YYYY HH:mm:ss");
+//     // const endTime = moment().format("MM/DD/YYYY HH:mm:ss");
+
+//     // // Yeastar format: 2025-11-18+10:00:00
+//     // const encodedStart = encodeURIComponent(startTime);
+//     // const encodedEnd = encodeURIComponent(endTime);
+
+//     // compute start & end in chosen timezone and format in Yeastar style: YYYY-MM-DD+HH:mm:ss
+//     // we use moment.tz(...) to ensure the same time window on every server.
+//     const endMoment = moment().tz(YEASTAR_TZ);
+//     const startMoment = endMoment.clone().subtract(24, "hours");
+
+//     // Yeastar format (example: 2025-11-22+16:38:43)
+//     const startTime = startMoment.format("YYYY-MM-DD+HH:mm:ss");
+//     const endTime = endMoment.format("YYYY-MM-DD+HH:mm:ss");
+
+//     // url-encode the strings (plus sign becomes %2B which is safe for query param)
+//     const encodedStart = encodeURIComponent(startTime);
+//     const encodedEnd = encodeURIComponent(endTime);
+
+//     // for debugging - log the timezone & timestamps (remove or reduce in prod)
+//     console.log("YEASTAR_TZ:", YEASTAR_TZ);
+//     console.log("startTime (formatted):", startTime);
+//     console.log("endTime (formatted):", endTime);
+
+//     const urlFrom = `${YEASTAR_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+//     const respFrom = await axios.get(urlFrom, {
+//       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
+//     });
+
+//     // ----------- API CALL 2 → INBOUND ----------
+//     const urlTo = `${YEASTAR_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+//     const respTo = await axios.get(urlTo, {
+//       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
+//     });
+
+//     console.log("resFrom" + respFrom.data.data);
+//     console.log("resTO" + respTo.data.data);
+
+
+
+//     const fromList = Array.isArray(respFrom.data?.data) ? respFrom.data.data : [];
+//     const toList = Array.isArray(respTo.data?.data) ? respTo.data.data : [];
+
+//     let finalList = [...fromList, ...toList];
+
+//     // ----- Remove duplicates by Yeastar ID -----
+//     const map = new Map();
+//     finalList.forEach((c) => map.set(c.id, c));
+//     finalList = [...map.values()];
+
+//     // ---- SAVE ONLY NEW CDRs ----
+//     let inserted = 0;
+
+//     for (const call of finalList) {
+//       const exists = await CallHistory.findOne({ yeastarId: call.id });
+//       if (exists) continue;
+//       console.log(call);
+
+//       await CallHistory.create({
+//         userId,
+//         extensionNumber: ext,
+//         yeastarId: call.id,
+
+//         call_from: call.call_from_number,
+//         call_to: call.call_to_number,
+
+//         talk_time: call.talk_duration,
+//         ring_time: call.ring_duration,
+//         duration: call.duration,
+
+//         direction: call.call_type,          // Outbound / Inbound
+//         status: call.disposition,           // ANSWERED / NO ANSWER
+
+//         start_time: new Date(call.time),
+//         end_time: new Date(call.time),
+
+//         record_file: call.record_file,
+//         disposition_code: call.reason,
+//         trunk: call.dst_trunk
+//       });
+
+
+//       inserted++;
+//     }
+
+//     return res.json({
+//       status: "scuccess",
+//       userId,
+//       extension: ext,
+//       time_window: { startTime, endTime },
+//       totalFetched: finalList.length,
+//       newInserted: inserted,
+//       message: `Stored ${inserted} new call records`,
+//     });
+
+//   } catch (err) {
+//     console.error("❌ Call History Error:", err.response?.data || err.message);
+//     return res.status(500).json({
+//       status: "error",
+//       message: "Failed to fetch/store call history",
+//       error: err.response?.data || err.message,
+//     });
+//   }
+// };
+
+
 exports.fetchAndStoreCallHistory = async (req, res) => {
   try {
-    const userId = req.user._id; // <-- token middleware should set this
+    const userId = req.user._id;
     const token = await getValidToken();
 
-    // ---- Get user details ----
     const user = await User.findById(userId);
     if (!user || !user.extensionNumber) {
       return res.status(400).json({
@@ -40,65 +162,50 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
 
     const ext = user.extensionNumber;
 
-    // // const ext = 1010;
-    // const startTime = moment().subtract(24, "hour").format("MM/DD/YYYY HH:mm:ss");
-    // const endTime = moment().format("MM/DD/YYYY HH:mm:ss");
+    // Always use Yeastar PBX timezone
+    const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
 
-    // // Yeastar format: 2025-11-18+10:00:00
-    // const encodedStart = encodeURIComponent(startTime);
-    // const encodedEnd = encodeURIComponent(endTime);
-
-    // compute start & end in chosen timezone and format in Yeastar style: YYYY-MM-DD+HH:mm:ss
-    // we use moment.tz(...) to ensure the same time window on every server.
-    const endMoment = moment().tz(YEASTAR_TZ);
+    // Build time window in Yeastar timezone
+    const endMoment = moment().tz(TZ);
     const startMoment = endMoment.clone().subtract(24, "hours");
 
-    // Yeastar format (example: 2025-11-22+16:38:43)
-    const startTime = startMoment.format("YYYY-MM-DD+HH:mm:ss");
-    const endTime = endMoment.format("YYYY-MM-DD+HH:mm:ss");
+    // Yeastar required format
+    const startTime = startMoment.format("MM/DD/YYYY HH:mm:ss");
+    const endTime = endMoment.format("MM/DD/YYYY HH:mm:ss");
 
-    // url-encode the strings (plus sign becomes %2B which is safe for query param)
     const encodedStart = encodeURIComponent(startTime);
     const encodedEnd = encodeURIComponent(endTime);
 
-    // for debugging - log the timezone & timestamps (remove or reduce in prod)
-    console.log("YEASTAR_TZ:", YEASTAR_TZ);
-    console.log("startTime (formatted):", startTime);
-    console.log("endTime (formatted):", endTime);
+    console.log("Using Yeastar TZ:", TZ);
+    console.log("startTime:", startTime, "endTime:", endTime);
 
+    // -------- OUTBOUND --------
     const urlFrom = `${YEASTAR_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
     const respFrom = await axios.get(urlFrom, {
       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
     });
 
-    // ----------- API CALL 2 → INBOUND ----------
+    // -------- INBOUND --------
     const urlTo = `${YEASTAR_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
     const respTo = await axios.get(urlTo, {
       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
     });
-
-    console.log("resFrom" + respFrom.data.data);
-    console.log("resTO" + respTo.data.data);
-
-
 
     const fromList = Array.isArray(respFrom.data?.data) ? respFrom.data.data : [];
     const toList = Array.isArray(respTo.data?.data) ? respTo.data.data : [];
 
     let finalList = [...fromList, ...toList];
 
-    // ----- Remove duplicates by Yeastar ID -----
+    // Remove duplicates
     const map = new Map();
     finalList.forEach((c) => map.set(c.id, c));
     finalList = [...map.values()];
 
-    // ---- SAVE ONLY NEW CDRs ----
     let inserted = 0;
 
     for (const call of finalList) {
       const exists = await CallHistory.findOne({ yeastarId: call.id });
       if (exists) continue;
-      console.log(call);
 
       await CallHistory.create({
         userId,
@@ -112,23 +219,22 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         ring_time: call.ring_duration,
         duration: call.duration,
 
-        direction: call.call_type,          // Outbound / Inbound
-        status: call.disposition,           // ANSWERED / NO ANSWER
+        direction: call.call_type,
+        status: call.disposition,
 
         start_time: new Date(call.time),
         end_time: new Date(call.time),
 
         record_file: call.record_file,
         disposition_code: call.reason,
-        trunk: call.dst_trunk
+        trunk: call.dst_trunk,
       });
-
 
       inserted++;
     }
 
     return res.json({
-      status: "scuccess",
+      status: "success",
       userId,
       extension: ext,
       time_window: { startTime, endTime },
@@ -136,9 +242,8 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
       newInserted: inserted,
       message: `Stored ${inserted} new call records`,
     });
-
   } catch (err) {
-    console.error("❌ Call History Error:", err.response?.data || err.message);
+    console.log("Error:", err.response?.data || err.message);
     return res.status(500).json({
       status: "error",
       message: "Failed to fetch/store call history",
