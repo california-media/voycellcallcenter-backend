@@ -19,6 +19,6 @@ router.post("/phone-number-call-history", getPhoneNumberCallHistory);
 
 router.post("/agent-call-history", checkRole(["user"]), getAgentCallHistory);
 
-router.get("/dashboard-call-history", getMonthlyCallGraph);
+router.post("/dashboard-call-history", getMonthlyCallGraph);
 
 module.exports = router;
