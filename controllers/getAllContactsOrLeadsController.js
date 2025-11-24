@@ -319,6 +319,67 @@ exports.getAllContactsOrLeads = async (req, res) => {
   }
 };
 
+exports.getAllActivities = async (req, res) => {
+  try {
+    const { contact_id, category } = req.query;
+    const createdBy = req.user._id;
+
+    if (!contact_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "contact_id is required",
+      });
+    }
+
+    if (!category) {
+      return res.status(400).json({
+        status: "error",
+        message: "category is required (contact or lead)",
+      });
+    }
+
+    // Determine which model to use based on category
+    var Model;
+    if (category === "lead") {
+      Model = Lead;
+    } else {
+      Model = Contact;
+    }
+
+    const record = await Model.findOne({
+      _id: contact_id,
+      createdBy,
+    })
+      .select("activities")
+      .lean();
+
+    if (!record) {
+      return res.status(404).json({
+        status: "error",
+        message: `${category} not found`,
+      });
+    }
+
+    // Sort activities by timestamp descending (newest first)
+    const activities = (record.activities || []).sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+    );
+
+    return res.status(200).json({
+      status: "success",
+      message: "Activities fetched successfully",
+      data: activities,
+    });
+  } catch (err) {
+    console.error("getAllActivities error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
 /**
  * Get a single contact or lead by ID
  */
@@ -414,12 +475,12 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
       .lean();
 
     // Add category field
-    const contactData = contacts.map(c => ({
+    const contactData = contacts.map((c) => ({
       id: c._id.toString(),
       firstname: c.firstname || "",
       lastname: c.lastname || "",
       emailAddresses: c.emailAddresses || [],
-      category: "contact"
+      category: "contact",
     }));
 
     // Fetch leads
@@ -428,12 +489,12 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
       .lean();
 
     // Add category field
-    const leadData = leads.map(l => ({
+    const leadData = leads.map((l) => ({
       id: l._id.toString(),
       firstname: l.firstname || "",
       lastname: l.lastname || "",
       emailAddresses: l.emailAddresses || [],
-      category: "lead"
+      category: "lead",
     }));
 
     // Combine both
@@ -442,9 +503,8 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
     return res.status(200).json({
       status: "success",
       message: "Email addresses fetched successfully",
-      data: finalData
+      data: finalData,
     });
-
   } catch (err) {
     console.error("getAllContactOrLeadIdEmails error:", err);
     return res.status(500).json({
