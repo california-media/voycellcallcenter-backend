@@ -1,6 +1,9 @@
 const axios = require("axios");
 const YeastarToken = require("../models/YeastarToken");
 const { getValidToken } = require("../utils/yeastarClient");
+const User = require("../models/userModel");
+const Lead = require("../models/leadModel");
+const Contact = require("../models/contactModel");
 
 const BASE_URL = process.env.YEASTAR_BASE_URL; // e.g. https://cmedia.ras.yeastar.com/openapi/v1.0
 const USERNAME = process.env.YEASTAR_USERNAME;
@@ -29,6 +32,83 @@ async function makeCallHandler(req, res) {
 
     const token = await getValidToken();
     const callee = countryCode ? `${countryCode}${mob_number}` : mob_number;
+
+    const rawNumber = String(mob_number || "");
+    const normalizedNumber = rawNumber.replace(/\D/g, ""); // e.g. "9876543210"
+    // also normalise country code (keep as-is if absent)
+    const normalizedCountryCode = countryCode ? String(countryCode).replace(/\D/g, "") : "";
+
+    // ── START: find owner (user) by extensionNumber
+    let ownerUser = null;
+    try {
+      ownerUser = await User.findOne({ extensionNumber: caller_extension }).select("_id");
+    } catch (dbErr) {
+      console.warn("Warning: error looking up owner by extension:", dbErr);
+      ownerUser = null;
+    }
+    // ── END
+
+    if (!ownerUser) {
+      return res.status(400).json({ status: "error", message: "Caller extension not registered" });
+    }
+
+    // ── START: check existing contact/lead for this owner
+    let existingContact = null;
+    let existingLead = null;
+
+    if (ownerUser) {
+      const ownerId = ownerUser._id;
+
+      // look in Contact
+      existingContact = await Contact.findOne({
+        createdBy: ownerId,
+        // "phoneNumbers.countryCode": normalizedCountryCode,
+        "phoneNumbers.number": normalizedNumber
+      }).lean();
+
+      // look in Lead
+      existingLead = await Lead.findOne({
+        createdBy: ownerId,
+        // "phoneNumbers.countryCode": normalizedCountryCode,
+        "phoneNumbers.number": normalizedNumber
+      }).lean();
+    }
+    // ── END
+
+
+    // ── START: create lead if phone not found in either collection
+    if (ownerUser && !existingContact && !existingLead) {
+      try {
+        const leadPayload = {
+          firstname: "", // optional — you can leave blank or populate if available
+          lastname: "",
+          phoneNumbers: [
+            {
+              countryCode: normalizedCountryCode || "",
+              number: normalizedNumber
+            }
+          ],
+          status: "interested",
+          createdBy: ownerUser._id,
+          // optional: add an activity log entry
+          activities: [
+            {
+              action: "lead_created_via_call_api",
+              type: "lead",
+              title: "Lead created from makeCall API",
+              description: `Phone ${normalizedCountryCode ? "+" + normalizedCountryCode : ""}${normalizedNumber}`,
+              timestamp: new Date()
+            }
+          ]
+        };
+
+        const createdLead = await Lead.create(leadPayload);
+        console.log("➕ Created new lead for number:", createdLead._id);
+      } catch (createErr) {
+        console.error("Failed to create lead for number:", createErr);
+      }
+    }
+    // ── END
 
     const callUrl = `/call/dial?access_token=${encodeURIComponent(token)}`;
 
