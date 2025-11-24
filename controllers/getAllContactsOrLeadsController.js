@@ -403,3 +403,54 @@ exports.getSingleContactOrLead = async (req, res) => {
     });
   }
 };
+
+exports.getAllContactOrLeadForEvent = async (req, res) => {
+  try {
+    const createdBy = req.user._id;
+
+    // Fetch contacts
+    const contacts = await Contact.find({ createdBy })
+      .select("_id emailAddresses firstname lastname")
+      .lean();
+
+    // Add category field
+    const contactData = contacts.map(c => ({
+      id: c._id.toString(),
+      firstname: c.firstname || "",
+      lastname: c.lastname || "",
+      emailAddresses: c.emailAddresses || [],
+      category: "contact"
+    }));
+
+    // Fetch leads
+    const leads = await Lead.find({ createdBy })
+      .select("_id emailAddresses firstname lastname")
+      .lean();
+
+    // Add category field
+    const leadData = leads.map(l => ({
+      id: l._id.toString(),
+      firstname: l.firstname || "",
+      lastname: l.lastname || "",
+      emailAddresses: l.emailAddresses || [],
+      category: "lead"
+    }));
+
+    // Combine both
+    const finalData = [...contactData, ...leadData];
+
+    return res.status(200).json({
+      status: "success",
+      message: "Email addresses fetched successfully",
+      data: finalData
+    });
+
+  } catch (err) {
+    console.error("getAllContactOrLeadIdEmails error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};

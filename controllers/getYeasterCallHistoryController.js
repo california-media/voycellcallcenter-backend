@@ -824,66 +824,6 @@ exports.callRecordingDownload = async (req, res) => {
   }
 };
 
-/* The above code is a JavaScript function that retrieves the monthly call graph data based on the call
-history. Here is a breakdown of what the code does: */
-/* The above code is a JavaScript function that generates a monthly call graph based on call history
-data. Here is a breakdown of what the code does: */
-
-// exports.getCallHistoryGraph = async (req, res) => {
-//   try {
-//     const now = new Date();
-//     const year = now.getFullYear();
-//     const monthIndex = now.getMonth() + 1;
-
-//     const monthStr = `${year}-${String(monthIndex).padStart(2, "0")}`;
-
-//     const startDate = new Date(Date.UTC(year, monthIndex - 1, 1, 0, 0, 0));
-//     const endDate = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0));
-
-//     const calls = await CallHistory.find({
-//       start_time: { $gte: startDate, $lt: endDate }
-//     }).select("start_time direction");
-
-//     const totalDays = new Date(year, monthIndex, 0).getDate();
-//     const daysArray = [];
-
-//     // 1️⃣ UPDATED STRUCTURE HERE
-//     for (let day = 1; day <= totalDays; day++) {
-//       daysArray.push({
-//         date: `${year}-${String(monthIndex).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
-//         inbound: 0,
-//         outbound: 0,
-//       });
-//     }
-
-//     // 2️⃣ UPDATED COUNTER HERE
-//     calls.forEach(call => {
-//       const d = new Date(call.start_time);
-//       const day = d.getUTCDate();
-
-//       if (call.direction === "Inbound") {
-//         daysArray[day - 1].inbound++;
-//       } else if (call.direction === "Outbound") {
-//         daysArray[day - 1].outbound++;
-//       }
-//     });
-
-//     return res.json({
-//       status: "success",
-//       month: monthStr,
-//       days: daysArray
-//     });
-
-//   } catch (error) {
-//     console.error("Error:", error);
-//     return res.status(500).json({
-//       status: "error",
-//       message: "Internal server error",
-//       error: error.message
-//     });
-//   }
-// };
-
 exports.getInboundOutBoundCallGraph = async (req, res) => {
   try {
     const loginUserId = req.user._id;
@@ -1093,8 +1033,12 @@ exports.getMonthlyCallGraph = async (req, res) => {
     // 7️⃣ Summary counts
     const inboundTotal = calls.filter((c) => c.direction === "Inbound").length;
     const outboundTotal = calls.filter((c) => c.direction === "Outbound").length;
+    const answeredTotal = calls.filter((c) => c.status === "ANSWERED").length;
+    const invalidTotal = calls.filter((c) => c.status === "FAILED").length;
+    const cancelledTotal = calls.filter((c) => c.status === "BUSY").length;
     const missedTotal = calls.filter(
-      (c) => c.status === "NO ANSWER" || c.status === "FAILED" || c.status === "BUSY"
+      (c) => c.status === "NO ANSWER"
+      // || c.status === "FAILED" || c.status === "BUSY"
     ).length;
 
     const totalCalls = inboundTotal + outboundTotal;
@@ -1108,6 +1052,9 @@ exports.getMonthlyCallGraph = async (req, res) => {
         inboundTotal,
         outboundTotal,
         missedTotal,
+        answeredTotal,
+        invalidTotal,
+        cancelledTotal,
         totalCalls,
       },
 
