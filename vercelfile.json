@@ -1,0 +1,31 @@
+{
+  "rewrites": [
+    {
+      "source": "/voycell_callback/:token",
+      "destination": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/voycell_callback/:token"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/voycell_callback/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        }
+      ]
+    }
+  ]
+}

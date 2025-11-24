@@ -62,15 +62,23 @@ async function makeCallHandler(req, res) {
       // look in Contact
       existingContact = await Contact.findOne({
         createdBy: ownerId,
-        // "phoneNumbers.countryCode": normalizedCountryCode,
-        "phoneNumbers.number": normalizedNumber
+        phoneNumbers: {
+          $elemMatch: {
+            countryCode: normalizedCountryCode,
+            number: normalizedNumber
+          }
+        }
       }).lean();
 
       // look in Lead
       existingLead = await Lead.findOne({
         createdBy: ownerId,
-        // "phoneNumbers.countryCode": normalizedCountryCode,
-        "phoneNumbers.number": normalizedNumber
+        phoneNumbers: {
+          $elemMatch: {
+            countryCode: normalizedCountryCode,
+            number: normalizedNumber
+          }
+        }
       }).lean();
     }
     // ── END
