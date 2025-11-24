@@ -2,26 +2,26 @@ require("dotenv").config();
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-  service: "smtp",
-  host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT),
-  secure: true, // Gmail on port 587 uses TLS (not SSL)
-  auth: {
-    user: process.env.MAIL_USERNAME,
-    pass: process.env.MAIL_PASSWORD,
-  },
-  tls: {
-    rejectUnauthorized: false, // important for Gmail on TLS
-  },
+    service: "smtp",
+    host: process.env.MAIL_HOST,
+    port: Number(process.env.MAIL_PORT),
+    secure: true, // Gmail on port 587 uses TLS (not SSL)
+    auth: {
+        user: process.env.MAIL_USERNAME,
+        pass: process.env.MAIL_PASSWORD,
+    },
+    tls: {
+        rejectUnauthorized: false, // important for Gmail on TLS
+    },
 });
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const sendVerificationEmail = async (email, link) => {
-  const mailOptions = {
-    from: '"VoyCell Call Center" <noreply@contacts.management>',
-    to: email,
-    subject: "voyCell : Verify Your E-mail",
-    html: `<html lang="en">
+    const mailOptions = {
+        from: '"VoyCell Call Center" <noreply@contacts.management>',
+        to: email,
+        subject: "voyCell : Verify Your E-mail",
+        html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -80,7 +80,7 @@ const sendVerificationEmail = async (email, link) => {
 <body>
     <div class="container">
 
-        <center> <img src="${FRONTEND_URL}/assets/img/voycell-logo.webp"
+        <center> <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
                     alt="VoyCell Call Center Logo" style="width:200px; display:block;"></center>
         <p><strong>Hello,</strong></p>
         
@@ -104,7 +104,7 @@ const sendVerificationEmail = async (email, link) => {
 
             <!-- Left Column (Image) -->
             <div style="float:left; width:110px; margin-right:10px;">
-                <img src="${FRONTEND_URL}/assets/img/voycell-logo.webp"
+                <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
                     alt="VoyCell Call Center logo" style="width:100px; display:block;">
             </div>
 
@@ -155,17 +155,17 @@ const sendVerificationEmail = async (email, link) => {
                         alt="Google Play"></a>
             </div>
 
-            <p>Need help? Visit <a href="#">support@contacts.management</a> </p>
-            <p>Sent with ❤️ from Contacts Management</p>
+            <p>Need help? Visit <a href="#">support@VoyCell</a> </p>
+            <p>Sent with ❤️ from VoyCell</p>
             <p><a href="#" target="_blank">Privacy Policy</a></p>
         </div>
     </div>
 </body>
 
 </html>`,
-  };
+    };
 
-  await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
 };
 
 // const sendHelpSupportReply = async (
@@ -283,21 +283,20 @@ const sendVerificationEmail = async (email, link) => {
 // };
 
 const sendHelpSupportReplyNotification = async (
-  userEmail,
-  userName,
-  subject,
-  adminMessage,
-  ticketId
+    userEmail,
+    userName,
+    subject,
+    adminMessage,
+    ticketId
 ) => {
-  const ticketsPageUrl = `${
-    process.env.FRONTEND_URL || "https://contacts.management"
-  }/my-tickets?ticketId=${ticketId}`;
+    const ticketsPageUrl = `${process.env.FRONTEND_URL || "https://contacts.management"
+        }/my-tickets?ticketId=${ticketId}`;
 
-  const mailOptions = {
-    from: '"Contacts Management Support" <noreply@contacts.management>',
-    to: userEmail,
-    subject: `New Reply: ${subject || "Your Support Request"}`,
-    html: `<html lang="en">
+    const mailOptions = {
+        from: '"Contacts Management Support" <noreply@contacts.management>',
+        to: userEmail,
+        subject: `New Reply: ${subject || "Your Support Request"}`,
+        html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -408,13 +407,13 @@ const sendHelpSupportReplyNotification = async (
 </body>
 
 </html>`,
-  };
+    };
 
-  await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
 };
 
 module.exports = {
-  sendVerificationEmail,
-  //   sendHelpSupportReply,
-  sendHelpSupportReplyNotification,
+    sendVerificationEmail,
+    //   sendHelpSupportReply,
+    sendHelpSupportReplyNotification,
 };

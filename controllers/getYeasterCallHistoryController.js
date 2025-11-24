@@ -828,7 +828,8 @@ exports.callRecordingDownload = async (req, res) => {
 history. Here is a breakdown of what the code does: */
 /* The above code is a JavaScript function that generates a monthly call graph based on call history
 data. Here is a breakdown of what the code does: */
-// exports.getMonthlyCallGraph = async (req, res) => {
+
+// exports.getCallHistoryGraph = async (req, res) => {
 //   try {
 //     const now = new Date();
 //     const year = now.getFullYear();
@@ -883,6 +884,135 @@ data. Here is a breakdown of what the code does: */
 //   }
 // };
 
+exports.getInboundOutBoundCallGraph = async (req, res) => {
+  try {
+    const loginUserId = req.user._id;
+
+    // Fetch logged in user (could be admin or agent/user)
+    const loggedUser = await User.findById(loginUserId).select("role createdByWhichCompanyAdmin");
+
+    if (!loggedUser) {
+      return res.status(400).json({
+        status: "error",
+        message: "User not found"
+      });
+    }
+
+    let userIdsToInclude = [];
+
+    // 🟦 CASE 1: companyAdmin → include ALL users created by this admin + admin itself
+    if (loggedUser.role === "companyAdmin") {
+      const allUsers = await User.find({
+        $or: [
+          { createdByWhichCompanyAdmin: loginUserId },
+          { _id: loginUserId } // include admin calls also
+        ]
+      }).select("_id");
+
+      userIdsToInclude = allUsers.map(u => u._id);
+
+    } else {
+      // 🟩 CASE 2: agent/user → only own calls
+      userIdsToInclude = [loginUserId];
+    }
+
+    // ------------------------------
+    // DATE RANGE: TODAY → LAST 30 DAYS
+    // ------------------------------
+
+    const today = new Date();
+
+    const endDate = new Date(Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate() + 1,   // next day at 00:00
+      0, 0, 0
+    ));
+
+    const startDate = new Date(Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate() - 29,
+      0, 0, 0
+    ));
+
+    // ------------------------------
+    // FETCH CALLS
+    // ------------------------------
+    const calls = await CallHistory.find({
+      userId: { $in: userIdsToInclude },   // <-- filter by userIds
+      start_time: { $gte: startDate, $lt: endDate }
+    }).select("start_time direction");
+
+    // ------------------------------
+    // FORMAT DATE: 24 Nov 2025
+    // ------------------------------
+    const formatDate = (dateObj) => {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${months[dateObj.getUTCMonth()]
+        } ${dateObj.getUTCFullYear()}`;
+    };
+
+    // ------------------------------
+    // BUILD EMPTY LAST-30-DAYS ARRAY
+    // ------------------------------
+    const daysArray = [];
+
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate() - i
+      ));
+
+      daysArray.push({
+        date: formatDate(d),
+        inbound: 0,
+        outbound: 0
+      });
+    }
+
+    // ------------------------------
+    // COUNT CALLS DAY-WISE
+    // ------------------------------
+    calls.forEach(call => {
+      const d = new Date(call.start_time);
+
+      const diffDays = Math.floor((endDate - d) / (1000 * 60 * 60 * 24));
+
+      if (diffDays >= 0 && diffDays < 30) {
+        if (call.direction === "Inbound") {
+          daysArray[diffDays].inbound++;
+        } else if (call.direction === "Outbound") {
+          daysArray[diffDays].outbound++;
+        }
+      }
+    });
+
+    // ------------------------------
+    // SEND FINAL RESULT
+    // ------------------------------
+    return res.json({
+      status: "success",
+      range: {
+        start: formatDate(startDate),
+        end: formatDate(today)
+      },
+      days: daysArray.reverse() // earliest → latest
+    });
+
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
 exports.getMonthlyCallGraph = async (req, res) => {
   try {
     const loginUserId = req.user._id;
@@ -933,32 +1063,32 @@ exports.getMonthlyCallGraph = async (req, res) => {
       start_time: { $gte: startDate, $lte: endDate },
     }).select("start_time direction status");
 
-    // 5️⃣ Build days array
-    const daysArray = [];
+    // // 5️⃣ Build days array
+    // const daysArray = [];
 
-    const cursor = moment(startDate);
-    const lastDay = moment(endDate);
+    // const cursor = moment(startDate);
+    // const lastDay = moment(endDate);
 
-    while (cursor.isSameOrBefore(lastDay, "day")) {
-      daysArray.push({
-        date: cursor.format("DD MMM YYYY"), // 👉 21 Oct 2025
-        inbound: 0,
-        outbound: 0,
-      });
+    // while (cursor.isSameOrBefore(lastDay, "day")) {
+    //   daysArray.push({
+    //     date: cursor.format("DD MMM YYYY"), // 👉 21 Oct 2025
+    //     inbound: 0,
+    //     outbound: 0,
+    //   });
 
-      cursor.add(1, "day");
-    }
+    //   cursor.add(1, "day");
+    // }
 
-    // 6️⃣ Count daily values
-    calls.forEach((call) => {
-      const d = moment(call.start_time).format("DD MMM YYYY");
+    // // 6️⃣ Count daily values
+    // calls.forEach((call) => {
+    //   const d = moment(call.start_time).format("DD MMM YYYY");
 
-      const dayIndex = daysArray.findIndex((x) => x.date === d);
-      if (dayIndex !== -1) {
-        if (call.direction === "Inbound") daysArray[dayIndex].inbound++;
-        if (call.direction === "Outbound") daysArray[dayIndex].outbound++;
-      }
-    });
+    //   const dayIndex = daysArray.findIndex((x) => x.date === d);
+    //   if (dayIndex !== -1) {
+    //     if (call.direction === "Inbound") daysArray[dayIndex].inbound++;
+    //     if (call.direction === "Outbound") daysArray[dayIndex].outbound++;
+    //   }
+    // });
 
     // 7️⃣ Summary counts
     const inboundTotal = calls.filter((c) => c.direction === "Inbound").length;
@@ -967,7 +1097,7 @@ exports.getMonthlyCallGraph = async (req, res) => {
       (c) => c.status === "NO ANSWER" || c.status === "FAILED" || c.status === "BUSY"
     ).length;
 
-    const totalCalls = calls.length;
+    const totalCalls = inboundTotal + outboundTotal;
 
     return res.json({
       status: "success",
@@ -982,7 +1112,7 @@ exports.getMonthlyCallGraph = async (req, res) => {
       },
 
       role: loginUser.role,
-      days: daysArray,
+      // days: daysArray,
     });
   } catch (error) {
     console.error("Error:", error);

@@ -7,6 +7,7 @@ const { fetchAndStoreCallHistory,
     callRecordingDownload,
     getPhoneNumberCallHistory,
     getAgentCallHistory,
+    getInboundOutBoundCallGraph,
     getMonthlyCallGraph } = require("../controllers/getYeasterCallHistoryController");
 
 router.post("/fetch-and-store", fetchAndStoreCallHistory);
@@ -20,5 +21,7 @@ router.post("/phone-number-call-history", getPhoneNumberCallHistory);
 router.post("/agent-call-history", checkRole(["user"]), getAgentCallHistory);
 
 router.post("/dashboard-call-history", getMonthlyCallGraph);
+
+router.get("/inbound-outbound-call-graph", getInboundOutBoundCallGraph);
 
 module.exports = router;
