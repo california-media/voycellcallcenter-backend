@@ -196,15 +196,15 @@ exports.addOrUpdateTask = async (req, res) => {
       await logActivityToContact(category, contact_id, {
         action: "task_updated",
         type: "task",
-        title: "Task Updated",
-        description: taskDescription || "Task details updated",
+        title: "Note Updated",
+        description: taskDescription || "Note details updated",
       });
     } else {
       await logActivityToContact(category, contact_id, {
-        action: "task_created",
+        action: "note_created",
         type: "task",
-        title: "Task Created",
-        description: taskDescription || "New task added",
+        title: "Note Created",
+        description: taskDescription || "New note added",
       });
     }
 
@@ -267,13 +267,13 @@ exports.deleteTask = async (req, res) => {
     await logActivityToContact(category, contact_id, {
       action: "task_deleted",
       type: "task",
-      title: "Task Deleted",
+      title: "Note Deleted",
       description: `${taskDescription}`,
     });
 
     return res.status(200).json({
       status: "success",
-      message: "Task Deleted",
+      message: "Note Deleted",
       data: { task_id },
     });
   } catch (error) {

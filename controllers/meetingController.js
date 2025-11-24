@@ -114,7 +114,7 @@ exports.getMeetingsForContact = async (req, res) => {
 exports.addOrUpdateMeeting = async (req, res) => {
   try {
     const {
-      category,            // "contact" or "lead"
+      category, // "contact" or "lead"
       contact_id,
       meeting_id,
       meetingTitle,
@@ -250,7 +250,8 @@ exports.addOrUpdateMeeting = async (req, res) => {
       meetingObj.createdAt = new Date();
 
       if (meetingTitle) meetingObj.meetingTitle = meetingTitle;
-      if (meetingDescription) meetingObj.meetingDescription = meetingDescription;
+      if (meetingDescription)
+        meetingObj.meetingDescription = meetingDescription;
       if (meetingStartDate) meetingObj.meetingStartDate = meetingStartDate;
       if (meetingStartTime) meetingObj.meetingStartTime = meetingStartTime;
       meetingObj.meetingType = meetingType || "offline";
@@ -279,7 +280,7 @@ exports.addOrUpdateMeeting = async (req, res) => {
 
     const activityTitle = isUpdate
       ? record.meetings.find((m) => m.meeting_id.toString() === meeting_id)
-        ?.meetingTitle
+          ?.meetingTitle
       : meetingObj.meetingTitle;
 
     // =============================================================
@@ -308,7 +309,6 @@ exports.addOrUpdateMeeting = async (req, res) => {
     });
   }
 };
-
 
 // exports.addOrUpdateMeeting = async (req, res) => {
 //   try {
@@ -545,7 +545,6 @@ exports.deleteMeeting = async (req, res) => {
     });
 
     console.log(contact);
-
 
     if (!contact) {
       return res.status(404).json({
