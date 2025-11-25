@@ -10,29 +10,31 @@ exports.getAllCompanyAdmins = async (req, res) => {
 
     const searchQuery = search
       ? {
-        $or: [
-          { firstname: { $regex: search, $options: "i" } },
-          { lastname: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { extensionNumber: { $regex: search, $options: "i" } },
-          { telephone: { $regex: search, $options: "i" } },
-          { "phonenumbers.number": { $regex: search, $options: "i" } }
-        ]
-      }
+          $or: [
+            { firstname: { $regex: search, $options: "i" } },
+            { lastname: { $regex: search, $options: "i" } },
+            { email: { $regex: search, $options: "i" } },
+            { extensionNumber: { $regex: search, $options: "i" } },
+            { telephone: { $regex: search, $options: "i" } },
+            { "phonenumbers.number": { $regex: search, $options: "i" } },
+          ],
+        }
       : {};
 
     const companyAdmins = await User.find({
       role: "companyAdmin",
-      ...searchQuery
+      ...searchQuery,
     })
-      .select("_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret")
+      .select(
+        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret extensionStatus"
+      )
       .skip(skip)
       .limit(limit)
       .lean();
 
     const totalAdmins = await User.countDocuments({
       role: "companyAdmin",
-      ...searchQuery
+      ...searchQuery,
     });
 
     res.status(200).json({
@@ -42,9 +44,8 @@ exports.getAllCompanyAdmins = async (req, res) => {
       limit,
       totalAdmins,
       totalPages: Math.ceil(totalAdmins / limit),
-      data: companyAdmins
+      data: companyAdmins,
     });
-
   } catch (error) {
     console.error("❌ Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -66,23 +67,25 @@ exports.getAgentsOfCompanyAdmin = async (req, res) => {
 
     const searchQuery = search
       ? {
-        $or: [
-          { firstname: { $regex: search, $options: "i" } },
-          { lastname: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { extensionNumber: { $regex: search, $options: "i" } },
-          { telephone: { $regex: search, $options: "i" } },
-          { "phonenumbers.number": { $regex: search, $options: "i" } }
-        ]
-      }
+          $or: [
+            { firstname: { $regex: search, $options: "i" } },
+            { lastname: { $regex: search, $options: "i" } },
+            { email: { $regex: search, $options: "i" } },
+            { extensionNumber: { $regex: search, $options: "i" } },
+            { telephone: { $regex: search, $options: "i" } },
+            { "phonenumbers.number": { $regex: search, $options: "i" } },
+          ],
+        }
       : {};
 
     const agents = await User.find({
       role: "user",
       createdByWhichCompanyAdmin: adminId,
-      ...searchQuery
+      ...searchQuery,
     })
-      .select("_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret createdByWhichCompanyAdmin")
+      .select(
+        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus"
+      )
       .skip(skip)
       .limit(limit)
       .lean();
@@ -90,7 +93,7 @@ exports.getAgentsOfCompanyAdmin = async (req, res) => {
     const totalAgents = await User.countDocuments({
       role: "user",
       createdByWhichCompanyAdmin: adminId,
-      ...searchQuery
+      ...searchQuery,
     });
 
     res.status(200).json({
@@ -101,9 +104,8 @@ exports.getAgentsOfCompanyAdmin = async (req, res) => {
       limit,
       totalAgents,
       totalPages: Math.ceil(totalAgents / limit),
-      data: agents
+      data: agents,
     });
-
   } catch (error) {
     console.error("❌ Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -116,9 +118,11 @@ exports.getCompanyAdminDetails = async (req, res) => {
 
     const admin = await User.findOne({
       _id: adminId,
-      role: "companyAdmin"
+      role: "companyAdmin",
     })
-      .select("_id firstname lastname email createdAt extensionNumber sipSecret telephone phonenumbers")
+      .select(
+        "_id firstname lastname email createdAt extensionNumber sipSecret telephone phonenumbers extensionStatus"
+      )
       .lean();
 
     if (!admin) {
@@ -128,9 +132,8 @@ exports.getCompanyAdminDetails = async (req, res) => {
     res.status(200).json({
       status: "success",
       message: "admin details fetched",
-      data: admin
+      data: admin,
     });
-
   } catch (error) {
     console.error("❌ Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -143,9 +146,11 @@ exports.getAgentDetails = async (req, res) => {
 
     const agent = await User.findOne({
       _id: agentId,
-      role: "user"
+      role: "user",
     })
-      .select("_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret createdByWhichCompanyAdmin")
+      .select(
+        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus"
+      )
       .lean();
 
     if (!agent) {
@@ -161,9 +166,8 @@ exports.getAgentDetails = async (req, res) => {
       status: "success",
       message: "agent details fetched",
       data: agent,
-      admin
+      admin,
     });
-
   } catch (error) {
     console.error("❌ Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -173,6 +177,7 @@ exports.getAgentDetails = async (req, res) => {
 exports.editCompanyAdminAndAgent = async (req, res) => {
   try {
     const { userId, extensionNumber, telephone, sipSecret, status } = req.body;
+    console.log("Editing user:", req.body);
 
     if (!userId) {
       return res.status(400).json({ error: "userId is required" });
@@ -187,24 +192,33 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     // Allowed fields only
     const updateData = {};
 
-    if (extensionNumber !== undefined) updateData.extensionNumber = extensionNumber;
+    if (extensionNumber !== undefined)
+      updateData.extensionNumber = extensionNumber;
     if (telephone !== undefined) updateData.telephone = telephone;
     if (sipSecret !== undefined) updateData.sipSecret = sipSecret;
-    if (status !== undefined) updateData.extensionStatus = status;
+    if (status !== undefined)
+      updateData.extensionStatus =
+        status === true &&
+        extensionNumber !== undefined &&
+        telephone !== undefined &&
+        sipSecret !== undefined
+          ? true
+          : false;
 
     // Update in DB
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $set: updateData },
       { new: true }
-    ).select("_id firstname lastname email role extensionNumber telephone sipSecret");
+    ).select(
+      "_id firstname lastname email role extensionNumber telephone sipSecret extensionStatus"
+    );
 
     res.status(200).json({
       status: "success",
       message: "User updated successfully",
       updatedUser,
     });
-
   } catch (error) {
     console.error("❌ Error updating user:", error);
     res.status(500).json({ error: "Internal Server Error" });

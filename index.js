@@ -57,7 +57,7 @@ const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
 const adminUserRoutes = require("./routes/admin/adminUserRoutes");
 const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
 const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
-const superadmin = require("./routes/admin/superAdminRoutes")
+const superadmin = require("./routes/admin/superAdminRoutes");
 
 console.log("Setting up Express app...");
 
@@ -195,7 +195,12 @@ app.use(
   adminHelpSupportRoutes
 );
 
-app.use("/superAdmin", checkForAuthentication(), checkRole(["superadmin"]), superadmin)
+app.use(
+  "/superAdmin",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  superadmin
+);
 
 app.use("/check", (req, res) => {
   res.json({ message: "API checkPage" });
@@ -278,7 +283,11 @@ const http = require("http");
       const server = http.createServer(app);
 
       server.listen(PORT, () =>
-        console.log(`🚀 Server running on http://localhost:${PORT}`, "env", process.env.NODE_ENV)
+        console.log(
+          `🚀 Server running on http://localhost:${PORT}`,
+          "env",
+          process.env.NODE_ENV
+        )
       );
     }
   } catch (err) {
@@ -302,3 +311,44 @@ module.exports.handler = serverless(async (event, context) => {
     };
   }
 });
+
+const t = {
+  status: "success",
+  message: "company admin fetched",
+  page: 1,
+  limit: 10,
+  totalAdmins: 7,
+  totalPages: 1,
+  data: [
+    {
+      _id: "69032996fc434f4104e3f57b",
+      email: "makvanayash2112@gmail.com",
+      extensionNumber: "3015",
+      sipSecret: "G5iknLPBhHu7",
+      phonenumbers: [{ countryCode: "91", number: "1235466877444" }],
+      createdAt: "2025-10-30T09:02:14.321Z",
+      firstname: "yash",
+      lastname: "makvana",
+    },
+  ],
+};
+
+const s = {
+  status: "success",
+  message: "admin details fetched",
+  data: {
+    _id: "69032996fc434f4104e3f57b",
+    email: "makvanayash2112@gmail.com",
+    extensionNumber: "3015",
+    sipSecret: "G5iknLPBhHu7",
+    phonenumbers: [
+      {
+        countryCode: "91",
+        number: "1235466877444",
+      },
+    ],
+    createdAt: "2025-10-30T09:02:14.321Z",
+    firstname: "yash",
+    lastname: "makvana",
+  },
+};
