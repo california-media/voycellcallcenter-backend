@@ -57,6 +57,7 @@ const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
 const adminUserRoutes = require("./routes/admin/adminUserRoutes");
 const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
 const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
+const superadmin = require("./routes/admin/superAdminRoutes")
 
 console.log("Setting up Express app...");
 
@@ -194,6 +195,8 @@ app.use(
   adminHelpSupportRoutes
 );
 
+app.use("/superAdmin", checkForAuthentication(), checkRole(["superadmin"]), superadmin)
+
 app.use("/check", (req, res) => {
   res.json({ message: "API checkPage" });
 });
@@ -275,7 +278,7 @@ const http = require("http");
       const server = http.createServer(app);
 
       server.listen(PORT, () =>
-        console.log(`🚀 Server running on http://localhost:${PORT}`,"env", process.env.NODE_ENV)
+        console.log(`🚀 Server running on http://localhost:${PORT}`, "env", process.env.NODE_ENV)
       );
     }
   } catch (err) {

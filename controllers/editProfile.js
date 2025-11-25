@@ -463,6 +463,7 @@ const editProfile = async (req, res) => {
       twitter,
       facebook,
       designation,
+      telephone,
       phonenumbers = [],
     } = req.body;
 
@@ -485,6 +486,10 @@ const editProfile = async (req, res) => {
     if (keys.includes("twitter")) user.twitter = twitter;
     if (keys.includes("facebook")) user.facebook = facebook;
     if (keys.includes("designation")) user.designation = designation;
+    if (keys.includes("telephone")) {
+      // normalize: trim and remove extra spaces
+      user.telephone = typeof telephone === "string" ? telephone.trim() : telephone;
+    }
 
     // === Email Validation ===
     if (keys.includes("email") && email) {
@@ -598,6 +603,7 @@ const editProfile = async (req, res) => {
         lastname: user.lastname,
         email: user.email,
         phonenumbers: user.phonenumbers,
+        telephone: user.telephone,
         profileImageURL: user.profileImageURL,
         linkedin: user.linkedin,
         instagram: user.instagram,
@@ -660,9 +666,8 @@ const updateContactStatuses = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: `${
-        category === "lead" ? "Lead" : "Contact"
-      } statuses updated successfully`,
+      message: `${category === "lead" ? "Lead" : "Contact"
+        } statuses updated successfully`,
       data: {
         contactStatuses: user.contactStatuses,
         leadStatuses: user.leadStatuses,
