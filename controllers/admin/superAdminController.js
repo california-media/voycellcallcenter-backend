@@ -172,7 +172,7 @@ exports.getAgentDetails = async (req, res) => {
 
 exports.editCompanyAdminAndAgent = async (req, res) => {
   try {
-    const { userId, extensionNumber, telephone, sipSecret } = req.body;
+    const { userId, extensionNumber, telephone, sipSecret, status } = req.body;
 
     if (!userId) {
       return res.status(400).json({ error: "userId is required" });
@@ -190,6 +190,7 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     if (extensionNumber !== undefined) updateData.extensionNumber = extensionNumber;
     if (telephone !== undefined) updateData.telephone = telephone;
     if (sipSecret !== undefined) updateData.sipSecret = sipSecret;
+    if (status !== undefined) updateData.extensionStatus = status;
 
     // Update in DB
     const updatedUser = await User.findByIdAndUpdate(
@@ -209,4 +210,3 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
-

@@ -87,6 +87,11 @@ const userSchema = new Schema(
 
     lastSeen: { type: Date, default: null },
 
+    extensionStatus: {
+      type: Boolean,
+      default: false,
+    },
+
     userInfo: {
       helps: {
         type: [String],
