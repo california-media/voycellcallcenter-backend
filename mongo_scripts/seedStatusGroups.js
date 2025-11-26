@@ -22,20 +22,25 @@ async function run() {
     const userId = "69032996fc434f4104e3f57b";
 
     const contactStatuses = [
-      { value: "interested", label: "Interested", group: 1 },
-      { value: "notInterested", label: "Not Interested", group: 1 },
-      { value: "called", label: "Called", group: 2 },
-      { value: "notValid", label: "Not Valid", group: 2 },
-      { value: "contacted", label: "Contacted", group: 2 },
-      { value: "win", label: "Win", group: 3 },
-      { value: "lost", label: "Lost", group: 3 },
+      { value: "interested", label: "Interested", group: 1, isDefault: true },
+      {
+        value: "notInterested",
+        label: "Not Interested",
+        group: 1,
+        isDefault: false,
+      },
+      { value: "called", label: "Called", group: 2, isDefault: true },
+      { value: "notValid", label: "Not Valid", group: 2, isDefault: false },
+      { value: "contacted", label: "Contacted", group: 2, isDefault: false },
+      { value: "win", label: "Win", group: 3, isDefault: true },
+      { value: "lost", label: "Lost", group: 3, isDefault: false },
     ];
 
     const leadStatuses = [
-      { value: "interested", label: "Interested", group: 1 },
-      { value: "followup", label: "Follow Up", group: 2 },
-      { value: "win", label: "Win", group: 3 },
-      { value: "lost", label: "Lost", group: 3 },
+      { value: "interested", label: "Interested", group: 1, isDefault: true },
+      { value: "followup", label: "Follow Up", group: 2, isDefault: true },
+      { value: "win", label: "Win", group: 3, isDefault: true },
+      { value: "lost", label: "Lost", group: 3, isDefault: false },
     ];
 
     const update = { contactStatuses, leadStatuses };
