@@ -177,7 +177,15 @@ exports.getAgentDetails = async (req, res) => {
 exports.editCompanyAdminAndAgent = async (req, res) => {
   try {
     const { userId, extensionNumber, telephone, sipSecret, status } = req.body;
-    console.log("Editing user:", req.body);
+
+    console.log(
+      "Received body:",
+      userId,
+      extensionNumber,
+      telephone,
+      sipSecret,
+      status
+    );
 
     if (!userId) {
       return res.status(400).json({ error: "userId is required" });
@@ -192,18 +200,50 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     // Allowed fields only
     const updateData = {};
 
+    // Determine if the request intends to activate the extension status.
+    // Accept either boolean true or string 'active' as activation intent.
+    const isActivating =
+      status === true || status === "active" || status === "Active";
+
+    // If activation is requested, require all three fields to be provided and non-empty.
+    if (isActivating) {
+      const missing = [];
+      if (!extensionNumber || String(extensionNumber).trim() === "")
+        missing.push("Extension Number");
+      if (!telephone || String(telephone).trim() === "")
+        missing.push("Telephone");
+      if (!sipSecret || String(sipSecret).trim() === "")
+        missing.push("SIP Secret");
+
+      if (missing.length > 0) {
+        return res.status(400).json({
+          error:
+            "To activate extension status, the following fields are required: " +
+            missing.join(", ") +
+            ".",
+        });
+      }
+    }
+
+    // SIP Secret complexity validation: must contain at least one digit, one lowercase and one uppercase letter
+    const sip = sipSecret || (user && user.sipSecret) || "";
+    if (sip) {
+      const sipRegex = /(?=.*\d)(?=.*[a-z])(?=.*[A-Z])/;
+      if (!sipRegex.test(String(sip))) {
+        return res.status(400).json({
+          error:
+            "SIP Secret must contain at least one lowercase letter, one uppercase letter and one number.",
+        });
+      }
+    }
+
     if (extensionNumber !== undefined)
       updateData.extensionNumber = extensionNumber;
     if (telephone !== undefined) updateData.telephone = telephone;
     if (sipSecret !== undefined) updateData.sipSecret = sipSecret;
+
     if (status !== undefined)
-      updateData.extensionStatus =
-        status === true &&
-        extensionNumber !== undefined &&
-        telephone !== undefined &&
-        sipSecret !== undefined
-          ? true
-          : false;
+      updateData.extensionStatus = isActivating ? true : false;
 
     // Update in DB
     const updatedUser = await User.findByIdAndUpdate(
