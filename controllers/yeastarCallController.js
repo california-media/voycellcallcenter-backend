@@ -4,6 +4,7 @@ const { getValidToken } = require("../utils/yeastarClient");
 const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
 const Contact = require("../models/contactModel");
+const mongoose = require("mongoose");
 
 const BASE_URL = process.env.YEASTAR_BASE_URL; // e.g. https://cmedia.ras.yeastar.com/openapi/v1.0
 const USERNAME = process.env.YEASTAR_USERNAME;
@@ -87,7 +88,10 @@ async function makeCallHandler(req, res) {
     // ── START: create lead if phone not found in either collection
     if (ownerUser && !existingContact && !existingLead) {
       try {
+        const newID = new mongoose.Types.ObjectId();
         const leadPayload = {
+          _id: newID,
+          contact_id: newID,
           firstname: "", // optional — you can leave blank or populate if available
           lastname: "",
           phoneNumbers: [
