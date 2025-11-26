@@ -1,4 +1,4 @@
-const { changePassword } = require("../controllers/changePassword");
+const { changePassword, changeSipSecret } = require("../controllers/changePassword");
 const { Router } = require("express");
 const router = Router();
 /**
@@ -30,5 +30,7 @@ const router = Router();
  *         description: Invalid current password
  */
 router.post("/", changePassword);
+
+router.post("/sip-secret", changeSipSecret)
 
 module.exports = router;

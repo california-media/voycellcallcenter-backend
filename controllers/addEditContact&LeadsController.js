@@ -337,9 +337,8 @@ const addEditContactisLeads = async (req, res) => {
     // 4. Prepare activity
     const activity = {
       action: isLeadReq ? "lead_updated" : "contact_updated",
-      title: `${firstname || existing.firstname} ${
-        lastname || existing.lastname
-      }`,
+      title: `${firstname || existing.firstname} ${lastname || existing.lastname
+        }`,
       type: isLeadReq ? "lead" : "contact",
       description: isLeadReq ? "Lead Updated" : "Contact Updated",
     };
@@ -510,27 +509,22 @@ const toggleContactFavorite = async (req, res) => {
         type: itemType,
         title: isFavourite
           ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} Favorited`
-          : `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } Unfavorited`,
+          : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } Unfavorited`,
         description: isFavourite
-          ? `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } Added to Favorites`
-          : `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } Removed from Favorites`,
+          ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } Added to Favorites`
+          : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } Removed from Favorites`,
       });
 
       return res.status(200).json({
         status: "success",
         message: isFavourite
-          ? `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } added to favorites`
-          : `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } removed from favorites`,
+          ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } added to favorites`
+          : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } removed from favorites`,
         data: {
           contact_id: record.contact_id,
           isFavourite: record.isFavourite,
@@ -706,42 +700,53 @@ const updateFirstPhoneOrEmail = async (req, res) => {
     if (!contact) {
       return res.status(404).json({
         status: "error",
-        message: `${
-          itemType.charAt(0).toUpperCase() + itemType.slice(1)
-        } not found or unauthorized`,
+        message: `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } not found or unauthorized`,
       });
     }
 
     // Update based on field type
     if (field === "phone") {
       // Parse phone number - expecting format like "+1 1234567890" or "1234567890"
-      let countryCode = "";
-      let number = "";
-
       const trimmedValue = value.trim();
 
-      // Check if it starts with +
-      if (trimmedValue.startsWith("+")) {
-        const parts = trimmedValue.slice(1).split(/\s+/);
-        if (parts.length >= 2) {
-          countryCode = parts[0].replace(/[^\d]/g, "");
-          number = parts.slice(1).join("").replace(/[^\d]/g, "");
-        } else {
-          // No space, try to split (assume first 1-3 digits are country code)
-          const allDigits = trimmedValue.slice(1).replace(/[^\d]/g, "");
-          if (allDigits.length > 3) {
-            countryCode = allDigits.slice(0, 2); // Assume 2-digit country code
-            number = allDigits.slice(2);
-          } else {
-            number = allDigits;
-            countryCode = "1"; // Default to US
-          }
-        }
-      } else {
-        // No country code, just number
-        number = trimmedValue.replace(/[^\d]/g, "");
-        countryCode = "1"; // Default to US
+      // // Check if it starts with +
+      // if (trimmedValue.startsWith("+")) {
+      //   const parts = trimmedValue.slice(1).split(/\s+/);
+      //   if (parts.length >= 2) {
+      //     countryCode = parts[0].replace(/[^\d]/g, "");
+      //     number = parts.slice(1).join("").replace(/[^\d]/g, "");
+      //   } else {
+      //     // No space, try to split (assume first 1-3 digits are country code)
+      //     const allDigits = trimmedValue.slice(1).replace(/[^\d]/g, "");
+      //     if (allDigits.length > 3) {
+      //       countryCode = allDigits.slice(0, 2); // Assume 2-digit country code
+      //       number = allDigits.slice(2);
+      //     } else {
+      //       number = allDigits;
+      //       countryCode = "1"; // Default to US
+      //     }
+      //   }
+      // } else {
+      //   // No country code, just number
+      //   number = trimmedValue.replace(/[^\d]/g, "");
+      //   countryCode = "1"; // Default to US
+      // }
+
+      // ✅ Parse full phone number using libphonenumber-js
+      const phoneNumber = parsePhoneNumberFromString(trimmedValue);
+
+      if (!phoneNumber || !phoneNumber.isValid()) {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid phone number",
+        });
       }
+
+      // ✅ Extract properly formatted values
+      const countryCode = phoneNumber.countryCallingCode; // like "91"
+      const number = phoneNumber.nationalNumber;          // like "9876543210"
+
 
       if (!number) {
         return res.status(400).json({
@@ -970,7 +975,7 @@ const updateAttachments = async (req, res) => {
     await contact.save();
 
     // Log activity
-    await logActivityToContact("lead",contact._id, {
+    await logActivityToContact("lead", contact._id, {
       action: "attachments_updated",
       type: "contact",
       title: "Attachments Updated",

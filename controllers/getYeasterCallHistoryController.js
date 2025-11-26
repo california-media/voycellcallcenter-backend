@@ -1119,16 +1119,20 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
 
     const { countryCode, number } = phoneNumbers;
 
+    // ---------- Normalize incoming ----------
+    let rawCountry = String(phoneNumbers.countryCode || "").trim().replace(/\D/g, "");
+    let rawNumber = String(phoneNumbers.number || "").trim().replace(/\D/g, "");
+
     let contact = await Contact.findOne({
       createdBy: userId,
-      "phoneNumbers.countryCode": countryCode,
-      "phoneNumbers.number": number,
+      "phoneNumbers.countryCode": rawCountry,
+      "phoneNumbers.number": rawNumber,
     });
 
     let lead = await Lead.findOne({
       createdBy: userId,
-      "phoneNumbers.countryCode": countryCode,
-      "phoneNumbers.number": number,
+      "phoneNumbers.countryCode": rawCountry,
+      "phoneNumbers.number": rawNumber,
     });
 
 

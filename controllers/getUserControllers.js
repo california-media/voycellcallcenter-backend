@@ -179,7 +179,7 @@ const getUserData = async (req, res) => {
     //   }
     // }
 
-    
+
     const data = {
       id: user._id,
       firstname: user.firstname,
@@ -212,6 +212,8 @@ const getUserData = async (req, res) => {
         companyName: "",
       },
       extensionNumber: user.extensionNumber || null,
+      extensionStatus: user.extensionStatus || null,
+      telephone: user.telephone || "",
       yeastarExtensionId: user.yeastarExtensionId || null,
       sipSecret: user.sipSecret || null,
       yeastarProvisionStatus: user.yeastarProvisionStatus || "pending",

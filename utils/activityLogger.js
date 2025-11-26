@@ -59,4 +59,3 @@ const logActivityToContact = async (category, contactId, activityObj) => {
 };
 
 module.exports = { logActivityToContact };
-
