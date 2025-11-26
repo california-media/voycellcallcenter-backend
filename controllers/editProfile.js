@@ -488,7 +488,8 @@ const editProfile = async (req, res) => {
     if (keys.includes("designation")) user.designation = designation;
     if (keys.includes("telephone")) {
       // normalize: trim and remove extra spaces
-      user.telephone = typeof telephone === "string" ? telephone.trim() : telephone;
+      user.telephone =
+        typeof telephone === "string" ? telephone.trim() : telephone;
     }
 
     // === Email Validation ===
@@ -639,12 +640,12 @@ const updateContactStatuses = async (req, res) => {
       });
     }
 
-    // Validate each status has value and label
+    // Validate each status has value, label, and group
     for (const status of statusesData) {
-      if (!status.value || !status.label) {
+      if (!status.value || !status.label || typeof status.group !== "number") {
         return res.status(400).json({
           status: "error",
-          message: "Each status must have a value and label",
+          message: "Each status must have a value, label, and group number",
         });
       }
     }
@@ -666,8 +667,9 @@ const updateContactStatuses = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: `${category === "lead" ? "Lead" : "Contact"
-        } statuses updated successfully`,
+      message: `${
+        category === "lead" ? "Lead" : "Contact"
+      } statuses updated successfully`,
       data: {
         contactStatuses: user.contactStatuses,
         leadStatuses: user.leadStatuses,

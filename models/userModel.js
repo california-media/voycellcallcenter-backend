@@ -274,16 +274,20 @@ const userSchema = new Schema(
             required: true,
             trim: true,
           },
+          group: {
+            type: Number,
+            required: true,
+          },
         },
       ],
       default: [
-        { value: "interested", label: "Interested" },
-        { value: "notInterested", label: "Not Interested" },
-        { value: "called", label: "Called" },
-        { value: "notValid", label: "Not Valid" },
-        { value: "contacted", label: "Contacted" },
-        { value: "win", label: "Win" },
-        { value: "lost", label: "Lost" },
+        { value: "interested", label: "Interested", group: 1 },
+        { value: "notInterested", label: "Not Interested", group: 1 },
+        { value: "called", label: "Called", group: 2 },
+        { value: "notValid", label: "Not Valid", group: 2 },
+        { value: "contacted", label: "Contacted", group: 2 },
+        { value: "win", label: "Win", group: 3 },
+        { value: "lost", label: "Lost", group: 3 },
       ],
     },
 
@@ -302,16 +306,17 @@ const userSchema = new Schema(
             required: true,
             trim: true,
           },
+          group: {
+            type: Number,
+            required: true,
+          },
         },
       ],
       default: [
-        { value: "interested", label: "Interested" },
-        { value: "notInterested", label: "Not Interested" },
-        { value: "called", label: "Called" },
-        { value: "notValid", label: "Not Valid" },
-        { value: "contacted", label: "Contacted" },
-        { value: "win", label: "Win" },
-        { value: "lost", label: "Lost" },
+        { value: "interested", label: "Interested", group: 1 },
+        { value: "followup", label: "Follow Up", group: 2 },
+        { value: "win", label: "Win", group: 3 },
+        { value: "lost", label: "Lost", group: 3 },
       ],
     },
 
@@ -401,7 +406,7 @@ userSchema.static(
     const query = email
       ? { email }
       : // : { phonenumbers: { $in: [phonenumber] } }; // assuming you store phone numbers as array
-      { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
+        { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
 
     const user = await this.findOne(query);
     if (!user) throw new Error("User not found");
