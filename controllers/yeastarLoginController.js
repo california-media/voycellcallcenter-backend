@@ -127,7 +127,7 @@ async function getYeastarLoginSignature(req, res) {
 
     // Fetch user from database
     const user = await User.findById(userId).select(
-      "extensionNumber sipSecret firstname lastname email"
+      "extensionNumber sipSecret firstname lastname email extensionStatus"
     );
 
     if (!user) {
@@ -145,7 +145,15 @@ async function getYeastarLoginSignature(req, res) {
       });
     }
 
-    console.log(user.extensionNumber);
+    if (user.extensionStatus === false) {
+      return res.status(400).json({
+        status: "error",
+        message:
+          "Not Activated Calling Facility.",
+      });
+    }
+
+    console.log(user);
 
     // Get valid access token
     const accessToken = await getValidToken();
@@ -185,6 +193,9 @@ async function getYeastarLoginSignature(req, res) {
     }
 
     const signature = signData.data?.sign;
+
+    console.log(signature);
+    
 
     if (!signature) {
       throw new Error("No signature returned from Yeastar");

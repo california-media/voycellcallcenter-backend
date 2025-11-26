@@ -1,10 +1,13 @@
 const axios = require("axios");
 // const moment = require("moment");
+const mongoose = require("mongoose");
 const https = require("https");
 const { getValidToken } = require("../utils/yeastarClient");
 const User = require("../models/userModel"); // make sure to import
 const CallHistory = require("../models/CallHistory");
 const moment = require("moment-timezone");
+const Contact = require("../models/contactModel");
+const Lead = require("../models/leadModel");
 
 const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL;
 /**
@@ -1065,6 +1068,124 @@ exports.getMonthlyCallGraph = async (req, res) => {
     console.error("Error:", error);
     return res.status(500).json({
       status: "error",
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.addFormDataAfterCallEnd = async (req, res) => {
+  try {
+    const { phoneNumbers, status, note, task, meeting } = req.body;
+    const userId = req.user._id;
+
+    if (!phoneNumbers || !phoneNumbers.countryCode || !phoneNumbers.number) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+
+
+    const { countryCode, number } = phoneNumbers;
+
+    let contact = await Contact.findOne({
+      createdBy: userId,
+      "phoneNumbers.countryCode": countryCode,
+      "phoneNumbers.number": number,
+    });
+
+    let lead = await Lead.findOne({
+      createdBy: userId,
+      "phoneNumbers.countryCode": countryCode,
+      "phoneNumbers.number": number,
+    });
+
+
+    let targetDoc = contact || lead;
+    let targetType = contact ? "contact" : lead ? "lead" : "newLead";
+
+
+    // ✅ 3. If NOT FOUND → Create New Lead
+    if (!targetDoc) {
+      const newID = new mongoose.Types.ObjectId();
+      const newLead = await Lead.create({
+        _id: newID,
+        contact_id: newID,
+        phoneNumbers: [
+          {
+            countryCode: countryCode,
+            number: number,
+          },
+        ],
+        status: status || "interested",
+        notes: note || "",
+        isLead: true,
+        createdBy: userId,
+        activities: [
+          {
+            action: "call_created",
+            type: "call",
+            title: "New Call Lead Created",
+            description: `Call received from ${countryCode}${number}`,
+          },
+        ],
+      });
+
+      targetDoc = newLead;
+      targetType = "newLead";
+    }
+
+    // ✅ 4. UPDATE STATUS
+    if (status) {
+      targetDoc.status = status;
+    }
+
+    // ✅ 5. ADD NOTE AS TASK
+    if (note) {
+      targetDoc.tasks.push({
+        taskDescription: note,
+        taskDueDate: new Date(),
+        taskIsCompleted: false,
+      });
+
+      targetDoc.activities.push({
+        action: "task_added",
+        type: "task",
+        title: "Call Note Added",
+        description: note,
+      });
+    }
+
+    // ✅ 6. ADD MEETING
+    if (meeting) {
+      targetDoc.meetings.push({
+        meetingTitle: meeting.meetingTitle || "Call Follow-up",
+        meetingDescription: meeting.meetingDescription || "",
+        meetingStartDate: meeting.meetingStartDate,
+        meetingStartTime: meeting.meetingStartTime,
+        meetingType: meeting.meetingType || "offline",
+        meetingLink: meeting.meetingLink || "",
+        meetingLocation: meeting.meetingLocation || "",
+      });
+
+      targetDoc.activities.push({
+        action: "meeting_added",
+        type: "meeting",
+        title: meeting.meetingTitle || "Meeting Scheduled",
+        description: "Meeting created after call",
+      });
+    }
+
+    // ✅ 7. SAVE FINAL DOCUMENT
+    await targetDoc.save();
+
+    return res.status(200).json({
+      message: "Call form data saved successfully",
+      type: targetType,
+      data: targetDoc,
+    });
+
+  } catch (error) {
+    console.error("❌ addFormDataAfterCallEnd Error:", error);
+    return res.status(500).json({
       message: "Internal server error",
       error: error.message,
     });
