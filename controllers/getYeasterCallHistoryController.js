@@ -774,7 +774,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
     let outboundCalls = 0;
     let internal = 0;
     let missedCalls = 0;
-    let totalCalls = allSummaryCalls.length;
+    let totalCalls = 0;
 
     allSummaryCalls.forEach(call => {
       if (call.direction === "Inbound") inboundCalls++;
@@ -783,6 +783,15 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
 
       if (call.status === "NO ANSWER") missedCalls++;
     });
+
+    totalCalls = inboundCalls + outboundCalls
+
+    const summary = {
+      inboundCalls,
+      outboundCalls,
+      missedCalls,
+      totalCalls
+    }
 
 
     return res.json({
