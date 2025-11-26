@@ -752,14 +752,38 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       .skip(skip)
       .limit(page_size);
 
-    // 1️⃣1️⃣ Static Summary (Never changes)
-    const summary = {
-      inboundCalls: 5,
-      internal: 4,
-      outboundCalls: 119,
-      missedCalls: 74,
-      totalCalls: 128
+    // // 1️⃣1️⃣ Static Summary (Never changes)
+    // const summary = {
+    //   inboundCalls: 5,
+    //   internal: 4,
+    //   outboundCalls: 119,
+    //   missedCalls: 74,
+    //   totalCalls: 128
+    // };
+
+    const summaryQuery = {
+      $or: [
+        { call_from: { $in: flatNumbers }, call_to: adminExtension },
+        { call_from: adminExtension, call_to: { $in: flatNumbers } }
+      ]
     };
+
+    const allSummaryCalls = await CallHistory.find(summaryQuery).select("direction status");
+
+    let inboundCalls = 0;
+    let outboundCalls = 0;
+    let internal = 0;
+    let missedCalls = 0;
+    let totalCalls = allSummaryCalls.length;
+
+    allSummaryCalls.forEach(call => {
+      if (call.direction === "Inbound") inboundCalls++;
+      if (call.direction === "Outbound") outboundCalls++;
+      if (call.direction === "Internal") internal++;
+
+      if (call.status === "NO ANSWER") missedCalls++;
+    });
+
 
     return res.json({
       status: "success",
