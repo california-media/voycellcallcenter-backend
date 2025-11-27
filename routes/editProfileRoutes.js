@@ -2,6 +2,7 @@ const { Router } = require("express");
 const {
   editProfile,
   updateContactStatuses,
+  updateLeadStatuses,
 } = require("../controllers/editProfile");
 const router = Router();
 
@@ -67,6 +68,7 @@ router.put("/", editProfile);
  *       200:
  *         description: Contact statuses updated successfully
  */
+router.put("/lead-statuses", updateLeadStatuses);
 router.put("/contact-statuses", updateContactStatuses);
 
 // router.get("/testingonesignal", testingOneSignal);

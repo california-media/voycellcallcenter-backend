@@ -622,7 +622,7 @@ const editProfile = async (req, res) => {
 };
 
 // Update contact statuses
-const updateContactStatuses = async (req, res) => {
+const updateLeadStatuses = async (req, res) => {
   try {
     const userId = req.user._id;
     const { contactStatuses, category } = req.body;
@@ -684,4 +684,67 @@ const updateContactStatuses = async (req, res) => {
   }
 };
 
-module.exports = { editProfile, updateContactStatuses };
+// Update contact statuses
+const updateContactStatuses = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { contactStatuses, category } = req.body;
+
+    // Determine which field to update based on category
+    const fieldToUpdate =
+      category === "lead" ? "leadStatuses" : "contactStatuses";
+    const statusesData = contactStatuses; // Keep the same param name for backward compatibility
+
+    // Validate that statuses is an array
+    if (!Array.isArray(statusesData)) {
+      return res.status(400).json({
+        status: "error",
+        message: `${fieldToUpdate} must be an array`,
+      });
+    }
+
+    // Validate each status has value and label
+    for (const status of statusesData) {
+      if (!status.value || !status.label) {
+        return res.status(400).json({
+          status: "error",
+          message: "Each status must have a value and label",
+        });
+      }
+    }
+
+    // Update user's statuses (contact or lead based on category)
+    const updateData = {};
+    updateData[fieldToUpdate] = statusesData;
+
+    const user = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: `${
+        category === "lead" ? "Lead" : "Contact"
+      } statuses updated successfully`,
+      data: {
+        contactStatuses: user.contactStatuses,
+        leadStatuses: user.leadStatuses,
+      },
+    });
+  } catch (error) {
+    console.error("Update Contact Statuses Error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Server error",
+    });
+  }
+};
+
+module.exports = { editProfile, updateContactStatuses, updateLeadStatuses };
