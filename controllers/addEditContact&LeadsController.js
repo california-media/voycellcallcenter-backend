@@ -6,6 +6,7 @@ const s3 = require("../utils/s3");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const path = require("path");
 const { logActivityToContact } = require("../utils/activityLogger");
+const { parsePhoneNumberFromString } = require("libphonenumber-js");
 
 const parseBoolean = (val) => {
   if (typeof val === "boolean") return val;
@@ -337,8 +338,9 @@ const addEditContactisLeads = async (req, res) => {
     // 4. Prepare activity
     const activity = {
       action: isLeadReq ? "lead_updated" : "contact_updated",
-      title: `${firstname || existing.firstname} ${lastname || existing.lastname
-        }`,
+      title: `${firstname || existing.firstname} ${
+        lastname || existing.lastname
+      }`,
       type: isLeadReq ? "lead" : "contact",
       description: isLeadReq ? "Lead Updated" : "Contact Updated",
     };
@@ -351,12 +353,10 @@ const addEditContactisLeads = async (req, res) => {
     );
 
     if (!updated) {
-      return res
-        .status(404)
-        .json({
-          status: "error",
-          message: "Record not found after update attempt",
-        });
+      return res.status(404).json({
+        status: "error",
+        message: "Record not found after update attempt",
+      });
     }
 
     return res.status(200).json({
@@ -509,22 +509,27 @@ const toggleContactFavorite = async (req, res) => {
         type: itemType,
         title: isFavourite
           ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} Favorited`
-          : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
-          } Unfavorited`,
+          : `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } Unfavorited`,
         description: isFavourite
-          ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
-          } Added to Favorites`
-          : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
-          } Removed from Favorites`,
+          ? `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } Added to Favorites`
+          : `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } Removed from Favorites`,
       });
 
       return res.status(200).json({
         status: "success",
         message: isFavourite
-          ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
-          } added to favorites`
-          : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
-          } removed from favorites`,
+          ? `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } added to favorites`
+          : `${
+              itemType.charAt(0).toUpperCase() + itemType.slice(1)
+            } removed from favorites`,
         data: {
           contact_id: record.contact_id,
           isFavourite: record.isFavourite,
@@ -662,7 +667,7 @@ const updateFirstPhoneOrEmail = async (req, res) => {
         message: "Unauthorized: User not found",
       });
     }
-
+    
     const { contact_id, field, value, category } = req.body;
 
     if (!contact_id || !field || !value) {
@@ -700,8 +705,9 @@ const updateFirstPhoneOrEmail = async (req, res) => {
     if (!contact) {
       return res.status(404).json({
         status: "error",
-        message: `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
-          } not found or unauthorized`,
+        message: `${
+          itemType.charAt(0).toUpperCase() + itemType.slice(1)
+        } not found or unauthorized`,
       });
     }
 
@@ -745,8 +751,7 @@ const updateFirstPhoneOrEmail = async (req, res) => {
 
       // ✅ Extract properly formatted values
       const countryCode = phoneNumber.countryCallingCode; // like "91"
-      const number = phoneNumber.nationalNumber;          // like "9876543210"
-
+      const number = phoneNumber.nationalNumber; // like "9876543210"
 
       if (!number) {
         return res.status(400).json({

@@ -25,7 +25,7 @@ const saveBulkContacts = async (req, res) => {
     }
 
     // Determine if contacts should be marked as leads
-    const shouldBeLeads =  category === "lead";
+    const shouldBeLeads = category === "lead";
 
     // Allow both camelCase (schema) and lowercase (incoming)
     const allowedFields = [
@@ -115,12 +115,31 @@ const saveBulkContacts = async (req, res) => {
         }
         if (phoneObj.number) phoneList.push(phoneObj);
       }
-
+      console.log("Preprocessed phone numbers:", phoneList);
       const emailList = Array.isArray(incomingEmailField)
         ? incomingEmailField.filter((e) => e)
         : incomingEmailField
         ? [incomingEmailField]
         : [];
+
+      // Validate phone numbers have proper country code
+      if (phoneList.length > 0) {
+        for (const phone of phoneList) {
+          if (!phone.countryCode || phone.countryCode.trim() === "") {
+            throw new Error(
+              `Invalid phone number format: ${
+                incomingPhoneField[0] || incomingPhoneField
+              }. ` +
+                `Unable to parse country code. Please provide phone numbers in international format (e.g., +971501234567)`
+            );
+          }
+          if (!phone.number || phone.number.trim() === "") {
+            throw new Error(
+              `Invalid phone number: Missing phone number after country code.`
+            );
+          }
+        }
+      }
 
       return {
         raw: contact,
@@ -182,10 +201,7 @@ const saveBulkContacts = async (req, res) => {
       ]);
 
       // Combine both results for duplicate checking
-      const existingContactsBatch = [
-        ...existingContacts,
-        ...existingLeads,
-      ];
+      const existingContactsBatch = [...existingContacts, ...existingLeads];
 
       // Build lookup maps
       const emailMap = new Map();
@@ -255,7 +271,7 @@ const saveBulkContacts = async (req, res) => {
             activities: [
               {
                 action: "lead_created",
-                type:  "contact",
+                type: "contact",
                 title: shouldBeLeads ? "Lead Imported" : "Contact Imported",
                 description: `${firstname} ${lastname}`,
               },
@@ -270,7 +286,9 @@ const saveBulkContacts = async (req, res) => {
           // Duplicate found in either Contact or Lead model - skip it
           skippedContacts.push({
             ...raw,
-            reason: `Duplicate found: ${existing.firstname} ${existing.lastname} already exists as ${existing.isLead ? 'Lead' : 'Contact'}`,
+            reason: `Duplicate found: ${existing.firstname} ${
+              existing.lastname
+            } already exists as ${existing.isLead ? "Lead" : "Contact"}`,
           });
         }
       }
