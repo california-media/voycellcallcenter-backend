@@ -5,11 +5,12 @@ const {
   addOrUpdateMeeting,
   deleteMeeting,
 } = require("../controllers/meetingController");
+const checkAccountStatus = require("../middlewares/checkAccountStatus")
 
-router.get("/getAll", getMeetingsForContact);
+router.get("/getAll", checkAccountStatus, getMeetingsForContact);
 
-router.post("/addUpdateMeeting", addOrUpdateMeeting);
+router.post("/addUpdateMeeting", checkAccountStatus, addOrUpdateMeeting);
 
-router.delete("/deleteMeeting", deleteMeeting);
+router.delete("/deleteMeeting", checkAccountStatus, deleteMeeting);
 
 module.exports = router;

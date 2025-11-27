@@ -8,6 +8,7 @@ const {
   updateAttachments,
 } = require("../controllers/addEditContact&LeadsController");
 const multer = require("multer");
+const checkAccountStatus = require("../middlewares/checkAccountStatus")
 
 // Use memory storage (for direct S3 upload)
 const storage = multer.memoryStorage();
@@ -16,14 +17,15 @@ const upload = multer({ storage });
 const router = Router();
 
 // Use .single("contactImage") to handle multipart/form-data uploads
-router.post("/", upload.single("contactImage"), addEditContactisLeads);
-router.post("/delete", deleteContactOrLead);
-router.put("/toggle-favorite", toggleContactFavorite);
-router.post("/batch-delete", batchDeleteContacts);
-router.put("/update-first-contact", updateFirstPhoneOrEmail);
+router.post("/", upload.single("contactImage"), checkAccountStatus, addEditContactisLeads);
+router.post("/delete", checkAccountStatus, deleteContactOrLead);
+router.put("/toggle-favorite", checkAccountStatus, toggleContactFavorite);
+router.post("/batch-delete", checkAccountStatus, batchDeleteContacts);
+router.put("/update-first-contact", checkAccountStatus, updateFirstPhoneOrEmail);
 router.put(
   "/update-attachments",
   upload.array("attachments", 10),
+  checkAccountStatus,
   updateAttachments
 );
 

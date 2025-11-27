@@ -4,6 +4,7 @@ const {
   updateContactStatuses,
 } = require("../controllers/editProfile");
 const router = Router();
+const checkAccountStatus = require("../middlewares/checkAccountStatus")
 
 /**
  * @swagger
@@ -38,7 +39,7 @@ const router = Router();
  *       200:
  *         description: Profile updated successfully
  */
-router.put("/", editProfile);
+router.put("/", checkAccountStatus, editProfile);
 
 /**
  * @swagger
@@ -67,7 +68,7 @@ router.put("/", editProfile);
  *       200:
  *         description: Contact statuses updated successfully
  */
-router.put("/contact-statuses", updateContactStatuses);
+router.put("/contact-statuses", checkAccountStatus, updateContactStatuses);
 
 // router.get("/testingonesignal", testingOneSignal);
 

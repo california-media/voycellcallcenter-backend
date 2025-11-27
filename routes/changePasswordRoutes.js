@@ -1,6 +1,8 @@
 const { changePassword, changeSipSecret } = require("../controllers/changePassword");
 const { Router } = require("express");
 const router = Router();
+const checkAccountStatus = require("../middlewares/checkAccountStatus")
+
 /**
  * @swagger
  * /api/v1/auth/change-password:
@@ -29,8 +31,8 @@ const router = Router();
  *       401:
  *         description: Invalid current password
  */
-router.post("/", changePassword);
+router.post("/", checkAccountStatus,changePassword);
 
-router.post("/sip-secret", changeSipSecret)
+router.post("/sip-secret", checkAccountStatus,changeSipSecret)
 
 module.exports = router;

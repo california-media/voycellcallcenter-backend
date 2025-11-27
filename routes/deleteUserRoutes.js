@@ -1,6 +1,7 @@
 const { Router } = require("express")
 const { deleteUser, activateUser, suspendUser } = require("../controllers/deleteUserControllers")
 const checkRole = require("../middlewares/roleCheck")
+const checkAccountStatus = require("../middlewares/checkAccountStatus")
 const router = Router()
 
 /**
@@ -15,11 +16,11 @@ const router = Router()
  */
 
 
-router.delete("/", deleteUser)
+router.delete("/", checkAccountStatus, deleteUser)
 
-router.post("/activate", checkRole(["superadmin"]), activateUser)
+router.post("/activate", checkAccountStatus, checkRole(["superadmin"]), activateUser)
 
-router.post("/suspend", checkRole(["superadmin"]), suspendUser)
+router.post("/suspend", checkAccountStatus, checkRole(["superadmin"]), suspendUser)
 
 
 module.exports = router

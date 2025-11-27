@@ -19,6 +19,7 @@ const serverless = require("serverless-http");
 
 console.log("Connecting to MongoDB...");
 const { checkForAuthentication } = require("./middlewares/authentication");
+const checkAccountStatus = require("./middlewares/checkAccountStatus")
 const checkRole = require("./middlewares/roleCheck");
 const { error } = require("console");
 const PORT = process.env.PORT || 3003;

@@ -6,10 +6,12 @@ const {
   getAllActivities
 } = require("../controllers/getAllContactsOrLeadsController");
 const router = Router();
+const checkAccountStatus = require("../middlewares/checkAccountStatus")
 
-router.post("/", getAllContactsOrLeads);
-router.post("/single", getSingleContactOrLead);
-router.get("/ForEvent", getAllContactOrLeadForEvent);
-router.get("/activities", getAllActivities);
+
+router.post("/", checkAccountStatus,getAllContactsOrLeads);
+router.post("/single",checkAccountStatus, getSingleContactOrLead);
+router.get("/ForEvent",checkAccountStatus, getAllContactOrLeadForEvent);
+router.get("/activities",checkAccountStatus, getAllActivities);
 
 module.exports = router;

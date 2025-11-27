@@ -5,14 +5,16 @@ const {
   deleteTask,
   getTasksForContact,
 } = require("../controllers/taskController");
+const checkAccountStatus = require("../middlewares/checkAccountStatus")
+
 
 // Get all tasks for a contact with optional sorting
-router.get("/getAll", getTasksForContact);
+router.get("/getAll",checkAccountStatus, getTasksForContact);
 
 // Add or update a task
-router.post("/addEdit", addOrUpdateTask);
+router.post("/addEdit",checkAccountStatus, addOrUpdateTask);
 
 // Delete a task
-router.delete("/delete", deleteTask);
+router.delete("/delete",checkAccountStatus, deleteTask);
 
 module.exports = router;
