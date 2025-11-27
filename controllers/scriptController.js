@@ -73,6 +73,14 @@ exports.generateScriptTag = async (req, res) => {
       return res.status(400).json({ error: "User or extension not found" });
     }
 
+    if (user.extensionStatus === false) {
+      return res.status(400).json({
+        status: "error",
+        message:
+          "Not Activated Calling Facility.",
+      });
+    }
+
     // === 1️⃣ Normalize allowedOrigin (remove trailing slash + lowercase) ===
     const allowedOrigin = (req.body.allowedOrigin || "")
       .trim()

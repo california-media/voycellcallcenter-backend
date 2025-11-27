@@ -1,17 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const { updateContactTags, addTag, getTags, getTagWithContact, editTag, deleteTag } = require("../controllers/tagController");
+const checkAccountStatus = require("../middlewares/checkAccountStatus")
 
-router.post("/assignedToContact", updateContactTags);
+router.post("/assignedToContact", checkAccountStatus, updateContactTags);
 
-router.post("/addTagToUser", addTag);
+router.post("/addTagToUser", checkAccountStatus, addTag);
 
-router.get("/getTagsOfUser", getTags);
+router.get("/getTagsOfUser", checkAccountStatus, getTags);
 
-router.get("/getTagWithContact", getTagWithContact);
+router.get("/getTagWithContact", checkAccountStatus, getTagWithContact);
 
-router.put("/editTagOfUser", editTag);
+router.put("/editTagOfUser", checkAccountStatus, editTag);
 
-router.delete("/deleteTagOfUser", deleteTag);
+router.delete("/deleteTagOfUser", checkAccountStatus, deleteTag);
 
 module.exports = router;

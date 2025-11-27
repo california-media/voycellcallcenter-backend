@@ -26,6 +26,17 @@ function formatDate(date, fallbackTime) {
   return m.format("MM/DD/YYYY HH:mm:ss");
 }
 
+function normalizeNumber(number) {
+  if (!number) return "";
+
+  return number
+    .toString()
+    .replace(/\s+/g, '')   // remove spaces
+    .replace(/^\+/, '')    // remove leading +
+    .replace(/\D/g, '');   // remove all non-digits
+}
+
+
 // exports.fetchAndStoreCallHistory = async (req, res) => {
 //   try {
 //     const userId = req.user._id; // <-- token middleware should set this
@@ -150,6 +161,7 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
   try {
     const userId = req.user._id;
     const token = await getValidToken();
+    console.log(userId);
 
     const user = await User.findById(userId);
     if (!user || !user.extensionNumber) {
@@ -208,13 +220,28 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
       const exists = await CallHistory.findOne({ yeastarId: call.id });
       if (exists) continue;
 
+      const from_number = normalizeNumber(call.call_from_number);
+      const to_number = normalizeNumber(call.call_to_number);
+
+      console.log(from_number, to_number);
+
+      console.log(call.time);
+
+      const dubaiFormatted = moment
+        .tz(call.time, "MM/DD/YYYY HH:mm:ss", TZ)
+        .format("MM/DD/YYYY HH:mm:ss");
+
+
+      console.log(dubaiFormatted);
+
+
       await CallHistory.create({
         userId,
         extensionNumber: ext,
         yeastarId: call.id,
 
-        call_from: call.call_from_number,
-        call_to: call.call_to_number,
+        call_from: from_number,
+        call_to: to_number,
 
         talk_time: call.talk_duration,
         ring_time: call.ring_duration,
@@ -223,8 +250,8 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         direction: call.call_type,
         status: call.disposition,
 
-        start_time: new Date(call.time),
-        end_time: new Date(call.time),
+        start_time: dubaiFormatted,
+        end_time: dubaiFormatted,
 
         record_file: call.record_file,
         disposition_code: call.reason,
@@ -388,13 +415,49 @@ exports.getCompanyCallHistory = async (req, res) => {
       }
     }
 
-    // 8️⃣ Date Filter
+    // // 8️⃣ Date Filter
+    // if (startDate && endDate) {
+    //   query.start_time = {
+    //     $gte: new Date(startDate),
+    //     $lte: new Date(endDate)
+    //   };
+    // }
+
+    // 8️⃣ Date Filter (SAFE for STRING + DATE + NULL values)
     if (startDate && endDate) {
-      query.start_time = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+      query.$expr = {
+        $and: [
+          {
+            $gte: [
+              {
+                $dateFromString: {
+                  dateString: { $toString: "$start_time" },  // ✅ forces to string
+                  format: "%m/%d/%Y %H:%M:%S",
+                  onError: new Date("1970-01-01"),             // ✅ prevents crash
+                  onNull: new Date("1970-01-01")               // ✅ prevents crash
+                }
+              },
+              new Date(startDate)
+            ]
+          },
+          {
+            $lte: [
+              {
+                $dateFromString: {
+                  dateString: { $toString: "$start_time" },  // ✅ forces to string
+                  format: "%m/%d/%Y %H:%M:%S",
+                  onError: new Date("2999-01-01"),             // ✅ prevents crash
+                  onNull: new Date("2999-01-01")               // ✅ prevents crash
+                }
+              },
+              new Date(endDate)
+            ]
+          }
+        ]
       };
     }
+
+
 
     // 9️⃣ Pagination
     const skip = (page - 1) * page_size;
@@ -405,6 +468,9 @@ exports.getCompanyCallHistory = async (req, res) => {
       .sort({ start_time: -1 })
       .skip(skip)
       .limit(page_size);
+
+    console.log();
+
 
     // 🔟 Summary filter
     const summaryFilter = { extensionNumber: finalExtension };
@@ -542,11 +608,45 @@ exports.getAgentCallHistory = async (req, res) => {
       }
     }
 
-    // 8️⃣ Date Filter
+    // // 8️⃣ Date Filter
+    // if (startDate && endDate) {
+    //   query.start_time = {
+    //     $gte: new Date(startDate),
+    //     $lte: new Date(endDate)
+    //   };
+    // }
+
+    // 8️⃣ Date Filter (SAFE for STRING + DATE + NULL values)
     if (startDate && endDate) {
-      query.start_time = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+      query.$expr = {
+        $and: [
+          {
+            $gte: [
+              {
+                $dateFromString: {
+                  dateString: { $toString: "$start_time" },  // ✅ forces to string
+                  format: "%m/%d/%Y %H:%M:%S",
+                  onError: new Date("1970-01-01"),             // ✅ prevents crash
+                  onNull: new Date("1970-01-01")               // ✅ prevents crash
+                }
+              },
+              new Date(startDate)
+            ]
+          },
+          {
+            $lte: [
+              {
+                $dateFromString: {
+                  dateString: { $toString: "$start_time" },  // ✅ forces to string
+                  format: "%m/%d/%Y %H:%M:%S",
+                  onError: new Date("2999-01-01"),             // ✅ prevents crash
+                  onNull: new Date("2999-01-01")               // ✅ prevents crash
+                }
+              },
+              new Date(endDate)
+            ]
+          }
+        ]
       };
     }
 
@@ -623,7 +723,7 @@ exports.getAgentCallHistory = async (req, res) => {
 //   try {
 //     const loginUserId = req.user._id;
 
-//     // 1️⃣ Get logged-in user
+//     // ✅ 1️⃣ Get logged-in admin
 //     const admin = await User.findById(loginUserId).select(
 //       "_id firstname lastname extensionNumber role"
 //     );
@@ -637,7 +737,7 @@ exports.getAgentCallHistory = async (req, res) => {
 
 //     const adminExtension = admin.extensionNumber;
 
-//     // 2️⃣ Request body filters
+//     // ✅ 2️⃣ Request body
 //     const {
 //       page = 1,
 //       page_size = 20,
@@ -649,7 +749,6 @@ exports.getAgentCallHistory = async (req, res) => {
 //       phonenumbers = []
 //     } = req.body;
 
-//     // 3️⃣ Handle missing phone numbers
 //     if (!Array.isArray(phonenumbers) || phonenumbers.length === 0) {
 //       return res.status(400).json({
 //         status: "error",
@@ -657,38 +756,101 @@ exports.getAgentCallHistory = async (req, res) => {
 //       });
 //     }
 
-//     // 4️⃣ Build complete phone variations list
-//     const flatNumbers = [];
+//     // ✅ 3️⃣ UNIVERSAL NORMALIZER
+//     const normalizePhone = (phone) => {
+//       if (!phone) return "";
+//       return phone
+//         .toString()
+//         .replace(/\s+/g, "")     // remove spaces
+//         .replace(/[^0-9]/g, "") // remove +, -, ()
+//         .replace(/^00/, "");    // remove leading 00 if exists
+//     };
+
+//     // ✅ 4️⃣ BUILD ALL POSSIBLE NORMALIZED VARIATIONS (FROM REQUEST)
+//     const flatNumbers = new Set();
 
 //     phonenumbers.forEach(p => {
-//       const raw = p.number?.trim() || "";
-//       const cc = p.countryCode?.trim() || "";
+//       const raw = normalizePhone(p.number);
+//       const cc = normalizePhone(p.countryCode);
 
 //       if (!raw) return;
 
-//       const variation1 = `${cc}${raw}`;
-//       const variation2 = raw;
-//       const variation3 = raw.startsWith("0") ? raw : "0" + raw;
-//       const variation4 = `${cc}${variation3}`;
-//       const variation5 = `+${cc}${variation3}`;
+//       // local
+//       flatNumbers.add(raw);
 
-//       [variation1, variation2, variation3, variation4, variation5].forEach(num => {
-//         if (num && !flatNumbers.includes(num)) {
-//           flatNumbers.push(num);
+//       // zero prefixed local
+//       if (!raw.startsWith("0")) {
+//         flatNumbers.add("0" + raw);
+//       }
+
+//       // international
+//       if (cc) {
+//         flatNumbers.add(cc + raw);
+
+//         if (!raw.startsWith("0")) {
+//           flatNumbers.add(cc + "0" + raw);
 //         }
-//       });
+//       }
 //     });
 
-//     // 5️⃣ Base query: extension <-> phone
+//     const normalizedNumbers = [...flatNumbers];
+
+//     // ✅ ✅ ✅ 5️⃣ MAIN DATABASE QUERY (AUTO-NORMALIZES DB VALUES)
 //     let query = {
-//       $or: [
-//         { call_from: { $in: flatNumbers }, call_to: adminExtension },
-//         { call_from: adminExtension, call_to: { $in: flatNumbers } }
-//       ]
+//       $expr: {
+//         $or: [
+//           {
+//             $and: [
+//               {
+//                 $in: [
+//                   {
+//                     $replaceAll: {
+//                       input: {
+//                         $replaceAll: {
+//                           input: "$call_from",
+//                           find: " ",
+//                           replacement: ""
+//                         }
+//                       },
+//                       find: "+",
+//                       replacement: ""
+//                     }
+//                   },
+//                   normalizedNumbers
+//                 ]
+//               },
+//               { $eq: ["$call_to", adminExtension] }
+//             ]
+//           },
+//           {
+//             $and: [
+//               { $eq: ["$call_from", adminExtension] },
+//               {
+//                 $in: [
+//                   {
+//                     $replaceAll: {
+//                       input: {
+//                         $replaceAll: {
+//                           input: "$call_to",
+//                           find: " ",
+//                           replacement: ""
+//                         }
+//                       },
+//                       find: "+",
+//                       replacement: ""
+//                     }
+//                   },
+//                   normalizedNumbers
+//                 ]
+//               }
+//             ]
+//           }
+//         ]
+//       }
 //     };
 
-//     // 6️⃣ Search filter
-//     if (search.trim() !== "") {
+//     // ✅ 6️⃣ SEARCH FILTER
+//     if (search.trim()) {
 //       query.$and = [
 //         {
 //           $or: [
@@ -699,7 +861,7 @@ exports.getAgentCallHistory = async (req, res) => {
 //       ];
 //     }
 
-//     // 7️⃣ Status filter
+//     // ✅ 7️⃣ STATUS FILTER
 //     if (Array.isArray(status) && status.length > 0) {
 //       const statusMap = {
 //         answered: "ANSWERED",
@@ -716,7 +878,7 @@ exports.getAgentCallHistory = async (req, res) => {
 //       }
 //     }
 
-//     // 8️⃣ Call type filter
+//     // ✅ 8️⃣ CALL TYPE FILTER
 //     if (Array.isArray(callType) && callType.length > 0) {
 //       const typeMap = {
 //         inbound: "Inbound",
@@ -731,15 +893,66 @@ exports.getAgentCallHistory = async (req, res) => {
 //       }
 //     }
 
-//     // 9️⃣ Date filter
+//     // // ✅ 9️⃣ DATE FILTER
+//     // if (startDate && endDate) {
+//     //   query.start_time = {
+//     //     $gte: new Date(startDate),
+//     //     $lte: new Date(endDate)
+//     //   };
+//     // }
+
+//     // // ✅ 9️⃣ SAFE DATE FILTER (NO MORE INVALID DATE CRASH)
+//     // if (startDate && endDate) {
+//     //   const start = new Date(startDate);
+//     //   const end = new Date(endDate);
+
+//     //   // ✅ Only apply filter if BOTH dates are valid
+//     //   if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+//     //     // ✅ Set end of day for accurate filtering
+//     //     end.setHours(23, 59, 59, 999);
+
+//     //     query.start_time = {
+//     //       $gte: start,
+//     //       $lte: end
+//     //     };
+//     //   }
+//     // }
+
+//     // 8️⃣ Date Filter (SAFE for STRING + DATE + NULL values)
 //     if (startDate && endDate) {
-//       query.start_time = {
-//         $gte: new Date(startDate),
-//         $lte: new Date(endDate)
+//       query.$expr = {
+//         $and: [
+//           {
+//             $gte: [
+//               {
+//                 $dateFromString: {
+//                   dateString: { $toString: "$start_time" },  // ✅ forces to string
+//                   format: "%m/%d/%Y %H:%M:%S",
+//                   onError: new Date("1970-01-01"),             // ✅ prevents crash
+//                   onNull: new Date("1970-01-01")               // ✅ prevents crash
+//                 }
+//               },
+//               new Date(startDate)
+//             ]
+//           },
+//           {
+//             $lte: [
+//               {
+//                 $dateFromString: {
+//                   dateString: { $toString: "$start_time" },  // ✅ forces to string
+//                   format: "%m/%d/%Y %H:%M:%S",
+//                   onError: new Date("2999-01-01"),             // ✅ prevents crash
+//                   onNull: new Date("2999-01-01")               // ✅ prevents crash
+//                 }
+//               },
+//               new Date(endDate)
+//             ]
+//           }
+//         ]
 //       };
 //     }
 
-//     // 🔟 Pagination
+//     // ✅ 🔟 PAGINATION
 //     const skip = (page - 1) * page_size;
 
 //     const totalRecords = await CallHistory.countDocuments(query);
@@ -749,21 +962,59 @@ exports.getAgentCallHistory = async (req, res) => {
 //       .skip(skip)
 //       .limit(page_size);
 
-//     // // 1️⃣1️⃣ Static Summary (Never changes)
-//     // const summary = {
-//     //   inboundCalls: 5,
-//     //   internal: 4,
-//     //   outboundCalls: 119,
-//     //   missedCalls: 74,
-//     //   totalCalls: 128
-//     // };
-
 //     const summaryQuery = {
-//       $or: [
-//         { call_from: { $in: flatNumbers }, call_to: adminExtension },
-//         { call_from: adminExtension, call_to: { $in: flatNumbers } }
-//       ]
+//       $expr: {
+//         $or: [
+//           {
+//             $and: [
+//               {
+//                 $in: [
+//                   {
+//                     $replaceAll: {
+//                       input: {
+//                         $replaceAll: {
+//                           input: "$call_from",
+//                           find: " ",
+//                           replacement: ""
+//                         }
+//                       },
+//                       find: "+",
+//                       replacement: ""
+//                     }
+//                   },
+//                   normalizedNumbers   // ✅ ARRAY HERE
+//                 ]
+//               },
+//               { $eq: ["$call_to", adminExtension] }
+//             ]
+//           },
+//           {
+//             $and: [
+//               { $eq: ["$call_from", adminExtension] },
+//               {
+//                 $in: [
+//                   {
+//                     $replaceAll: {
+//                       input: {
+//                         $replaceAll: {
+//                           input: "$call_to",
+//                           find: " ",
+//                           replacement: ""
+//                         }
+//                       },
+//                       find: "+",
+//                       replacement: ""
+//                     }
+//                   },
+//                   normalizedNumbers   // ✅ ARRAY HERE
+//                 ]
+//               }
+//             ]
+//           }
+//         ]
+//       }
 //     };
+
 
 //     const allSummaryCalls = await CallHistory.find(summaryQuery).select("direction status");
 
@@ -790,6 +1041,7 @@ exports.getAgentCallHistory = async (req, res) => {
 //       totalCalls
 //     }
 
+//     // ✅ ✅ ✅ FINAL RESPONSE
 //     return res.json({
 //       status: "success",
 //       summary,
@@ -846,46 +1098,37 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       });
     }
 
-    // ✅ 3️⃣ UNIVERSAL NORMALIZER
+    // ✅ 3️⃣ UNIVERSAL PHONE NORMALIZER
     const normalizePhone = (phone) => {
       if (!phone) return "";
       return phone
         .toString()
-        .replace(/\s+/g, "") // remove spaces
-        .replace(/[^0-9]/g, "") // remove +, -, ()
-        .replace(/^00/, ""); // remove leading 00 if exists
+        .replace(/\s+/g, "")
+        .replace(/[^0-9]/g, "")
+        .replace(/^00/, "");
     };
 
-    // ✅ 4️⃣ BUILD ALL POSSIBLE NORMALIZED VARIATIONS (FROM REQUEST)
+    // ✅ 4️⃣ BUILD ALL POSSIBLE PHONE VARIATIONS
     const flatNumbers = new Set();
 
-    phonenumbers.forEach((p) => {
-      const raw = normalizePhone(p.number);
-      const cc = normalizePhone(p.countryCode);
+    phonenumbers.forEach(p => {
+      const raw = normalizePhone(p.number);        // 558894938
+      const cc = normalizePhone(p.countryCode);   // 971
 
       if (!raw) return;
 
-      // local
-      flatNumbers.add(raw);
+      flatNumbers.add(raw);              // 558894938
+      flatNumbers.add("0" + raw);        // 0558894938
 
-      // zero prefixed local
-      if (!raw.startsWith("0")) {
-        flatNumbers.add("0" + raw);
-      }
-
-      // international
       if (cc) {
-        flatNumbers.add(cc + raw);
-
-        if (!raw.startsWith("0")) {
-          flatNumbers.add(cc + "0" + raw);
-        }
+        flatNumbers.add(cc + raw);       // 971558894938
+        flatNumbers.add(cc + "0" + raw); // 9710558894938
       }
     });
 
     const normalizedNumbers = [...flatNumbers];
 
-    // ✅ ✅ ✅ 5️⃣ MAIN DATABASE QUERY (AUTO-NORMALIZES DB VALUES)
+    // ✅ 5️⃣ BASE PHONE FILTER QUERY (MAIN LOGIC)
     let query = {
       $expr: {
         $or: [
@@ -941,14 +1184,13 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
 
     // ✅ 6️⃣ SEARCH FILTER
     if (search.trim()) {
-      query.$and = [
-        {
-          $or: [
-            { call_from: { $regex: search, $options: "i" } },
-            { call_to: { $regex: search, $options: "i" } },
-          ],
-        },
-      ];
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { call_from: { $regex: search, $options: "i" } },
+          { call_to: { $regex: search, $options: "i" } }
+        ]
+      });
     }
 
     // ✅ 7️⃣ STATUS FILTER
@@ -961,8 +1203,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
         invalid: "FAILED",
       };
 
-      const mapped = status.map((s) => statusMap[s]).filter(Boolean);
-
+      const mapped = status.map(s => statusMap[s]).filter(Boolean);
       if (mapped.length > 0) {
         query.status = { $in: mapped };
       }
@@ -976,36 +1217,47 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
         internal: "Internal",
       };
 
-      const mapped = callType.map((t) => typeMap[t]).filter(Boolean);
-
+      const mapped = callType.map(t => typeMap[t]).filter(Boolean);
       if (mapped.length > 0) {
         query.direction = { $in: mapped };
       }
     }
 
-    // // ✅ 9️⃣ DATE FILTER
-    // if (startDate && endDate) {
-    //   query.start_time = {
-    //     $gte: new Date(startDate),
-    //     $lte: new Date(endDate)
-    //   };
-    // }
-
-    // ✅ 9️⃣ SAFE DATE FILTER (NO MORE INVALID DATE CRASH)
+    // ✅ 9️⃣ DATE FILTER (SAFE FOR STRING DATABASE)
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-
-      // ✅ Only apply filter if BOTH dates are valid
-      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-        // ✅ Set end of day for accurate filtering
-        end.setHours(23, 59, 59, 999);
-
-        query.start_time = {
-          $gte: start,
-          $lte: end,
-        };
-      }
+      query.$and = query.$and || [];
+      query.$and.push({
+        $expr: {
+          $and: [
+            {
+              $gte: [
+                {
+                  $dateFromString: {
+                    dateString: "$start_time",
+                    format: "%m/%d/%Y %H:%M:%S",
+                    onError: new Date("1970-01-01"),
+                    onNull: new Date("1970-01-01")
+                  }
+                },
+                new Date(startDate)
+              ]
+            },
+            {
+              $lte: [
+                {
+                  $dateFromString: {
+                    dateString: "$start_time",
+                    format: "%m/%d/%Y %H:%M:%S",
+                    onError: new Date("2999-01-01"),
+                    onNull: new Date("2999-01-01")
+                  }
+                },
+                new Date(endDate)
+              ]
+            }
+          ]
+        }
+      });
     }
 
     // ✅ 🔟 PAGINATION
@@ -1018,85 +1270,107 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       .skip(skip)
       .limit(page_size);
 
-    const summaryQuery = {
-      $expr: {
-        $or: [
-          {
-            $and: [
-              {
-                $in: [
-                  {
-                    $replaceAll: {
-                      input: {
-                        $replaceAll: {
-                          input: "$call_from",
-                          find: " ",
-                          replacement: "",
-                        },
-                      },
-                      find: "+",
-                      replacement: "",
+    // // ✅ 1️⃣1️⃣ SUMMARY (USES SAME FILTER = ALWAYS ACCURATE)
+    // const allSummaryCalls = await CallHistory.find(query).select("direction status");
+
+    // let inboundCalls = 0;
+    // let outboundCalls = 0;
+    // let missedCalls = 0;
+
+    // allSummaryCalls.forEach(call => {
+    //   if (call.direction === "Inbound") inboundCalls++;
+    //   if (call.direction === "Outbound") outboundCalls++;
+    //   if (call.status === "NO ANSWER") missedCalls++;
+    // });
+
+    // const totalCalls = inboundCalls + outboundCalls;
+
+    // const summary = {
+    //   inboundCalls,
+    //   outboundCalls,
+    //   missedCalls,
+    //   totalCalls
+    // };
+
+    // ✅ 1️⃣1️⃣ SUMMARY (PHONE-ONLY, IGNORE OTHER REQ FILTERS)
+    // Build a phone-only $expr exactly like the base filter but WITHOUT
+    // the other request-driven filters (search, status, callType, date).
+    const phoneOnlyExpr = {
+      $or: [
+        {
+          $and: [
+            {
+              $in: [
+                {
+                  $replaceAll: {
+                    input: {
+                      $replaceAll: {
+                        input: "$call_from",
+                        find: " ",
+                        replacement: ""
+                      }
                     },
-                  },
-                  normalizedNumbers, // ✅ ARRAY HERE
-                ],
-              },
-              { $eq: ["$call_to", adminExtension] },
-            ],
-          },
-          {
-            $and: [
-              { $eq: ["$call_from", adminExtension] },
-              {
-                $in: [
-                  {
-                    $replaceAll: {
-                      input: {
-                        $replaceAll: {
-                          input: "$call_to",
-                          find: " ",
-                          replacement: "",
-                        },
-                      },
-                      find: "+",
-                      replacement: "",
+                    find: "+",
+                    replacement: ""
+                  }
+                },
+                normalizedNumbers
+              ]
+            },
+            { $eq: ["$call_to", adminExtension] }
+          ]
+        },
+        {
+          $and: [
+            { $eq: ["$call_from", adminExtension] },
+            {
+              $in: [
+                {
+                  $replaceAll: {
+                    input: {
+                      $replaceAll: {
+                        input: "$call_to",
+                        find: " ",
+                        replacement: ""
+                      }
                     },
-                  },
-                  normalizedNumbers, // ✅ ARRAY HERE
-                ],
-              },
-            ],
-          },
-        ],
-      },
+                    find: "+",
+                    replacement: ""
+                  }
+                },
+                normalizedNumbers
+              ]
+            }
+          ]
+        }
+      ]
     };
 
-    const allSummaryCalls = await CallHistory.find(summaryQuery).select(
-      "direction status"
-    );
+    // phoneOnlyQuery only filters by phone variations (ignores search/status/type/date)
+    const phoneOnlyQuery = { $expr: phoneOnlyExpr };
+
+    // Get all matching calls for the phone(s) — used only for the summary counts.
+    const allSummaryCalls = await CallHistory.find(phoneOnlyQuery).select("direction status");
 
     let inboundCalls = 0;
     let outboundCalls = 0;
-    let internal = 0;
     let missedCalls = 0;
-    let totalCalls = 0;
 
     allSummaryCalls.forEach((call) => {
       if (call.direction === "Inbound") inboundCalls++;
       if (call.direction === "Outbound") outboundCalls++;
-      if (call.direction === "Internal") internal++;
-
       if (call.status === "NO ANSWER") missedCalls++;
     });
 
-    totalCalls = inboundCalls + outboundCalls;
+    const totalCalls = inboundCalls + outboundCalls;
 
     const summary = {
       inboundCalls,
       outboundCalls,
       missedCalls,
-      totalCalls,
+      totalCalls
     };
+
 
     // ✅ ✅ ✅ FINAL RESPONSE
     return res.json({
@@ -1229,10 +1503,45 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     // ------------------------------
     // FETCH CALLS
     // ------------------------------
+    // const calls = await CallHistory.find({
+    //   userId: { $in: userIdsToInclude },   // <-- filter by userIds
+    //   start_time: { $gte: startDate, $lt: endDate }
+    // }).select("start_time direction");
+
     const calls = await CallHistory.find({
-      userId: { $in: userIdsToInclude }, // <-- filter by userIds
-      start_time: { $gte: startDate, $lt: endDate },
+      userId: { $in: userIdsToInclude },
+      $expr: {
+        $and: [
+          {
+            $gte: [
+              {
+                $dateFromString: {
+                  dateString: { $toString: "$start_time" },
+                  format: "%m/%d/%Y %H:%M:%S",
+                  onError: new Date("1970-01-01"),
+                  onNull: new Date("1970-01-01")
+                }
+              },
+              startDate
+            ]
+          },
+          {
+            $lt: [
+              {
+                $dateFromString: {
+                  dateString: { $toString: "$start_time" },
+                  format: "%m/%d/%Y %H:%M:%S",
+                  onError: new Date("2999-01-01"),
+                  onNull: new Date("2999-01-01")
+                }
+              },
+              endDate
+            ]
+          }
+        ]
+      }
     }).select("start_time direction");
+
 
     // ------------------------------
     // FORMAT DATE: 24 Nov 2025
@@ -1282,8 +1591,16 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     // ------------------------------
     // COUNT CALLS DAY-WISE
     // ------------------------------
-    calls.forEach((call) => {
-      const d = new Date(call.start_time);
+    calls.forEach(call => {
+      // const d = new Date(call.start_time);
+
+      const d = new Date(
+        call.start_time.replace(
+          /(\d{2})\/(\d{2})\/(\d{4})/,
+          "$3-$1-$2"
+        )
+      );
+
 
       const diffDays = Math.floor((endDate - d) / (1000 * 60 * 60 * 24));
 
@@ -1362,37 +1679,50 @@ exports.getMonthlyCallGraph = async (req, res) => {
     }
 
     // 4️⃣ Fetch calls
+    // const calls = await CallHistory.find({
+    //   userId: { $in: userIdsToSearch },
+    //   start_time: { $gte: startDate, $lte: endDate },
+    // }).select("start_time direction status");
+
+    // 4️⃣ Fetch calls (safe for start_time stored as STRING "MM/DD/YYYY HH:mm:ss")
+    // Converts start_time -> Date using $dateFromString, safely handles nulls/mixed types.
     const calls = await CallHistory.find({
       userId: { $in: userIdsToSearch },
-      start_time: { $gte: startDate, $lte: endDate },
-    }).select("start_time direction status");
+      $expr: {
+        $and: [
+          {
+            $gte: [
+              {
+                $dateFromString: {
+                  dateString: { $trim: { input: { $toString: "$start_time" } } },
+                  format: "%m/%d/%Y %H:%M:%S",
+                  onError: null,
+                  onNull: null
+                }
+              },
+              startDate
+            ]
+          },
+          {
+            $lte: [
+              {
+                $dateFromString: {
+                  dateString: { $trim: { input: { $toString: "$start_time" } } },
+                  format: "%m/%d/%Y %H:%M:%S",
+                  onError: null,
+                  onNull: null
+                }
+              },
+              endDate
+            ]
+          }
+        ]
+      }
+    }).select("start_time direction status userId");
 
-    // // 5️⃣ Build days array
-    // const daysArray = [];
 
-    // const cursor = moment(startDate);
-    // const lastDay = moment(endDate);
+    console.log(calls);
 
-    // while (cursor.isSameOrBefore(lastDay, "day")) {
-    //   daysArray.push({
-    //     date: cursor.format("DD MMM YYYY"), // 👉 21 Oct 2025
-    //     inbound: 0,
-    //     outbound: 0,
-    //   });
-
-    //   cursor.add(1, "day");
-    // }
-
-    // // 6️⃣ Count daily values
-    // calls.forEach((call) => {
-    //   const d = moment(call.start_time).format("DD MMM YYYY");
-
-    //   const dayIndex = daysArray.findIndex((x) => x.date === d);
-    //   if (dayIndex !== -1) {
-    //     if (call.direction === "Inbound") daysArray[dayIndex].inbound++;
-    //     if (call.direction === "Outbound") daysArray[dayIndex].outbound++;
-    //   }
-    // });
 
     // 7️⃣ Summary counts
     const inboundTotal = calls.filter((c) => c.direction === "Inbound").length;
@@ -1402,10 +1732,7 @@ exports.getMonthlyCallGraph = async (req, res) => {
     const answeredTotal = calls.filter((c) => c.status === "ANSWERED").length;
     const invalidTotal = calls.filter((c) => c.status === "FAILED").length;
     const cancelledTotal = calls.filter((c) => c.status === "BUSY").length;
-    const missedTotal = calls.filter(
-      (c) => c.status === "NO ANSWER"
-      // || c.status === "FAILED" || c.status === "BUSY"
-    ).length;
+    const missedTotal = calls.filter((c) => c.status === "NO ANSWER").length;
 
     const totalCalls = inboundTotal + outboundTotal;
 
@@ -1425,7 +1752,6 @@ exports.getMonthlyCallGraph = async (req, res) => {
       },
 
       role: loginUser.role,
-      // days: daysArray,
     });
   } catch (error) {
     console.error("Error:", error);
