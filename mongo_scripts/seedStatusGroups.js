@@ -1,77 +1,61 @@
-#!/usr/bin/env node
-require("dotenv").config();
 
-const mongoose = require("mongoose");
-const User = require("../models/userModel");
 
-const MONGO_URI =
-  process.env.MONGO_URI ||
-  process.env.MONGODB_URI ||
-  process.env.MONGO_URL ||
-  "mongodb://localhost:27017/voycellcallcenter";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+dotenv.config();
 
-async function run() {
+const uri = process.env.MONGO_URL;
+
+const USER_ID = "69086406d3528368397525eb";
+
+const leadStatuses = [
+  { value: "interested", label: "Interested" },
+  { value: "notInterested", label: "Not Interested" },
+  { value: "called", label: "Called" },
+  { value: "notValid", label: "Not Valid" },
+  { value: "contacted", label: "Contacted" },
+  { value: "win", label: "Win" },
+  { value: "lost", label: "Lost" },
+];
+
+async function populateLeadStatuses() {
+  if (!uri) {
+    console.error("MONGO_URL is not defined in environment");
+    process.exit(1);
+  }
+
   try {
-    console.log("Connecting to MongoDB...");
-    await mongoose.connect(MONGO_URI, {
+    await mongoose.connect(uri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log("Connected to", MONGO_URI);
+    console.log("✅ Connected to MongoDB");
 
-    const userId = "69032996fc434f4104e3f57b";
+    const db = mongoose.connection.db;
 
-    const contactStatuses = [
-      { value: "interested", label: "Interested", group: 1, isDefault: true },
-      {
-        value: "notInterested",
-        label: "Not Interested",
-        group: 1,
-        isDefault: false,
-      },
-      { value: "called", label: "Called", group: 2, isDefault: true },
-      { value: "notValid", label: "Not Valid", group: 2, isDefault: false },
-      { value: "contacted", label: "Contacted", group: 2, isDefault: false },
-      { value: "win", label: "Win", group: 3, isDefault: true },
-      { value: "lost", label: "Lost", group: 3, isDefault: false },
-    ];
+    const result = await db
+      .collection("users")
+      .updateOne(
+        { _id: new mongoose.Types.ObjectId(USER_ID) },
+        { $set: { contactStatuses: leadStatuses } },
+        { upsert: false }
+      );
 
-    const leadStatuses = [
-      { value: "interested", label: "Interested", group: 1, isDefault: true },
-      { value: "followup", label: "Follow Up", group: 2, isDefault: true },
-      { value: "win", label: "Win", group: 3, isDefault: true },
-      { value: "lost", label: "Lost", group: 3, isDefault: false },
-    ];
-
-    const update = { contactStatuses, leadStatuses };
-
-    const user = await User.findByIdAndUpdate(userId, update, { new: true });
-
-    if (!user) {
-      console.error("User not found:", userId);
-      process.exitCode = 2;
-      return;
+    if (result.matchedCount === 0) {
+      console.log(`ℹ️  No user found with _id ${USER_ID}`);
+    } else if (result.modifiedCount === 1) {
+      console.log(`✅ leadStatuses updated for user ${USER_ID}`);
+    } else {
+      console.log(
+        "⚠️  Update executed but no modifications were made (maybe identical data)"
+      );
     }
-
-    console.log("Successfully updated user:", user._id.toString());
-    console.log(
-      "Contact statuses set to:",
-      JSON.stringify(user.contactStatuses, null, 2)
-    );
-    console.log(
-      "Lead statuses set to:",
-      JSON.stringify(user.leadStatuses, null, 2)
-    );
-  } catch (err) {
-    console.error("Error running seed script:", err);
-    process.exitCode = 1;
+  } catch (error) {
+    console.error("❌ Error updating leadStatuses:", error);
   } finally {
-    try {
-      await mongoose.disconnect();
-    } catch (e) {
-      // ignore
-    }
+    await mongoose.disconnect();
+    console.log("🔒 Disconnected from MongoDB");
   }
 }
 
-run();
+populateLeadStatuses();
