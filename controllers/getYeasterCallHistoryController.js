@@ -623,11 +623,202 @@ exports.getAgentCallHistory = async (req, res) => {
   }
 };
 
+// exports.getPhoneNumberCallHistory = async (req, res) => {
+//   try {
+//     const loginUserId = req.user._id;
+
+//     // 1️⃣ Get logged-in user
+//     const admin = await User.findById(loginUserId).select(
+//       "_id firstname lastname extensionNumber role"
+//     );
+
+//     if (!admin) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Company admin not found"
+//       });
+//     }
+
+//     const adminExtension = admin.extensionNumber;
+
+//     // 2️⃣ Request body filters
+//     const {
+//       page = 1,
+//       page_size = 20,
+//       search = "",
+//       status = [],
+//       callType = [],
+//       startDate = "",
+//       endDate = "",
+//       phonenumbers = []
+//     } = req.body;
+
+//     // 3️⃣ Handle missing phone numbers
+//     if (!Array.isArray(phonenumbers) || phonenumbers.length === 0) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Phone numbers list is required"
+//       });
+//     }
+
+//     // 4️⃣ Build complete phone variations list
+//     const flatNumbers = [];
+
+//     phonenumbers.forEach(p => {
+//       const raw = p.number?.trim() || "";
+//       const cc = p.countryCode?.trim() || "";
+
+//       if (!raw) return;
+
+//       const variation1 = `${cc}${raw}`;
+//       const variation2 = raw;
+//       const variation3 = raw.startsWith("0") ? raw : "0" + raw;
+//       const variation4 = `${cc}${variation3}`;
+//       const variation5 = `+${cc}${variation3}`;
+
+//       [variation1, variation2, variation3, variation4, variation5].forEach(num => {
+//         if (num && !flatNumbers.includes(num)) {
+//           flatNumbers.push(num);
+//         }
+//       });
+//     });
+
+//     // 5️⃣ Base query: extension <-> phone
+//     let query = {
+//       $or: [
+//         { call_from: { $in: flatNumbers }, call_to: adminExtension },
+//         { call_from: adminExtension, call_to: { $in: flatNumbers } }
+//       ]
+//     };
+
+//     // 6️⃣ Search filter
+//     if (search.trim() !== "") {
+//       query.$and = [
+//         {
+//           $or: [
+//             { call_from: { $regex: search, $options: "i" } },
+//             { call_to: { $regex: search, $options: "i" } }
+//           ]
+//         }
+//       ];
+//     }
+
+//     // 7️⃣ Status filter
+//     if (Array.isArray(status) && status.length > 0) {
+//       const statusMap = {
+//         answered: "ANSWERED",
+//         missedCall: "NO ANSWER",
+//         noAnswered: "NO ANSWER",
+//         cancelled: "BUSY",
+//         invalid: "FAILED"
+//       };
+
+//       const mapped = status.map(s => statusMap[s]).filter(Boolean);
+
+//       if (mapped.length > 0) {
+//         query.status = { $in: mapped };
+//       }
+//     }
+
+//     // 8️⃣ Call type filter
+//     if (Array.isArray(callType) && callType.length > 0) {
+//       const typeMap = {
+//         inbound: "Inbound",
+//         outbound: "Outbound",
+//         internal: "Internal"
+//       };
+
+//       const mapped = callType.map(t => typeMap[t]).filter(Boolean);
+
+//       if (mapped.length > 0) {
+//         query.direction = { $in: mapped };
+//       }
+//     }
+
+//     // 9️⃣ Date filter
+//     if (startDate && endDate) {
+//       query.start_time = {
+//         $gte: new Date(startDate),
+//         $lte: new Date(endDate)
+//       };
+//     }
+
+//     // 🔟 Pagination
+//     const skip = (page - 1) * page_size;
+
+//     const totalRecords = await CallHistory.countDocuments(query);
+
+//     const callRecords = await CallHistory.find(query)
+//       .sort({ start_time: -1 })
+//       .skip(skip)
+//       .limit(page_size);
+
+//     // // 1️⃣1️⃣ Static Summary (Never changes)
+//     // const summary = {
+//     //   inboundCalls: 5,
+//     //   internal: 4,
+//     //   outboundCalls: 119,
+//     //   missedCalls: 74,
+//     //   totalCalls: 128
+//     // };
+
+//     const summaryQuery = {
+//       $or: [
+//         { call_from: { $in: flatNumbers }, call_to: adminExtension },
+//         { call_from: adminExtension, call_to: { $in: flatNumbers } }
+//       ]
+//     };
+
+//     const allSummaryCalls = await CallHistory.find(summaryQuery).select("direction status");
+
+//     let inboundCalls = 0;
+//     let outboundCalls = 0;
+//     let internal = 0;
+//     let missedCalls = 0;
+//     let totalCalls = 0;
+
+//     allSummaryCalls.forEach(call => {
+//       if (call.direction === "Inbound") inboundCalls++;
+//       if (call.direction === "Outbound") outboundCalls++;
+//       if (call.direction === "Internal") internal++;
+
+//       if (call.status === "NO ANSWER") missedCalls++;
+//     });
+
+//     totalCalls = inboundCalls + outboundCalls
+
+//     const summary = {
+//       inboundCalls,
+//       outboundCalls,
+//       missedCalls,
+//       totalCalls
+//     }
+
+
+//     return res.json({
+//       status: "success",
+//       summary,
+//       page,
+//       page_size,
+//       totalRecords,
+//       callRecords
+//     });
+
+//   } catch (err) {
+//     console.error("❌ PhoneNumber Call History Error:", err);
+//     return res.status(500).json({
+//       status: "error",
+//       message: "Failed to retrieve phone number call history",
+//       error: err.message
+//     });
+//   }
+// };
+
 exports.getPhoneNumberCallHistory = async (req, res) => {
   try {
     const loginUserId = req.user._id;
 
-    // 1️⃣ Get logged-in user
+    // ✅ 1️⃣ Get logged-in admin
     const admin = await User.findById(loginUserId).select(
       "_id firstname lastname extensionNumber role"
     );
@@ -641,7 +832,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
 
     const adminExtension = admin.extensionNumber;
 
-    // 2️⃣ Request body filters
+    // ✅ 2️⃣ Request body
     const {
       page = 1,
       page_size = 20,
@@ -653,7 +844,6 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       phonenumbers = []
     } = req.body;
 
-    // 3️⃣ Handle missing phone numbers
     if (!Array.isArray(phonenumbers) || phonenumbers.length === 0) {
       return res.status(400).json({
         status: "error",
@@ -661,37 +851,101 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       });
     }
 
-    // 4️⃣ Build complete phone variations list
-    const flatNumbers = [];
+    // ✅ 3️⃣ UNIVERSAL NORMALIZER
+    const normalizePhone = (phone) => {
+      if (!phone) return "";
+      return phone
+        .toString()
+        .replace(/\s+/g, "")     // remove spaces
+        .replace(/[^0-9]/g, "") // remove +, -, ()
+        .replace(/^00/, "");    // remove leading 00 if exists
+    };
+
+    // ✅ 4️⃣ BUILD ALL POSSIBLE NORMALIZED VARIATIONS (FROM REQUEST)
+    const flatNumbers = new Set();
 
     phonenumbers.forEach(p => {
-      const raw = p.number?.trim() || "";
-      const cc = p.countryCode?.trim() || "";
+      const raw = normalizePhone(p.number);
+      const cc = normalizePhone(p.countryCode);
 
       if (!raw) return;
 
-      const variation1 = `${cc}${raw}`;
-      const variation2 = raw;
-      const variation3 = raw.startsWith("0") ? raw : "0" + raw;
-      const variation4 = `${cc}${variation3}`;
+      // local
+      flatNumbers.add(raw);
 
-      [variation1, variation2, variation3, variation4].forEach(num => {
-        if (num && !flatNumbers.includes(num)) {
-          flatNumbers.push(num);
+      // zero prefixed local
+      if (!raw.startsWith("0")) {
+        flatNumbers.add("0" + raw);
+      }
+
+      // international
+      if (cc) {
+        flatNumbers.add(cc + raw);
+
+        if (!raw.startsWith("0")) {
+          flatNumbers.add(cc + "0" + raw);
         }
-      });
+      }
     });
 
-    // 5️⃣ Base query: extension <-> phone
+    const normalizedNumbers = [...flatNumbers];
+
+    // ✅ ✅ ✅ 5️⃣ MAIN DATABASE QUERY (AUTO-NORMALIZES DB VALUES)
     let query = {
-      $or: [
-        { call_from: { $in: flatNumbers }, call_to: adminExtension },
-        { call_from: adminExtension, call_to: { $in: flatNumbers } }
-      ]
+      $expr: {
+        $or: [
+          {
+            $and: [
+              {
+                $in: [
+                  {
+                    $replaceAll: {
+                      input: {
+                        $replaceAll: {
+                          input: "$call_from",
+                          find: " ",
+                          replacement: ""
+                        }
+                      },
+                      find: "+",
+                      replacement: ""
+                    }
+                  },
+                  normalizedNumbers
+                ]
+              },
+              { $eq: ["$call_to", adminExtension] }
+            ]
+          },
+          {
+            $and: [
+              { $eq: ["$call_from", adminExtension] },
+              {
+                $in: [
+                  {
+                    $replaceAll: {
+                      input: {
+                        $replaceAll: {
+                          input: "$call_to",
+                          find: " ",
+                          replacement: ""
+                        }
+                      },
+                      find: "+",
+                      replacement: ""
+                    }
+                  },
+                  normalizedNumbers
+                ]
+              }
+            ]
+          }
+        ]
+      }
     };
 
-    // 6️⃣ Search filter
-    if (search.trim() !== "") {
+    // ✅ 6️⃣ SEARCH FILTER
+    if (search.trim()) {
       query.$and = [
         {
           $or: [
@@ -702,7 +956,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       ];
     }
 
-    // 7️⃣ Status filter
+    // ✅ 7️⃣ STATUS FILTER
     if (Array.isArray(status) && status.length > 0) {
       const statusMap = {
         answered: "ANSWERED",
@@ -719,7 +973,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       }
     }
 
-    // 8️⃣ Call type filter
+    // ✅ 8️⃣ CALL TYPE FILTER
     if (Array.isArray(callType) && callType.length > 0) {
       const typeMap = {
         inbound: "Inbound",
@@ -734,15 +988,33 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       }
     }
 
-    // 9️⃣ Date filter
+    // // ✅ 9️⃣ DATE FILTER
+    // if (startDate && endDate) {
+    //   query.start_time = {
+    //     $gte: new Date(startDate),
+    //     $lte: new Date(endDate)
+    //   };
+    // }
+
+    // ✅ 9️⃣ SAFE DATE FILTER (NO MORE INVALID DATE CRASH)
     if (startDate && endDate) {
-      query.start_time = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      // ✅ Only apply filter if BOTH dates are valid
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        // ✅ Set end of day for accurate filtering
+        end.setHours(23, 59, 59, 999);
+
+        query.start_time = {
+          $gte: start,
+          $lte: end
+        };
+      }
     }
 
-    // 🔟 Pagination
+
+    // ✅ 🔟 PAGINATION
     const skip = (page - 1) * page_size;
 
     const totalRecords = await CallHistory.countDocuments(query);
@@ -752,21 +1024,59 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       .skip(skip)
       .limit(page_size);
 
-    // // 1️⃣1️⃣ Static Summary (Never changes)
-    // const summary = {
-    //   inboundCalls: 5,
-    //   internal: 4,
-    //   outboundCalls: 119,
-    //   missedCalls: 74,
-    //   totalCalls: 128
-    // };
-
     const summaryQuery = {
-      $or: [
-        { call_from: { $in: flatNumbers }, call_to: adminExtension },
-        { call_from: adminExtension, call_to: { $in: flatNumbers } }
-      ]
+      $expr: {
+        $or: [
+          {
+            $and: [
+              {
+                $in: [
+                  {
+                    $replaceAll: {
+                      input: {
+                        $replaceAll: {
+                          input: "$call_from",
+                          find: " ",
+                          replacement: ""
+                        }
+                      },
+                      find: "+",
+                      replacement: ""
+                    }
+                  },
+                  normalizedNumbers   // ✅ ARRAY HERE
+                ]
+              },
+              { $eq: ["$call_to", adminExtension] }
+            ]
+          },
+          {
+            $and: [
+              { $eq: ["$call_from", adminExtension] },
+              {
+                $in: [
+                  {
+                    $replaceAll: {
+                      input: {
+                        $replaceAll: {
+                          input: "$call_to",
+                          find: " ",
+                          replacement: ""
+                        }
+                      },
+                      find: "+",
+                      replacement: ""
+                    }
+                  },
+                  normalizedNumbers   // ✅ ARRAY HERE
+                ]
+              }
+            ]
+          }
+        ]
+      }
     };
+
 
     const allSummaryCalls = await CallHistory.find(summaryQuery).select("direction status");
 
@@ -793,7 +1103,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       totalCalls
     }
 
-
+    // ✅ ✅ ✅ FINAL RESPONSE
     return res.json({
       status: "success",
       summary,
@@ -812,6 +1122,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
     });
   }
 };
+
 
 exports.callRecordingDownload = async (req, res) => {
   try {
