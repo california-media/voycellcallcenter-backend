@@ -1562,9 +1562,8 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         "Dec",
       ];
 
-      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${
-        months[dateObj.getUTCMonth()]
-      } ${dateObj.getUTCFullYear()}`;
+      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${months[dateObj.getUTCMonth()]
+        } ${dateObj.getUTCFullYear()}`;
     };
 
     // ------------------------------
@@ -1767,7 +1766,7 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
   try {
     const { phoneNumbers, status, note, task, meeting } = req.body;
     const userId = req.user._id;
-   
+
     if (!phoneNumbers || !phoneNumbers.countryCode || !phoneNumbers.number) {
       return res.status(400).json({ message: "Phone number is required" });
     }
@@ -1793,8 +1792,53 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       "phoneNumbers.number": rawNumber,
     });
 
-    let targetDoc = contact || lead;
-    let targetType = contact ? "contact" : lead ? "lead" : "newLead";
+    // let targetDoc = contact || lead;
+    // let targetType = contact ? "contact" : lead ? "lead" : "newLead";
+
+    let targetDoc = null;
+    let targetType = null;
+
+    // ✅ CHECK IF CONTACT EXISTS BUT LEAD DOES NOT
+    const shouldConvertToLead =
+      contact &&
+      !lead &&
+      (status === "interested" || status === "callback");
+
+    if (shouldConvertToLead) {
+      // ✅ CONVERT CONTACT → LEAD (FULL DATA COPY)
+      const contactObj = contact.toObject();
+
+      // ✅ IMPORTANT: REMOVE _id so MongoDB creates new Lead document
+      delete contactObj._id;
+
+      const newLead = await Lead.create({
+        ...contactObj,              // ✅ COPY ALL FIELDS
+        isLead: true,               // ✅ MARK AS LEAD
+        status: status,             // ✅ SET NEW STATUS
+        createdBy: userId,
+
+        activities: [
+          ...(contactObj.activities || []),
+          {
+            action: "contact_converted_to_lead",
+            type: "lead",
+            title: "Contact Converted to Lead",
+            description: `Converted after call with status "${status}"`,
+          },
+        ],
+      });
+
+      targetDoc = newLead;
+      targetType = "convertedLead";
+
+      // ✅ OPTIONAL: REMOVE OLD CONTACT IF YOU WANT
+      // await Contact.findByIdAndDelete(contact._id);
+
+    } else {
+      // ✅ NORMAL FLOW (NO CONVERSION)
+      targetDoc = contact || lead;
+      targetType = contact ? "contact" : lead ? "lead" : "newLead";
+    }
 
     // ✅ 3. If NOT FOUND → Create New Lead
     if (!targetDoc) {
