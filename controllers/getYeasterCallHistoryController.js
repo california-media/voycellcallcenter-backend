@@ -1802,7 +1802,8 @@ exports.getMonthlyCallGraph = async (req, res) => {
 
 exports.addFormDataAfterCallEnd = async (req, res) => {
   try {
-    const { phoneNumbers, status, note, task, meeting } = req.body;
+    const { phoneNumbers, status, note, meeting } = req.body;
+    console.log("status sent", status);
     const userId = req.user._id;
 
     if (!phoneNumbers || !phoneNumbers.countryCode || !phoneNumbers.number) {
@@ -1840,14 +1841,14 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     const shouldConvertToLead =
       contact &&
       !lead &&
-      (status === "interested" || status === "callback");
+      (status === "interested" || status === "callBack");
 
     if (shouldConvertToLead) {
       // ✅ CONVERT CONTACT → LEAD (FULL DATA COPY)
       const contactObj = contact.toObject();
 
       // ✅ IMPORTANT: REMOVE _id so MongoDB creates new Lead document
-      delete contactObj._id;
+      // delete contactObj._id;
 
       const newLead = await Lead.create({
         ...contactObj,              // ✅ COPY ALL FIELDS
@@ -1870,7 +1871,7 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       targetType = "convertedLead";
 
       // ✅ OPTIONAL: REMOVE OLD CONTACT IF YOU WANT
-      // await Contact.findByIdAndDelete(contact._id);
+      await Contact.findByIdAndDelete(contact._id);
 
     } else {
       // ✅ NORMAL FLOW (NO CONVERSION)

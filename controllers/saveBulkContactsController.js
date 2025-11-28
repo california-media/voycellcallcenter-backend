@@ -27,6 +27,11 @@ const saveBulkContacts = async (req, res) => {
     // Determine if contacts should be marked as leads
     const shouldBeLeads = category === "lead";
 
+    // Get valid statuses for the user based on category
+    const validStatuses = shouldBeLeads
+      ? (user.leadStatuses || []).map((s) => s.value)
+      : (user.contactStatuses || []).map((s) => s.value);
+
     // Allow both camelCase (schema) and lowercase (incoming)
     const allowedFields = [
       "firstname",
@@ -138,6 +143,14 @@ const saveBulkContacts = async (req, res) => {
               `Invalid phone number: Missing phone number after country code.`
             );
           }
+        }
+      }
+
+      // Validate status if provided
+      if (status && status.trim() !== "") {
+        if (!validStatuses.includes(status)) {
+          const categoryName = shouldBeLeads ? "lead" : "contact";
+          throw new Error(`Invalid ${categoryName} status: "${status}".`);
         }
       }
 

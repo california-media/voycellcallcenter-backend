@@ -74,8 +74,11 @@ const addEditContactisLeads = async (req, res) => {
     // ------------------------------------------------------------------
     const duplicateCheck = {
       $or: [
-        { emailAddresses: { $in: emails } },
-        { "phoneNumbers.number": { $in: phones.map((p) => p.number) } },
+        { emailAddresses: { $in: emails }, createdBy: user_id },
+        {
+          "phoneNumbers.number": { $in: phones.map((p) => p.number) },
+          createdBy: user_id,
+        },
       ],
     };
 
@@ -84,7 +87,6 @@ const addEditContactisLeads = async (req, res) => {
       const exists =
         (await Contact.findOne(duplicateCheck)) ||
         (await Lead.findOne(duplicateCheck));
-
       if (exists) {
         return res.status(409).json({
           status: "error",
@@ -160,12 +162,16 @@ const addEditContactisLeads = async (req, res) => {
     const duplicate =
       (await Contact.findOne({
         ...duplicateCheck,
+        createdBy: req.user._id,
         contact_id: { $ne: existing.contact_id },
       })) ||
       (await Lead.findOne({
         ...duplicateCheck,
+        createdBy: req.user._id,
         contact_id: { $ne: existing.contact_id },
       }));
+    console.log("existing id:", contact_id);
+    console.log("Received duplicate:", duplicate);
 
     if (duplicate) {
       return res.status(409).json({
@@ -667,7 +673,7 @@ const updateFirstPhoneOrEmail = async (req, res) => {
         message: "Unauthorized: User not found",
       });
     }
-    
+
     const { contact_id, field, value, category } = req.body;
 
     if (!contact_id || !field || !value) {

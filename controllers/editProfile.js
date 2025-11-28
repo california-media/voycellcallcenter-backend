@@ -650,6 +650,64 @@ const updateLeadStatuses = async (req, res) => {
       }
     }
 
+    // Get current user's statuses to check what's being removed/modified
+    const currentUser = await User.findById(userId);
+    if (!currentUser) {
+      return res.status(404).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
+
+    const currentStatuses =
+      category === "lead"
+        ? currentUser.leadStatuses
+        : currentUser.contactStatuses;
+    const newStatusValues = statusesData.map((s) => s.value);
+    const removedStatuses = currentStatuses.filter(
+      (cs) => !newStatusValues.includes(cs.value)
+    );
+
+    // Check if any removed statuses are currently in use
+    if (removedStatuses.length > 0) {
+      const Contact = require("../models/contactModel");
+      const Lead = require("../models/leadModel");
+
+      const removedStatusValues = removedStatuses.map((rs) => rs.value);
+      const modelToCheck = category === "lead" ? Lead : Contact;
+
+      const recordsUsingStatus = await modelToCheck
+        .find({
+          createdBy: userId,
+          status: { $in: removedStatusValues },
+        })
+        .select("firstname lastname status");
+
+      if (recordsUsingStatus.length > 0) {
+        const statusInUse = [
+          ...new Set(recordsUsingStatus.map((r) => r.status)),
+        ];
+        const recordNames = recordsUsingStatus
+          .map((r) => `${r.firstname} ${r.lastname}`)
+          .slice(0, 3);
+        const moreCount =
+          recordsUsingStatus.length > 3
+            ? ` and ${recordsUsingStatus.length - 3} more`
+            : "";
+
+        return res.status(400).json({
+          status: "error",
+          message: `Cannot delete status(es) "${statusInUse.join(
+            '", "'
+          )}" as they are currently used by ${
+            category === "lead" ? "leads" : "contacts"
+          }: ${recordNames.join(
+            ", "
+          )}${moreCount}. Please change their status first.`,
+        });
+      }
+    }
+
     // Update user's statuses (contact or lead based on category)
     const updateData = {};
     updateData[fieldToUpdate] = statusesData;
@@ -709,6 +767,64 @@ const updateContactStatuses = async (req, res) => {
         return res.status(400).json({
           status: "error",
           message: "Each status must have a value and label",
+        });
+      }
+    }
+
+    // Get current user's statuses to check what's being removed/modified
+    const currentUser = await User.findById(userId);
+    if (!currentUser) {
+      return res.status(404).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
+
+    const currentStatuses =
+      category === "lead"
+        ? currentUser.leadStatuses
+        : currentUser.contactStatuses;
+    const newStatusValues = statusesData.map((s) => s.value);
+    const removedStatuses = currentStatuses.filter(
+      (cs) => !newStatusValues.includes(cs.value)
+    );
+
+    // Check if any removed statuses are currently in use
+    if (removedStatuses.length > 0) {
+      const Contact = require("../models/contactModel");
+      const Lead = require("../models/leadModel");
+
+      const removedStatusValues = removedStatuses.map((rs) => rs.value);
+      const modelToCheck = category === "lead" ? Lead : Contact;
+
+      const recordsUsingStatus = await modelToCheck
+        .find({
+          createdBy: userId,
+          status: { $in: removedStatusValues },
+        })
+        .select("firstname lastname status");
+
+      if (recordsUsingStatus.length > 0) {
+        const statusInUse = [
+          ...new Set(recordsUsingStatus.map((r) => r.status)),
+        ];
+        const recordNames = recordsUsingStatus
+          .map((r) => `${r.firstname} ${r.lastname}`)
+          .slice(0, 3);
+        const moreCount =
+          recordsUsingStatus.length > 3
+            ? ` and ${recordsUsingStatus.length - 3} more`
+            : "";
+
+        return res.status(400).json({
+          status: "error",
+          message: `Cannot delete status(es) "${statusInUse.join(
+            '", "'
+          )}" as they are currently used by ${
+            category === "lead" ? "leads" : "contacts"
+          }: ${recordNames.join(
+            ", "
+          )}${moreCount}. Please change their status first.`,
         });
       }
     }
