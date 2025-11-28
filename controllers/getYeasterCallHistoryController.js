@@ -162,6 +162,8 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     const userId = req.user._id;
     const token = await getValidToken();
     console.log(userId);
+    console.log(token);
+
 
     const user = await User.findById(userId);
     if (!user || !user.extensionNumber) {
@@ -370,10 +372,24 @@ exports.getCompanyCallHistory = async (req, res) => {
       });
     }
 
-    // 4️⃣ Base query (very important: ONLY ONE extension)
-    let query = {
-      extensionNumber: agentExtensions,
-    };
+    // // 4️⃣ Base query (very important: ONLY ONE extension)
+    // let query = {
+    //   extensionNumber: agentExtensions,
+    // };
+
+    // 4️⃣ Base query (USER BASED FILTER — NOT EXTENSION BASED)
+    let query = {};
+
+    if (agentIdsArray.length > 0) {
+      // ✅ Multiple agents selected → filter by their userIds
+      query.extensionNumber = agentExtensions;
+      query.userId = { $in: agentIdsArray };
+    } else {
+      // ✅ No agent selected → only show company admin calls
+      query.extensionNumber = agentExtensions;
+      query.userId = loginUserId;
+    }
+
 
     // 5️⃣ Search filter
     if (search.trim() !== "") {
@@ -473,7 +489,19 @@ exports.getCompanyCallHistory = async (req, res) => {
 
 
     // 🔟 Summary filter
-    const summaryFilter = { extensionNumber: finalExtension };
+    // const summaryFilter = { extensionNumber: finalExtension };
+
+    // 🔟 Summary filter (SAME AS MAIN QUERY but WITHOUT PAGINATION)
+    let summaryFilter = {};
+
+    // if (agentIdsArray.length > 0) {
+    //   summaryFilter.userId = { $in: agentIdsArray };
+    //   summaryFilter.extensionNumber = finalExtension;
+    // } else {
+    summaryFilter.extensionNumber = finalExtension;
+    summaryFilter.userId = loginUserId;
+    // }
+
 
     // if (query.direction) summaryFilter.direction = query.direction;
     // if (query.status) summaryFilter.status = query.status;
@@ -566,6 +594,7 @@ exports.getAgentCallHistory = async (req, res) => {
 
     let query = {
       extensionNumber: finalExtension,
+      userId: loginUserId
     };
 
     // 5️⃣ Search filter
@@ -661,7 +690,10 @@ exports.getAgentCallHistory = async (req, res) => {
       .limit(page_size);
 
     // 🔟 Summary filter
-    const summaryFilter = { extensionNumber: finalExtension };
+    const summaryFilter = {
+      extensionNumber: finalExtension,
+      userId: loginUserId
+    };
 
     // if (query.direction) summaryFilter.direction = query.direction;
     // if (query.status) summaryFilter.status = query.status;
@@ -1130,6 +1162,8 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
 
     // ✅ 5️⃣ BASE PHONE FILTER QUERY (MAIN LOGIC)
     let query = {
+      userId: loginUserId,                // ✅ FILTER BY LOGGED-IN USER
+      extensionNumber: adminExtension,  // ✅ FILTER BY EXTENSION
       $expr: {
         $or: [
           {
@@ -1347,7 +1381,11 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
     };
 
     // phoneOnlyQuery only filters by phone variations (ignores search/status/type/date)
-    const phoneOnlyQuery = { $expr: phoneOnlyExpr };
+    const phoneOnlyQuery = {
+      userId: loginUserId,                // ✅ FILTER BY LOGGED-IN USER
+      extensionNumber: adminExtension,  // ✅ FILTER BY EXTENSION
+      $expr: phoneOnlyExpr
+    };
 
     // Get all matching calls for the phone(s) — used only for the summary counts.
     const allSummaryCalls = await CallHistory.find(phoneOnlyQuery).select("direction status");
