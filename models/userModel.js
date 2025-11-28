@@ -284,6 +284,7 @@ const userSchema = new Schema(
         { value: "contacted", label: "Contacted" },
         { value: "win", label: "Win" },
         { value: "lost", label: "Lost" },
+        { value: "noAnswer", label: "No Answer" },
       ],
     },
 
@@ -317,6 +318,8 @@ const userSchema = new Schema(
         { value: "followup", label: "Follow Up", group: 2, isDefault: true },
         { value: "win", label: "Win", group: 3, isDefault: true },
         { value: "lost", label: "Lost", group: 3, isDefault: false },
+        { value: "callBack", label: "Call Back", group: 4, isDefault: false },
+        { value: "noAnswer", label: "No Answer", group: 4, isDefault: false },
       ],
     },
 

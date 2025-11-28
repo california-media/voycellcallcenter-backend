@@ -468,10 +468,38 @@ exports.getSingleContactOrLead = async (req, res) => {
 exports.getAllContactOrLeadForEvent = async (req, res) => {
   try {
     const createdBy = req.user._id;
+    const { search = "" } = req.query;
+
+    // Base query for both contacts and leads
+    const baseQuery = { createdBy };
+
+    // Add search functionality if search term is provided
+    if (search && search.trim() !== "") {
+      const searchTerm = search.trim();
+      const escaped = escapeRegex(searchTerm);
+      const regexInsensitive = new RegExp(escaped, "i");
+
+      baseQuery.$or = [
+        { firstname: { $regex: regexInsensitive } },
+        { lastname: { $regex: regexInsensitive } },
+        { emailAddresses: { $elemMatch: { $regex: regexInsensitive } } },
+        {
+          $expr: {
+            $regexMatch: {
+              input: {
+                $toLower: { $concat: ["$firstname", " ", "$lastname"] },
+              },
+              regex: searchTerm.toLowerCase(),
+            },
+          },
+        },
+      ];
+    }
 
     // Fetch contacts
-    const contacts = await Contact.find({ createdBy })
+    const contacts = await Contact.find(baseQuery)
       .select("_id emailAddresses firstname lastname")
+      .limit(50) // Limit results for better performance
       .lean();
 
     // Add category field
@@ -484,8 +512,9 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
     }));
 
     // Fetch leads
-    const leads = await Lead.find({ createdBy })
+    const leads = await Lead.find(baseQuery)
       .select("_id emailAddresses firstname lastname")
+      .limit(50) // Limit results for better performance
       .lean();
 
     // Add category field
