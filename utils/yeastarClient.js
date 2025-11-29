@@ -432,28 +432,88 @@ function generateSecret(length = 12) {
 /**
  * 🧩 Create Yeastar extension for a user
  */
+// async function createYeastarExtensionForUser(user) {
+//   const token = await getValidToken();
+//   const extensionNumber = await findNextAvailableExtension(1001);
+//   const secret = generateSecret();
+//   console.log(token);
+
+//   const url = `${YEASTAR_BASE_URL}/extension/create?access_token=${token}`;
+//   console.log("Creating Yeastar extension:", extensionNumber, user?.email);
+
+//   const body = {
+//     number: extensionNumber.toString(),
+//     first_name:
+//       user.firstname + " Voycell" || user?.email + " Voycell" || "Voycell", // ✅ added
+//     last_name:
+//       user?.role === "user"
+//         ? "agent"
+//         : user?.role === "companyAdmin"
+//           ? "companyAdmin"
+//           : user?.role === "superadmin"
+//             ? "superadmin"
+//             : "",
+//     caller_id_name:
+//       `${user.firstname || ""} ${user.lastname || ""}`.trim() || "User",
+//     reg_name: extensionNumber.toString(),
+//     reg_password: secret,
+//     concurrent_registrations: 1,
+//     user_password: secret,
+//     type: "SIP",
+//     presence_status: "available",
+//     enable_outbound: true,
+//     enable_inbound: true,
+//     // ✅ New field required by Yeastar
+//     organization_list: [
+//       { value: "1" }, // use "1" or your actual organization ID
+//     ],
+//   };
+
+//   try {
+//     const res = await axios.post(url, body);
+//     const data = res.data;
+
+//     if (data.errcode === 0) {
+//       console.log("✅ Yeastar extension created:", extensionNumber);
+//       return { extensionNumber, secret, result: data };
+//     }
+
+//     console.error("❌ Yeastar extension creation failed:", data);
+//     throw new Error(data.errmsg || "Yeastar extension creation failed");
+//   } catch (err) {
+//     console.error(
+//       "❌ Yeastar extension creation failed:",
+//       err.response?.data || err.message
+//     );
+//     throw err;
+//   }
+// }
+
 async function createYeastarExtensionForUser(user) {
   const token = await getValidToken();
   const extensionNumber = await findNextAvailableExtension(1001);
   const secret = generateSecret();
 
   const url = `${YEASTAR_BASE_URL}/extension/create?access_token=${token}`;
-  console.log("Creating Yeastar extension:", extensionNumber, user?.email);
 
   const body = {
     number: extensionNumber.toString(),
+
     first_name:
-      user.firstname + " Voycell" || user?.email + " Voycell" || "Voycell", // ✅ added
+      `${user.firstname || user.email.split("@")[0]} Voycell`,
+
     last_name:
       user?.role === "user"
         ? "agent"
         : user?.role === "companyAdmin"
-        ? "companyAdmin"
-        : user?.role === "superadmin"
-        ? "superadmin"
-        : "",
+          ? "companyAdmin"
+          : user?.role === "superadmin"
+            ? "superadmin"
+            : "",
+
     caller_id_name:
       `${user.firstname || ""} ${user.lastname || ""}`.trim() || "User",
+
     reg_name: extensionNumber.toString(),
     reg_password: secret,
     concurrent_registrations: 1,
@@ -462,9 +522,9 @@ async function createYeastarExtensionForUser(user) {
     presence_status: "available",
     enable_outbound: true,
     enable_inbound: true,
-    // ✅ New field required by Yeastar
+
     organization_list: [
-      { value: "1" }, // use "1" or your actual organization ID
+      { value: "1" },
     ],
   };
 
@@ -472,21 +532,50 @@ async function createYeastarExtensionForUser(user) {
     const res = await axios.post(url, body);
     const data = res.data;
 
+    // ✅ SUCCESS
     if (data.errcode === 0) {
       console.log("✅ Yeastar extension created:", extensionNumber);
-      return { extensionNumber, secret, result: data };
+
+      return {
+        extensionNumber,
+        secret,
+        result: data,
+      };
     }
 
-    console.error("❌ Yeastar extension creation failed:", data);
-    throw new Error(data.errmsg || "Yeastar extension creation failed");
+    // ✅ HANDLE LIMIT ERROR SAFELY
+    if (data.errcode === 60002) {
+      console.error("❌ Yeastar limit reached");
+
+      return {
+        extensionNumber: null,
+        secret: null,
+        result: {
+          errcode: 60002,
+          errmsg: "Extension limit reached on Yeastar",
+        },
+      };
+    }
+
+    // ✅ OTHER YEASTAR ERRORS
+    console.error("❌ Yeastar API error:", data);
+
+    return {
+      extensionNumber: null,
+      secret: null,
+      result: data,
+    };
+
   } catch (err) {
     console.error(
-      "❌ Yeastar extension creation failed:",
+      "❌ Yeastar request failed:",
       err.response?.data || err.message
     );
-    throw err;
+
+    throw new Error("Yeastar network failure");
   }
 }
+
 
 /**
  * 🗑️ Delete Yeastar extension

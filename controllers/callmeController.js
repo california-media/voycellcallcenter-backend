@@ -49,32 +49,68 @@ exports.serveCallmeJS = async (req, res) => {
     return res.status(404).send("// User not found for this token");
   }
 
-  function requestOriginMatches(req, allowedOrigin) {
-    if (!allowedOrigin) return true; // if no restriction set at all
+  // function requestOriginMatches(req, allowedOrigin) {
+  //   if (!allowedOrigin) return true; // if no restriction set at all
 
-    console.log(allowedOrigin);
+  //   console.log(allowedOrigin);
 
 
-    const allowed = allowedOrigin.trim().replace(/\/+$/, "").toLowerCase();
+  //   const allowed = allowedOrigin.trim().replace(/\/+$/, "").toLowerCase();
 
-    const referer = (req.get("referer") || req.get("referrer") || "")
-      .split("#")[0]
-      .split("?")[0]
-      .trim()
-      .toLowerCase();
+  //   const referer = (req.get("referer") || req.get("referrer") || "")
+  //     .split("#")[0]
+  //     .split("?")[0]
+  //     .trim()
+  //     .toLowerCase();
 
-    const originHeader = (req.get("origin") || "").trim().toLowerCase();
+  //   const originHeader = (req.get("origin") || "").trim().toLowerCase();
 
-    // If no origin or referer at all, block (e.g., file://)
-    if (!originHeader && !referer) {
-      return false; // 🚫 disallow if no headers
+  //   // If no origin or referer at all, block (e.g., file://)
+  //   if (!originHeader && !referer) {
+  //     return false; // 🚫 disallow if no headers
+  //   }
+
+  //   if (originHeader && originHeader.startsWith(allowed)) return true;
+  //   if (referer && referer.startsWith(allowed)) return true;
+
+  //   return false; // 🚫 disallow all other cases
+  // }
+
+  // ✅ 1️⃣ Extract exact origin from request safely
+  function getRequestOrigin(req) {
+    const originHeader = (req.get("origin") || "").trim();
+    const refererHeader = (req.get("referer") || req.get("referrer") || "").trim();
+
+    try {
+      if (originHeader) {
+        return new URL(originHeader).origin; // ✅ Exact origin
+      }
+      if (refererHeader) {
+        return new URL(refererHeader).origin;
+      }
+    } catch (err) {
+      return "";
     }
 
-    if (originHeader && originHeader.startsWith(allowed)) return true;
-    if (referer && referer.startsWith(allowed)) return true;
-
-    return false; // 🚫 disallow all other cases
+    return "";
   }
+
+  // ✅ 2️⃣ STRICT comparison (NO startsWith, NO partial match)
+  function requestOriginMatches(req, allowedOrigin) {
+    if (!allowedOrigin) return true; // no restriction saved
+
+    const requestOrigin = getRequestOrigin(req);
+
+    console.log("✅ Allowed Origin:", allowedOrigin);
+    console.log("🟡 Request Origin:", requestOrigin);
+
+    // ❌ Block if browser sends NO origin
+    if (!requestOrigin) return false;
+
+    // ✅ ✅ ✅ EXACT MATCH ONLY
+    return requestOrigin === allowedOrigin;
+  }
+
 
 
   if (tokenDoc.allowedOrigin && !requestOriginMatches(req, tokenDoc.allowedOrigin)) {
