@@ -6,6 +6,7 @@ const {
   getHelpSupportTicketById,
   replyToHelpSupportTicket,
   deleteHelpSupportTicket,
+  closeHelpSupportTicket,
   getHelpSupportStats,
 } = require("../../controllers/admin/adminHelpSupportController");
 
@@ -20,6 +21,9 @@ router.get("/:id", getHelpSupportTicketById);
 
 // POST /admin/help-support/:id/reply - Reply to a help support ticket
 router.post("/:id/reply", replyToHelpSupportTicket);
+
+// POST /admin/help-support/:id/close - Close a help support ticket
+router.post("/:id/close", closeHelpSupportTicket);
 
 // DELETE /admin/help-support/:id - Delete a help support ticket
 router.delete("/:id", deleteHelpSupportTicket);

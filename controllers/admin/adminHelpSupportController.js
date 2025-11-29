@@ -320,6 +320,52 @@ const deleteHelpSupportTicket = async (req, res) => {
   }
 };
 
+// POST - Close a help support ticket (admin action)
+const closeHelpSupportTicket = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid ticket ID",
+      });
+    }
+
+    const ticket = await HelpSupport.findById(id);
+
+    if (!ticket) {
+      return res.status(404).json({
+        status: "error",
+        message: "Help support ticket not found",
+      });
+    }
+
+    if (ticket.status === "closed") {
+      return res.status(400).json({
+        status: "error",
+        message: "Ticket is already closed",
+      });
+    }
+
+    ticket.status = "closed";
+    ticket.lastMessageAt = new Date();
+    await ticket.save();
+
+    res.status(200).json({
+      status: "success",
+      message: "Ticket closed successfully",
+      data: { ticketId: ticket._id, closedAt: ticket.lastMessageAt },
+    });
+  } catch (error) {
+    console.error("Error closing help support ticket:", error);
+    res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
 // GET help support dashboard stats
 const getHelpSupportStats = async (req, res) => {
   try {
@@ -405,5 +451,6 @@ module.exports = {
   getHelpSupportTicketById,
   replyToHelpSupportTicket,
   deleteHelpSupportTicket,
+  closeHelpSupportTicket,
   getHelpSupportStats,
 };
