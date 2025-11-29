@@ -175,12 +175,75 @@ const createHelpSupport = async (req, res) => {
 const getUserHelpRequests = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { page = 1, limit = 10 } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      inquiryType,
+      search,
+      startDate,
+      endDate,
+    } = req.query;
+
+    // Build filter query
+    let filter = { userId };
+
+    // Status filtering - support multiple statuses
+    if (status && status !== "all") {
+      const statusArray = Array.isArray(status) ? status : status.split(",");
+      if (statusArray.length > 0) {
+        filter.status = { $in: statusArray };
+      }
+    }
+
+    // Type filtering - support multiple types
+    if (inquiryType && inquiryType !== "All") {
+      const typeArray = Array.isArray(inquiryType)
+        ? inquiryType
+        : inquiryType.split(",");
+      if (typeArray.length > 0) {
+        filter.inquiryType = { $in: typeArray };
+      }
+    }
+
+    // Date range filtering
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        // Add one day to include the end date
+        const end = new Date(endDate);
+        end.setDate(end.getDate() + 1);
+        filter.createdAt.$lt = end;
+      }
+    }
+
+    // Search filtering
+    if (search) {
+      const searchFilter = [
+        { name: { $regex: search, $options: "i" } },
+        { subject: { $regex: search, $options: "i" } },
+        { message: { $regex: search, $options: "i" } },
+      ];
+
+      // Combine with existing filter
+      if (Object.keys(filter).length > 1) {
+        // More than just userId
+        filter = {
+          $and: [filter, { $or: searchFilter }],
+        };
+      } else {
+        filter.$or = searchFilter;
+        filter.userId = userId; // Re-add userId
+      }
+    }
 
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const requests = await HelpSupport.find({ userId })
+    const requests = await HelpSupport.find(filter)
       .populate({
         path: "messages.senderInfo",
         select: "firstname lastname email role",
@@ -190,7 +253,7 @@ const getUserHelpRequests = async (req, res) => {
       .limit(parseInt(limit));
 
     // Get total count for pagination
-    const totalTickets = await HelpSupport.countDocuments({ userId });
+    const totalTickets = await HelpSupport.countDocuments(filter);
     const totalPages = Math.ceil(totalTickets / parseInt(limit));
 
     res.status(200).json({
@@ -286,6 +349,14 @@ const replyToTicket = async (req, res) => {
       });
     }
 
+    // Check if ticket is closed
+    if (ticket.status === "closed") {
+      return res.status(400).json({
+        status: "error",
+        message: "Cannot reply to a closed ticket",
+      });
+    }
+
     // Add new message to the chat
     const newMessage = {
       sender: "customer",
@@ -294,10 +365,11 @@ const replyToTicket = async (req, res) => {
       senderInfo: userId,
     };
 
-    // Update ticket with new message
+    // Update ticket with new message and set status to 'pending'
     await HelpSupport.findByIdAndUpdate(id, {
       $push: { messages: newMessage },
       $set: {
+        status: "pending",
         lastMessageAt: new Date(),
       },
     });
@@ -366,14 +438,12 @@ module.exports = {
   deleteTicket,
 };
 
-
 // const mongoose = require("mongoose");
 // const HelpSupport = require("../models/helpSupportModel");
 // const User = require("../models/userModel");
 // const { sendHelpSupportReplyNotification } = require("../utils/emailUtils");
 // const s3 = require("../utils/s3");
 // const { PutObjectCommand } = require("@aws-sdk/client-s3");
-
 
 // // Upload file to S3
 // const uploadImageToS3 = async (file) => {
@@ -438,7 +508,7 @@ module.exports = {
 //         }
 
 //         console.log(user.createdByWhichCompanyAdmin);
-        
+
 //         const ticket = await HelpSupport.create({
 //             userId: user._id,
 //             companyId: user.createdByWhichCompanyAdmin || null,

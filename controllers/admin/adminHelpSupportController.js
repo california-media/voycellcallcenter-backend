@@ -18,33 +18,47 @@ const getAllHelpSupportTickets = async (req, res) => {
       sortBy = "createdAt",
       sortOrder = "desc",
       search,
-      adminReply,
+      status,
+      startDate,
+      endDate,
     } = req.query;
 
     // Build filter query
     let filter = {};
 
+    // Status filtering - support multiple statuses
+    if (status && status !== "all") {
+      const statusArray = Array.isArray(status) ? status : status.split(",");
+      if (statusArray.length > 0) {
+        filter.status = { $in: statusArray };
+      }
+    }
+
+    // Type filtering - support multiple types
     if (inquiryType && inquiryType !== "All") {
-      filter.inquiryType = inquiryType;
+      const typeArray = Array.isArray(inquiryType)
+        ? inquiryType
+        : inquiryType.split(",");
+      if (typeArray.length > 0) {
+        filter.inquiryType = { $in: typeArray };
+      }
     }
 
-    // Handle status filtering based on adminReply parameter
-    if (adminReply === "null") {
-      // Open tickets - either no adminReply or empty messages from admin
-      filter.$or = [
-        { adminReply: { $exists: false } },
-        { adminReply: null },
-        { adminReply: "" },
-        { "messages.sender": { $ne: "admin" } },
-      ];
-    } else if (adminReply === "notnull") {
-      // Closed tickets - has adminReply or has admin messages
-      filter.$or = [
-        { adminReply: { $exists: true, $ne: null, $ne: "" } },
-        { "messages.sender": "admin" },
-      ];
+    // Date range filtering
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        // Add one day to include the end date
+        const end = new Date(endDate);
+        end.setDate(end.getDate() + 1);
+        filter.createdAt.$lt = end;
+      }
     }
 
+    // Search filtering
     if (search) {
       const searchFilter = [
         { name: { $regex: search, $options: "i" } },
@@ -54,9 +68,9 @@ const getAllHelpSupportTickets = async (req, res) => {
       ];
 
       // If there's already a filter, combine with AND
-      if (filter.$or) {
+      if (Object.keys(filter).length > 0) {
         filter = {
-          $and: [{ $or: filter.$or }, { $or: searchFilter }],
+          $and: [filter, { $or: searchFilter }],
         };
       } else {
         filter.$or = searchFilter;
@@ -196,6 +210,14 @@ const replyToHelpSupportTicket = async (req, res) => {
       });
     }
 
+    // Check if ticket is closed
+    if (ticket.status === "closed") {
+      return res.status(400).json({
+        status: "error",
+        message: "Cannot reply to a closed ticket",
+      });
+    }
+
     // Add new message to the chat
     const newMessage = {
       sender: "admin",
@@ -235,10 +257,11 @@ const replyToHelpSupportTicket = async (req, res) => {
       ticket._id
     );
 
-    // Update ticket with new message
+    // Update ticket with new message and set status to 'replied'
     await HelpSupport.findByIdAndUpdate(id, {
       $push: { messages: newMessage },
       $set: {
+        status: "replied",
         lastMessageAt: new Date(),
         lastRepliedAt: new Date(),
         repliedBy: req.user._id,
