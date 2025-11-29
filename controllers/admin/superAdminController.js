@@ -26,7 +26,7 @@ exports.getAllCompanyAdmins = async (req, res) => {
       ...searchQuery,
     })
       .select(
-        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret extensionStatus"
+        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName"
       )
       .skip(skip)
       .limit(limit)
@@ -84,7 +84,7 @@ exports.getAgentsOfCompanyAdmin = async (req, res) => {
       ...searchQuery,
     })
       .select(
-        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus"
+        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus accountStatus"
       )
       .skip(skip)
       .limit(limit)
@@ -121,7 +121,7 @@ exports.getCompanyAdminDetails = async (req, res) => {
       role: "companyAdmin",
     })
       .select(
-        "_id firstname lastname email createdAt extensionNumber sipSecret telephone phonenumbers extensionStatus"
+        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName"
       )
       .lean();
 
@@ -149,7 +149,7 @@ exports.getAgentDetails = async (req, res) => {
       role: "user",
     })
       .select(
-        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus"
+        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus accountStatus"
       )
       .lean();
 
@@ -251,7 +251,7 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
       { $set: updateData },
       { new: true }
     ).select(
-      "_id firstname lastname email role extensionNumber telephone sipSecret extensionStatus"
+      "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName"
     );
 
     res.status(200).json({

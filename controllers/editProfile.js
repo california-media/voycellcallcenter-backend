@@ -465,6 +465,7 @@ const editProfile = async (req, res) => {
       designation,
       telephone,
       phonenumbers = [],
+      companyName,
     } = req.body;
 
     console.log("📱 Incoming phonenumbers:", firstname, lastname);
@@ -490,6 +491,13 @@ const editProfile = async (req, res) => {
       // normalize: trim and remove extra spaces
       user.telephone =
         typeof telephone === "string" ? telephone.trim() : telephone;
+    }
+
+    // Update companyName for companyAdmin role
+    if (user.role === "companyAdmin" && keys.includes("companyName")) {
+      if (!user.userInfo) user.userInfo = {};
+      user.userInfo.companyName = companyName || "";
+      user.markModified("userInfo");
     }
 
     // === Email Validation ===
@@ -613,6 +621,7 @@ const editProfile = async (req, res) => {
         facebook: user.facebook,
         designation: user.designation,
         provider: user.provider,
+        userInfo: user.userInfo,
       },
     });
   } catch (error) {
