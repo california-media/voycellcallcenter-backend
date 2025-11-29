@@ -63,7 +63,6 @@ const getAllHelpSupportTickets = async (req, res) => {
       const searchFilter = [
         { name: { $regex: search, $options: "i" } },
         { subject: { $regex: search, $options: "i" } },
-        { message: { $regex: search, $options: "i" } },
         { emailaddresses: { $regex: search, $options: "i" } },
       ];
 

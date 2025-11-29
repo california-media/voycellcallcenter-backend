@@ -222,11 +222,7 @@ const getUserHelpRequests = async (req, res) => {
 
     // Search filtering
     if (search) {
-      const searchFilter = [
-        { name: { $regex: search, $options: "i" } },
-        { subject: { $regex: search, $options: "i" } },
-        { message: { $regex: search, $options: "i" } },
-      ];
+      const searchFilter = [{ subject: { $regex: search, $options: "i" } }];
 
       // Combine with existing filter
       if (Object.keys(filter).length > 1) {
