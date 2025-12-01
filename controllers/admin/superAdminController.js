@@ -1,4 +1,7 @@
 const User = require("../../models/userModel");
+const crypto = require("crypto");
+const { sendEmailChangeVerification } = require("../../utils/emailUtils");
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 exports.getAllCompanyAdmins = async (req, res) => {
   try {
@@ -176,7 +179,8 @@ exports.getAgentDetails = async (req, res) => {
 
 exports.editCompanyAdminAndAgent = async (req, res) => {
   try {
-    const { userId, extensionNumber, telephone, sipSecret, status } = req.body;
+    const { userId, extensionNumber, telephone, sipSecret, status, newEmail } =
+      req.body;
 
     console.log(
       "Received body:",
@@ -184,8 +188,10 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
       extensionNumber,
       telephone,
       sipSecret,
-      status
+      status,
+      newEmail
     );
+    console.log("new email:", newEmail);
 
     if (!userId) {
       return res.status(400).json({ error: "userId is required" });
@@ -195,6 +201,51 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
+    }
+
+    // Handle email change if newEmail is provided and different from current
+    let emailVerificationSent = false;
+    if (newEmail && newEmail.trim() !== "" && newEmail !== user.email) {
+      // Check if new email already exists for another user
+      const existingUser = await User.findOne({
+        email: newEmail,
+        _id: { $ne: userId },
+      });
+      if (existingUser) {
+        return res.status(400).json({
+          error: "This email address is already in use by another account.",
+        });
+      }
+
+      // Generate email change verification token
+      const emailChangeToken = crypto.randomBytes(32).toString("hex");
+
+      // Store pending email change data
+      user.pendingEmailChange = {
+        newEmail: newEmail,
+        token: emailChangeToken,
+        createdAt: new Date(),
+      };
+
+      // Send verification email
+      const verificationLink = `${FRONTEND_URL}/verify-email-change?token=${emailChangeToken}`;
+
+      try {
+        await sendEmailChangeVerification(
+          newEmail,
+          user.email,
+          `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email,
+          user._id.toString(),
+          verificationLink
+        );
+        emailVerificationSent = true;
+        console.log("✅ Email change verification sent to:", newEmail);
+      } catch (emailError) {
+        console.error("❌ Failed to send verification email:", emailError);
+        return res.status(500).json({
+          error: "Failed to send verification email. Please try again.",
+        });
+      }
     }
 
     // Allowed fields only
@@ -245,6 +296,11 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     if (status !== undefined)
       updateData.extensionStatus = isActivating ? true : false;
 
+    // Add pending email change to update data if it exists
+    if (user.pendingEmailChange) {
+      updateData.pendingEmailChange = user.pendingEmailChange;
+    }
+
     // Update in DB
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -257,10 +313,77 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     res.status(200).json({
       status: "success",
       message: "User updated successfully",
+      emailVerificationSent: emailVerificationSent,
       updatedUser,
     });
   } catch (error) {
     console.error("❌ Error updating user:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.verifyEmailChange = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        status: "error",
+        message: "Verification token is required",
+      });
+    }
+
+    // Find user with matching token
+    const user = await User.findOne({
+      "pendingEmailChange.token": token,
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid or expired verification token",
+      });
+    }
+
+    // Check if token is expired (optional: 24 hour expiry)
+    const tokenAge = new Date() - new Date(user.pendingEmailChange.createdAt);
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+
+    if (tokenAge > twentyFourHours) {
+      user.pendingEmailChange = undefined;
+      await user.save();
+      return res.status(400).json({
+        status: "error",
+        message:
+          "Verification token has expired. Please request a new email change.",
+      });
+    }
+
+    // Update email and clear pending change
+    const oldEmail = user.email;
+    const newEmail = user.pendingEmailChange.newEmail;
+
+    user.email = newEmail;
+    user.pendingEmailChange = undefined;
+    await user.save();
+
+    console.log(
+      `✅ Email changed successfully from ${oldEmail} to ${newEmail} for user ${user._id}`
+    );
+
+    res.status(200).json({
+      status: "success",
+      message: "Email verified and updated successfully",
+      data: {
+        userId: user._id,
+        newEmail: user.email,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error verifying email change:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Internal Server Error",
+    });
   }
 };

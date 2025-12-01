@@ -48,6 +48,11 @@ const userSchema = new Schema(
     ],
 
     emailVerificationToken: String,
+    pendingEmailChange: {
+      newEmail: String,
+      token: String,
+      createdAt: Date,
+    },
     isVerified: {
       type: Boolean,
       default: false,

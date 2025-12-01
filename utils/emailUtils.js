@@ -2,26 +2,26 @@ require("dotenv").config();
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-    service: "smtp",
-    host: process.env.MAIL_HOST,
-    port: Number(process.env.MAIL_PORT),
-    secure: true, // Gmail on port 587 uses TLS (not SSL)
-    auth: {
-        user: process.env.MAIL_USERNAME,
-        pass: process.env.MAIL_PASSWORD,
-    },
-    tls: {
-        rejectUnauthorized: false, // important for Gmail on TLS
-    },
+  service: "smtp",
+  host: process.env.MAIL_HOST,
+  port: Number(process.env.MAIL_PORT),
+  secure: true, // Gmail on port 587 uses TLS (not SSL)
+  auth: {
+    user: process.env.MAIL_USERNAME,
+    pass: process.env.MAIL_PASSWORD,
+  },
+  tls: {
+    rejectUnauthorized: false, // important for Gmail on TLS
+  },
 });
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const sendVerificationEmail = async (email, link) => {
-    const mailOptions = {
-        from: '"VoyCell Call Center" <noreply@contacts.management>',
-        to: email,
-        subject: "voyCell : Verify Your E-mail",
-        html: `<html lang="en">
+  const mailOptions = {
+    from: '"VoyCell Call Center" <noreply@contacts.management>',
+    to: email,
+    subject: "voyCell : Verify Your E-mail",
+    html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -163,9 +163,9 @@ const sendVerificationEmail = async (email, link) => {
 </body>
 
 </html>`,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+  await transporter.sendMail(mailOptions);
 };
 
 // const sendHelpSupportReply = async (
@@ -283,20 +283,21 @@ const sendVerificationEmail = async (email, link) => {
 // };
 
 const sendHelpSupportReplyNotification = async (
-    userEmail,
-    userName,
-    subject,
-    adminMessage,
-    ticketId
+  userEmail,
+  userName,
+  subject,
+  adminMessage,
+  ticketId
 ) => {
-    const ticketsPageUrl = `${process.env.FRONTEND_URL || "https://contacts.management"
-        }/my-tickets?ticketId=${ticketId}`;
+  const ticketsPageUrl = `${
+    process.env.FRONTEND_URL || "https://contacts.management"
+  }/my-tickets?ticketId=${ticketId}`;
 
-    const mailOptions = {
-        from: '"Contacts Management Support" <noreply@contacts.management>',
-        to: userEmail,
-        subject: `New Reply: ${subject || "Your Support Request"}`,
-        html: `<html lang="en">
+  const mailOptions = {
+    from: '"Contacts Management Support" <noreply@contacts.management>',
+    to: userEmail,
+    subject: `New Reply: ${subject || "Your Support Request"}`,
+    html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -407,13 +408,184 @@ const sendHelpSupportReplyNotification = async (
 </body>
 
 </html>`,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+  await transporter.sendMail(mailOptions);
+};
+
+const sendEmailChangeVerification = async (
+  newEmail,
+  oldEmail,
+  userName,
+  userId,
+  verificationLink
+) => {
+  const mailOptions = {
+    from: '"VoyCell Call Center" <noreply@contacts.management>',
+    to: newEmail,
+    subject: "VoyCell: Verify Your New Email Address",
+    html: `<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Verify Your New Email Address</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #ffffff;
+            color: #2d313a;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .info-box {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .button {
+            display: inline-block;
+            background-color: #007bff;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 15px 25px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+
+        .social-icons img {
+            width: 30px;
+            margin: 0 5px;
+            vertical-align: middle;
+        }
+
+        .app-buttons img {
+            width: 120px;
+            margin: 10px 5px;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 30px;
+        }
+
+        .footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <center> <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
+                    alt="VoyCell Call Center Logo" style="width:200px; display:block;"></center>
+        <p><strong>Hello ${userName || "User"},</strong></p>
+        
+        <p>Your VoyCell Call Center account email address has been updated by the system administrator.</p>
+
+        <div class="info-box">
+            <h4 style="margin-top: 0;">Email Change Details:</h4>
+            <p style="margin: 5px 0;"><strong>Account:</strong> ${
+              userName || userId
+            }</p>
+            <p style="margin: 5px 0;"><strong>Previous Email:</strong> ${oldEmail}</p>
+            <p style="margin: 5px 0;"><strong>New Email:</strong> ${newEmail}</p>
+        </div>
+
+        <p>To complete this email change and ensure the security of your account, please verify your new email address by clicking the button below:</p>
+
+        <center><a href="${verificationLink}" class="button">VERIFY NEW EMAIL ADDRESS</a></center>
+
+        <p style="margin-top: 20px;">Or copy and paste this link into your browser:</p>
+        <p><span style="font-size:18px;">👉</span> <a href="${verificationLink}" style="color:#007bff;text-decoration:none;word-break:break-all;">${verificationLink}</a></p>
+
+        <p><strong>Important:</strong> If you did not request this change or believe this is an error, please contact your administrator immediately.</p>
+
+        <p>Warm regards,<br>VoyCell Call Center Team</p>
+
+        <div style="width:100%; overflow:hidden;">
+
+            <!-- Left Column (Image) -->
+            <div style="float:left; width:110px; margin-right:10px;">
+                <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
+                    alt="VoyCell Call Center logo" style="width:100px; display:block;">
+            </div>
+
+            <!-- Right Column (Text) -->
+            <br>
+            <div style="overflow:hidden;">
+
+                <span style="color:rgb(45,49,58); font-size:14px; letter-spacing:0.25px;">Be Extraordinary,</span><br>
+
+                <span>
+                    <b>VoyCell Call Center Team</b><br>
+                    <a href="${FRONTEND_URL}" target="_blank" style="color:#007BFF; text-decoration:none;">
+                       ${FRONTEND_URL}
+                    </a>
+                </span>
+
+            </div>
+
+        </div>
+
+        <div class="footer">
+            <p>Follow Contacts Management social media on:</p>
+            <div class="social-icons">
+                <a href="#"><img
+                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/facebookIcon.png"
+                        alt="Facebook"></a>
+                <a href="#"><img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/instagramIcon.png"
+                        alt="Instagram"></a>
+                <a href="#"><img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/linkedinIcon.png"
+                        alt="linkedin"></a>
+                <a href="#"><img
+                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/twitterIcon.png"
+                        alt="Twitter"></a>
+                <a href="#"><img
+                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/youtubeIcon.png"
+                        alt="YouTube"></a>
+            </div>
+            <br><br>
+            <div class="app-buttons">
+                <p>Download the Contacts Managementt App:</p>
+                <a href="#"><img
+                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/appStoreIcon.png"
+                        alt="App Store"></a>
+                <a href="#"><img
+                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/playStoreIcon.png"
+                        alt="Google Play"></a>
+            </div>
+
+            <p>Need help? Visit <a href="#">support@VoyCell</a> </p>
+            <p>Sent with ❤️ from VoyCell</p>
+            <p><a href="#" target="_blank">Privacy Policy</a></p>
+        </div>
+    </div>
+</body>
+
+</html>`,
+  };
+
+  await transporter.sendMail(mailOptions);
 };
 
 module.exports = {
-    sendVerificationEmail,
-    //   sendHelpSupportReply,
-    sendHelpSupportReplyNotification,
+  sendVerificationEmail,
+  //   sendHelpSupportReply,
+  sendHelpSupportReplyNotification,
+  sendEmailChangeVerification,
 };
