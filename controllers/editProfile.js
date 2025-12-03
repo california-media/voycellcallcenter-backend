@@ -432,12 +432,37 @@ const deleteImageFromS3 = async (imageUrl) => {
   try {
     if (!imageUrl) return;
 
-    const urlParts = imageUrl.split(".amazonaws.com/");
-    if (urlParts.length < 2) return;
+    const bucket = process.env.AWS_BUCKET_NAME;
+    let fileKey;
 
-    const fileKey = urlParts[1];
+    // Try robust URL parsing first (handles virtual-hosted and path-style URLs)
+    try {
+      const parsed = new URL(imageUrl);
+      // pathname might be "/profileImages/..." or "/<bucket>/profileImages/..."
+      fileKey = parsed.pathname.startsWith("/") ? parsed.pathname.slice(1) : parsed.pathname;
+
+      // If the pathname includes the bucket name at the front, remove it.
+      if (fileKey.startsWith(`${bucket}/`)) {
+        fileKey = fileKey.slice(bucket.length + 1);
+      }
+    } catch (err) {
+      // Fallback for other URL formats (e.g. older code that used ".amazonaws.com/")
+      const urlParts = imageUrl.split(".amazonaws.com/");
+      if (urlParts.length >= 2) {
+        fileKey = urlParts[1];
+      } else {
+        console.warn("deleteImageFromS3: Unrecognized S3 URL format, skipping delete:", imageUrl);
+        return;
+      }
+    }
+
+    if (!fileKey) {
+      console.warn("deleteImageFromS3: could not determine file key for URL:", imageUrl);
+      return;
+    }
+
     const params = {
-      Bucket: process.env.AWS_BUCKET_NAME,
+      Bucket: bucket,
       Key: fileKey,
     };
 
@@ -448,6 +473,7 @@ const deleteImageFromS3 = async (imageUrl) => {
     console.error("Failed to delete from S3:", err);
   }
 };
+
 
 // === Edit Profile ===
 const editProfile = async (req, res) => {
@@ -584,22 +610,76 @@ const editProfile = async (req, res) => {
       }
     }
 
+    // // === Profile Image Handling ===
+    // if (keys.includes("profileImage")) {
+    //   if (!req.body.profileImage || req.body.profileImage.trim() === "") {
+    //     await deleteImageFromS3(user.profileImageURL);
+    //     user.profileImageURL = "";
+    //   }
+    // }
+
+    // if (req.file) {
+    //   if (user.profileImageURL) {
+    //     await deleteImageFromS3(user.profileImageURL);
+    //   }
+
+    //   const profileImage = await uploadImageToS3(req.file);
+    //   user.profileImageURL = profileImage;
+    // }
+
     // === Profile Image Handling ===
-    if (keys.includes("profileImage")) {
-      if (!req.body.profileImage || req.body.profileImage.trim() === "") {
+    // if (keys.includes("profileImage")) {
+    //   // When the client sends profileImage as an empty string (or "null"/"undefined"),
+    //   // treat that as "remove the image".
+    //   const rawProfileImageField = req.body.profileImage;
+    //   const shouldRemove =
+    //     rawProfileImageField === "" ||
+    //     rawProfileImageField === null ||
+    //     rawProfileImageField === "null" ||
+    //     rawProfileImageField === "undefined";
+
+    //   if (shouldRemove) {
+    //     if (user.profileImageURL) {
+    //       await deleteImageFromS3(user.profileImageURL);
+    //       user.profileImageURL = "";
+    //     }
+    //   }
+    // }
+
+    // === Profile Image Removal (Works for Postman + Frontend) ===
+    const rawProfileImageField = req.body.profileImage;
+
+    // ✅ Remove if explicitly sent as empty
+    const shouldRemove =
+      rawProfileImageField === "" ||
+      rawProfileImageField === null ||
+      rawProfileImageField === "null" ||
+      rawProfileImageField === "undefined";
+
+    // ✅ ALSO remove if frontend wants to remove but didn't send file
+    if (shouldRemove && !req.file) {
+      if (user.profileImageURL) {
+        console.log("🗑 Removing image from S3:", user.profileImageURL);
         await deleteImageFromS3(user.profileImageURL);
         user.profileImageURL = "";
       }
     }
 
+
     if (req.file) {
       if (user.profileImageURL) {
-        await deleteImageFromS3(user.profileImageURL);
+        try {
+          await deleteImageFromS3(user.profileImageURL);
+        } catch (err) {
+          console.warn("Failed to delete previous profile image before upload:", err);
+        }
       }
 
       const profileImage = await uploadImageToS3(req.file);
       user.profileImageURL = profileImage;
     }
+
+
 
     await user.save();
 
@@ -708,11 +788,10 @@ const updateLeadStatuses = async (req, res) => {
           status: "error",
           message: `Cannot delete status(es) "${statusInUse.join(
             '", "'
-          )}" as they are currently used by ${
-            category === "lead" ? "leads" : "contacts"
-          }: ${recordNames.join(
-            ", "
-          )}${moreCount}. Please change their status first.`,
+          )}" as they are currently used by ${category === "lead" ? "leads" : "contacts"
+            }: ${recordNames.join(
+              ", "
+            )}${moreCount}. Please change their status first.`,
         });
       }
     }
@@ -734,9 +813,8 @@ const updateLeadStatuses = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: `${
-        category === "lead" ? "Lead" : "Contact"
-      } statuses updated successfully`,
+      message: `${category === "lead" ? "Lead" : "Contact"
+        } statuses updated successfully`,
       data: {
         contactStatuses: user.contactStatuses,
         leadStatuses: user.leadStatuses,
@@ -829,11 +907,10 @@ const updateContactStatuses = async (req, res) => {
           status: "error",
           message: `Cannot delete status(es) "${statusInUse.join(
             '", "'
-          )}" as they are currently used by ${
-            category === "lead" ? "leads" : "contacts"
-          }: ${recordNames.join(
-            ", "
-          )}${moreCount}. Please change their status first.`,
+          )}" as they are currently used by ${category === "lead" ? "leads" : "contacts"
+            }: ${recordNames.join(
+              ", "
+            )}${moreCount}. Please change their status first.`,
         });
       }
     }
@@ -855,9 +932,8 @@ const updateContactStatuses = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: `${
-        category === "lead" ? "Lead" : "Contact"
-      } statuses updated successfully`,
+      message: `${category === "lead" ? "Lead" : "Contact"
+        } statuses updated successfully`,
       data: {
         contactStatuses: user.contactStatuses,
         leadStatuses: user.leadStatuses,

@@ -1,27 +1,35 @@
 require("dotenv").config();
 const nodemailer = require("nodemailer");
 
+
+// MAIL_HOST=smtp.titan.email
+// MAIL_PORT=465
+// MAIL_USERNAME=noreply@contacts.management
+// MAIL_PASSWORD=bZ}JTus_PQ{qWvA
+
+
 const transporter = nodemailer.createTransport({
-  service: "smtp",
-  host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT),
-  secure: true, // Gmail on port 587 uses TLS (not SSL)
-  auth: {
-    user: process.env.MAIL_USERNAME,
-    pass: process.env.MAIL_PASSWORD,
-  },
-  tls: {
-    rejectUnauthorized: false, // important for Gmail on TLS
-  },
+    service: "gmail",
+    // service: "smtp",
+    host: process.env.MAIL_HOST,
+    port: Number(process.env.MAIL_PORT),
+    secure: true, // Gmail on port 587 uses TLS (not SSL)
+    auth: {
+        user: process.env.MAIL_USERNAME,
+        pass: process.env.MAIL_PASSWORD,
+    },
+    tls: {
+        rejectUnauthorized: false, // important for Gmail on TLS
+    },
 });
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const sendVerificationEmail = async (email, link) => {
-  const mailOptions = {
-    from: '"VoyCell Call Center" <noreply@contacts.management>',
-    to: email,
-    subject: "voyCell : Verify Your E-mail",
-    html: `<html lang="en">
+    const mailOptions = {
+        from: '"VoyCell Call Center" <noreply@contacts.management>',
+        to: email,
+        subject: "voyCell : Verify Your E-mail",
+        html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -163,9 +171,9 @@ const sendVerificationEmail = async (email, link) => {
 </body>
 
 </html>`,
-  };
+    };
 
-  await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
 };
 
 // const sendHelpSupportReply = async (
@@ -283,21 +291,20 @@ const sendVerificationEmail = async (email, link) => {
 // };
 
 const sendHelpSupportReplyNotification = async (
-  userEmail,
-  userName,
-  subject,
-  adminMessage,
-  ticketId
+    userEmail,
+    userName,
+    subject,
+    adminMessage,
+    ticketId
 ) => {
-  const ticketsPageUrl = `${
-    process.env.FRONTEND_URL || "https://contacts.management"
-  }/my-tickets?ticketId=${ticketId}`;
+    const ticketsPageUrl = `${process.env.FRONTEND_URL || "https://contacts.management"
+        }/my-tickets?ticketId=${ticketId}`;
 
-  const mailOptions = {
-    from: '"Contacts Management Support" <noreply@contacts.management>',
-    to: userEmail,
-    subject: `New Reply: ${subject || "Your Support Request"}`,
-    html: `<html lang="en">
+    const mailOptions = {
+        from: '"Contacts Management Support" <noreply@contacts.management>',
+        to: userEmail,
+        subject: `New Reply: ${subject || "Your Support Request"}`,
+        html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -408,23 +415,23 @@ const sendHelpSupportReplyNotification = async (
 </body>
 
 </html>`,
-  };
+    };
 
-  await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
 };
 
 const sendEmailChangeVerification = async (
-  newEmail,
-  oldEmail,
-  userName,
-  userId,
-  verificationLink
+    newEmail,
+    oldEmail,
+    userName,
+    userId,
+    verificationLink
 ) => {
-  const mailOptions = {
-    from: '"VoyCell Call Center" <noreply@contacts.management>',
-    to: newEmail,
-    subject: "VoyCell: Verify Your New Email Address",
-    html: `<html lang="en">
+    const mailOptions = {
+        from: '"VoyCell Call Center" <noreply@contacts.management>',
+        to: newEmail,
+        subject: "VoyCell: Verify Your New Email Address",
+        html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -499,8 +506,7 @@ const sendEmailChangeVerification = async (
 
         <div class="info-box">
             <h4 style="margin-top: 0;">Email Change Details:</h4>
-            <p style="margin: 5px 0;"><strong>Account:</strong> ${
-              userName || userId
+            <p style="margin: 5px 0;"><strong>Account:</strong> ${userName || userId
             }</p>
             <p style="margin: 5px 0;"><strong>Previous Email:</strong> ${oldEmail}</p>
             <p style="margin: 5px 0;"><strong>New Email:</strong> ${newEmail}</p>
@@ -578,14 +584,14 @@ const sendEmailChangeVerification = async (
 </body>
 
 </html>`,
-  };
+    };
 
-  await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
 };
 
 module.exports = {
-  sendVerificationEmail,
-  //   sendHelpSupportReply,
-  sendHelpSupportReplyNotification,
-  sendEmailChangeVerification,
+    sendVerificationEmail,
+    //   sendHelpSupportReply,
+    sendHelpSupportReplyNotification,
+    sendEmailChangeVerification,
 };
