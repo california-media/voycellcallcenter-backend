@@ -31,11 +31,10 @@ function normalizeNumber(number) {
 
   return number
     .toString()
-    .replace(/\s+/g, '')   // remove spaces
-    .replace(/^\+/, '')    // remove leading +
-    .replace(/\D/g, '');   // remove all non-digits
+    .replace(/\s+/g, "") // remove spaces
+    .replace(/^\+/, "") // remove leading +
+    .replace(/\D/g, ""); // remove all non-digits
 }
-
 
 // exports.fetchAndStoreCallHistory = async (req, res) => {
 //   try {
@@ -164,7 +163,6 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     console.log(userId);
     console.log(token);
 
-
     const user = await User.findById(userId);
     if (!user || !user.extensionNumber) {
       return res.status(400).json({
@@ -233,9 +231,7 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         .tz(call.time, "MM/DD/YYYY HH:mm:ss", TZ)
         .format("MM/DD/YYYY HH:mm:ss");
 
-
       console.log(dubaiFormatted);
-
 
       await CallHistory.create({
         userId,
@@ -390,7 +386,6 @@ exports.getCompanyCallHistory = async (req, res) => {
       query.userId = loginUserId;
     }
 
-
     // 5️⃣ Search filter
     if (search.trim() !== "") {
       query.$or = [
@@ -447,33 +442,31 @@ exports.getCompanyCallHistory = async (req, res) => {
             $gte: [
               {
                 $dateFromString: {
-                  dateString: { $toString: "$start_time" },  // ✅ forces to string
+                  dateString: { $toString: "$start_time" }, // ✅ forces to string
                   format: "%m/%d/%Y %H:%M:%S",
-                  onError: new Date("1970-01-01"),             // ✅ prevents crash
-                  onNull: new Date("1970-01-01")               // ✅ prevents crash
-                }
+                  onError: new Date("1970-01-01"), // ✅ prevents crash
+                  onNull: new Date("1970-01-01"), // ✅ prevents crash
+                },
               },
-              new Date(startDate)
-            ]
+              new Date(startDate),
+            ],
           },
           {
             $lte: [
               {
                 $dateFromString: {
-                  dateString: { $toString: "$start_time" },  // ✅ forces to string
+                  dateString: { $toString: "$start_time" }, // ✅ forces to string
                   format: "%m/%d/%Y %H:%M:%S",
-                  onError: new Date("2999-01-01"),             // ✅ prevents crash
-                  onNull: new Date("2999-01-01")               // ✅ prevents crash
-                }
+                  onError: new Date("2999-01-01"), // ✅ prevents crash
+                  onNull: new Date("2999-01-01"), // ✅ prevents crash
+                },
               },
-              new Date(endDate)
-            ]
-          }
-        ]
+              new Date(endDate),
+            ],
+          },
+        ],
       };
     }
-
-
 
     // 9️⃣ Pagination
     const skip = (page - 1) * page_size;
@@ -486,7 +479,6 @@ exports.getCompanyCallHistory = async (req, res) => {
       .limit(page_size);
 
     console.log();
-
 
     // 🔟 Summary filter
     // const summaryFilter = { extensionNumber: finalExtension };
@@ -501,7 +493,6 @@ exports.getCompanyCallHistory = async (req, res) => {
     summaryFilter.extensionNumber = finalExtension;
     summaryFilter.userId = loginUserId;
     // }
-
 
     // if (query.direction) summaryFilter.direction = query.direction;
     // if (query.status) summaryFilter.status = query.status;
@@ -594,7 +585,7 @@ exports.getAgentCallHistory = async (req, res) => {
 
     let query = {
       extensionNumber: finalExtension,
-      userId: loginUserId
+      userId: loginUserId,
     };
 
     // 5️⃣ Search filter
@@ -653,29 +644,29 @@ exports.getAgentCallHistory = async (req, res) => {
             $gte: [
               {
                 $dateFromString: {
-                  dateString: { $toString: "$start_time" },  // ✅ forces to string
+                  dateString: { $toString: "$start_time" }, // ✅ forces to string
                   format: "%m/%d/%Y %H:%M:%S",
-                  onError: new Date("1970-01-01"),             // ✅ prevents crash
-                  onNull: new Date("1970-01-01")               // ✅ prevents crash
-                }
+                  onError: new Date("1970-01-01"), // ✅ prevents crash
+                  onNull: new Date("1970-01-01"), // ✅ prevents crash
+                },
               },
-              new Date(startDate)
-            ]
+              new Date(startDate),
+            ],
           },
           {
             $lte: [
               {
                 $dateFromString: {
-                  dateString: { $toString: "$start_time" },  // ✅ forces to string
+                  dateString: { $toString: "$start_time" }, // ✅ forces to string
                   format: "%m/%d/%Y %H:%M:%S",
-                  onError: new Date("2999-01-01"),             // ✅ prevents crash
-                  onNull: new Date("2999-01-01")               // ✅ prevents crash
-                }
+                  onError: new Date("2999-01-01"), // ✅ prevents crash
+                  onNull: new Date("2999-01-01"), // ✅ prevents crash
+                },
               },
-              new Date(endDate)
-            ]
-          }
-        ]
+              new Date(endDate),
+            ],
+          },
+        ],
       };
     }
 
@@ -692,7 +683,7 @@ exports.getAgentCallHistory = async (req, res) => {
     // 🔟 Summary filter
     const summaryFilter = {
       extensionNumber: finalExtension,
-      userId: loginUserId
+      userId: loginUserId,
     };
 
     // if (query.direction) summaryFilter.direction = query.direction;
@@ -1047,7 +1038,6 @@ exports.getAgentCallHistory = async (req, res) => {
 //       }
 //     };
 
-
 //     const allSummaryCalls = await CallHistory.find(summaryQuery).select("direction status");
 
 //     let inboundCalls = 0;
@@ -1143,17 +1133,17 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
     // ✅ 4️⃣ BUILD ALL POSSIBLE PHONE VARIATIONS
     const flatNumbers = new Set();
 
-    phonenumbers.forEach(p => {
-      const raw = normalizePhone(p.number);        // 558894938
-      const cc = normalizePhone(p.countryCode);   // 971
+    phonenumbers.forEach((p) => {
+      const raw = normalizePhone(p.number); // 558894938
+      const cc = normalizePhone(p.countryCode); // 971
 
       if (!raw) return;
 
-      flatNumbers.add(raw);              // 558894938
-      flatNumbers.add("0" + raw);        // 0558894938
+      flatNumbers.add(raw); // 558894938
+      flatNumbers.add("0" + raw); // 0558894938
 
       if (cc) {
-        flatNumbers.add(cc + raw);       // 971558894938
+        flatNumbers.add(cc + raw); // 971558894938
         flatNumbers.add(cc + "0" + raw); // 9710558894938
       }
     });
@@ -1162,8 +1152,8 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
 
     // ✅ 5️⃣ BASE PHONE FILTER QUERY (MAIN LOGIC)
     let query = {
-      userId: loginUserId,                // ✅ FILTER BY LOGGED-IN USER
-      extensionNumber: adminExtension,  // ✅ FILTER BY EXTENSION
+      userId: loginUserId, // ✅ FILTER BY LOGGED-IN USER
+      extensionNumber: adminExtension, // ✅ FILTER BY EXTENSION
       $expr: {
         $or: [
           {
@@ -1222,8 +1212,8 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       query.$and.push({
         $or: [
           { call_from: { $regex: search, $options: "i" } },
-          { call_to: { $regex: search, $options: "i" } }
-        ]
+          { call_to: { $regex: search, $options: "i" } },
+        ],
       });
     }
 
@@ -1237,7 +1227,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
         invalid: "FAILED",
       };
 
-      const mapped = status.map(s => statusMap[s]).filter(Boolean);
+      const mapped = status.map((s) => statusMap[s]).filter(Boolean);
       if (mapped.length > 0) {
         query.status = { $in: mapped };
       }
@@ -1251,7 +1241,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
         internal: "Internal",
       };
 
-      const mapped = callType.map(t => typeMap[t]).filter(Boolean);
+      const mapped = callType.map((t) => typeMap[t]).filter(Boolean);
       if (mapped.length > 0) {
         query.direction = { $in: mapped };
       }
@@ -1270,11 +1260,11 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
                     dateString: "$start_time",
                     format: "%m/%d/%Y %H:%M:%S",
                     onError: new Date("1970-01-01"),
-                    onNull: new Date("1970-01-01")
-                  }
+                    onNull: new Date("1970-01-01"),
+                  },
                 },
-                new Date(startDate)
-              ]
+                new Date(startDate),
+              ],
             },
             {
               $lte: [
@@ -1283,14 +1273,14 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
                     dateString: "$start_time",
                     format: "%m/%d/%Y %H:%M:%S",
                     onError: new Date("2999-01-01"),
-                    onNull: new Date("2999-01-01")
-                  }
+                    onNull: new Date("2999-01-01"),
+                  },
                 },
-                new Date(endDate)
-              ]
-            }
-          ]
-        }
+                new Date(endDate),
+              ],
+            },
+          ],
+        },
       });
     }
 
@@ -1341,18 +1331,18 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
                       $replaceAll: {
                         input: "$call_from",
                         find: " ",
-                        replacement: ""
-                      }
+                        replacement: "",
+                      },
                     },
                     find: "+",
-                    replacement: ""
-                  }
+                    replacement: "",
+                  },
                 },
-                normalizedNumbers
-              ]
+                normalizedNumbers,
+              ],
             },
-            { $eq: ["$call_to", adminExtension] }
-          ]
+            { $eq: ["$call_to", adminExtension] },
+          ],
         },
         {
           $and: [
@@ -1365,30 +1355,32 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
                       $replaceAll: {
                         input: "$call_to",
                         find: " ",
-                        replacement: ""
-                      }
+                        replacement: "",
+                      },
                     },
                     find: "+",
-                    replacement: ""
-                  }
+                    replacement: "",
+                  },
                 },
-                normalizedNumbers
-              ]
-            }
-          ]
-        }
-      ]
+                normalizedNumbers,
+              ],
+            },
+          ],
+        },
+      ],
     };
 
     // phoneOnlyQuery only filters by phone variations (ignores search/status/type/date)
     const phoneOnlyQuery = {
-      userId: loginUserId,                // ✅ FILTER BY LOGGED-IN USER
-      extensionNumber: adminExtension,  // ✅ FILTER BY EXTENSION
-      $expr: phoneOnlyExpr
+      userId: loginUserId, // ✅ FILTER BY LOGGED-IN USER
+      extensionNumber: adminExtension, // ✅ FILTER BY EXTENSION
+      $expr: phoneOnlyExpr,
     };
 
     // Get all matching calls for the phone(s) — used only for the summary counts.
-    const allSummaryCalls = await CallHistory.find(phoneOnlyQuery).select("direction status");
+    const allSummaryCalls = await CallHistory.find(phoneOnlyQuery).select(
+      "direction status"
+    );
 
     let inboundCalls = 0;
     let outboundCalls = 0;
@@ -1406,9 +1398,8 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       inboundCalls,
       outboundCalls,
       missedCalls,
-      totalCalls
+      totalCalls,
     };
-
 
     // ✅ ✅ ✅ FINAL RESPONSE
     return res.json({
@@ -1557,11 +1548,11 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
                   dateString: { $toString: "$start_time" },
                   format: "%m/%d/%Y %H:%M:%S",
                   onError: new Date("1970-01-01"),
-                  onNull: new Date("1970-01-01")
-                }
+                  onNull: new Date("1970-01-01"),
+                },
               },
-              startDate
-            ]
+              startDate,
+            ],
           },
           {
             $lt: [
@@ -1570,16 +1561,15 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
                   dateString: { $toString: "$start_time" },
                   format: "%m/%d/%Y %H:%M:%S",
                   onError: new Date("2999-01-01"),
-                  onNull: new Date("2999-01-01")
-                }
+                  onNull: new Date("2999-01-01"),
+                },
               },
-              endDate
-            ]
-          }
-        ]
-      }
+              endDate,
+            ],
+          },
+        ],
+      },
     }).select("start_time direction");
-
 
     // ------------------------------
     // FORMAT DATE: 24 Nov 2025
@@ -1600,8 +1590,9 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         "Dec",
       ];
 
-      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${months[dateObj.getUTCMonth()]
-        } ${dateObj.getUTCFullYear()}`;
+      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${
+        months[dateObj.getUTCMonth()]
+      } ${dateObj.getUTCFullYear()}`;
     };
 
     // ------------------------------
@@ -1628,16 +1619,12 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     // ------------------------------
     // COUNT CALLS DAY-WISE
     // ------------------------------
-    calls.forEach(call => {
+    calls.forEach((call) => {
       // const d = new Date(call.start_time);
 
       const d = new Date(
-        call.start_time.replace(
-          /(\d{2})\/(\d{2})\/(\d{4})/,
-          "$3-$1-$2"
-        )
+        call.start_time.replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$1-$2")
       );
-
 
       const diffDays = Math.floor((endDate - d) / (1000 * 60 * 60 * 24));
 
@@ -1731,35 +1718,35 @@ exports.getMonthlyCallGraph = async (req, res) => {
             $gte: [
               {
                 $dateFromString: {
-                  dateString: { $trim: { input: { $toString: "$start_time" } } },
+                  dateString: {
+                    $trim: { input: { $toString: "$start_time" } },
+                  },
                   format: "%m/%d/%Y %H:%M:%S",
                   onError: null,
-                  onNull: null
-                }
+                  onNull: null,
+                },
               },
-              startDate
-            ]
+              startDate,
+            ],
           },
           {
             $lte: [
               {
                 $dateFromString: {
-                  dateString: { $trim: { input: { $toString: "$start_time" } } },
+                  dateString: {
+                    $trim: { input: { $toString: "$start_time" } },
+                  },
                   format: "%m/%d/%Y %H:%M:%S",
                   onError: null,
-                  onNull: null
-                }
+                  onNull: null,
+                },
               },
-              endDate
-            ]
-          }
-        ]
-      }
+              endDate,
+            ],
+          },
+        ],
+      },
     }).select("start_time direction status userId");
-
-
-    console.log(calls);
-
 
     // 7️⃣ Summary counts
     const inboundTotal = calls.filter((c) => c.direction === "Inbound").length;
@@ -1839,9 +1826,7 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
 
     // ✅ CHECK IF CONTACT EXISTS BUT LEAD DOES NOT
     const shouldConvertToLead =
-      contact &&
-      !lead &&
-      (status === "interested" || status === "callBack");
+      contact && !lead && (status === "interested" || status === "callBack");
 
     if (shouldConvertToLead) {
       // ✅ CONVERT CONTACT → LEAD (FULL DATA COPY)
@@ -1851,9 +1836,9 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       // delete contactObj._id;
 
       const newLead = await Lead.create({
-        ...contactObj,              // ✅ COPY ALL FIELDS
-        isLead: true,               // ✅ MARK AS LEAD
-        status: status,             // ✅ SET NEW STATUS
+        ...contactObj, // ✅ COPY ALL FIELDS
+        isLead: true, // ✅ MARK AS LEAD
+        status: status, // ✅ SET NEW STATUS
         createdBy: userId,
 
         activities: [
@@ -1872,7 +1857,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
 
       // ✅ OPTIONAL: REMOVE OLD CONTACT IF YOU WANT
       await Contact.findByIdAndDelete(contact._id);
-
     } else {
       // ✅ NORMAL FLOW (NO CONVERSION)
       targetDoc = contact || lead;
