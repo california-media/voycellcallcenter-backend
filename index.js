@@ -116,7 +116,7 @@ app.use("/task", checkForAuthentication(), addeditTaskRoutes);
 app.use("/tag", checkForAuthentication(), addedittagRoutes);
 app.use("/meeting", checkForAuthentication(), meetingRoutes);
 app.use("/getProfileEvent", checkForAuthentication(), getProfileEventRoutes);
-app.use("/faq", faqRoutes);
+app.use("/faq", checkForAuthentication(), faqRoutes);
 app.use(
   "/help-support",
   checkForAuthentication(),
