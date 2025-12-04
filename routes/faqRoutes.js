@@ -8,11 +8,11 @@ const checkAccountStatus = require("../middlewares/checkAccountStatus")
 // ✅ Middleware for role-based access (example)
 
 // all → can get FAQ
-router.get("/get", checkAccountStatus,checkForAuthentication(), getFAQs);
+router.get("/get", checkForAuthentication(), checkAccountStatus, getFAQs);
 
 // company_admin → can add FAQ
-router.post("/addEdit",checkAccountStatus, checkForAuthentication(), checkRole(["companyAdmin"]), addOrEditFAQ);
+router.post("/addEdit", checkForAuthentication(), checkAccountStatus, checkRole(["companyAdmin"]), addOrEditFAQ);
 
-router.delete("/delete",checkAccountStatus, checkForAuthentication(), checkRole(["companyAdmin"]), deleteFAQ);
+router.delete("/delete", checkForAuthentication(), checkAccountStatus, checkRole(["companyAdmin"]), deleteFAQ);
 
 module.exports = router;
