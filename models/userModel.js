@@ -64,6 +64,18 @@ const userSchema = new Schema(
       default: "email", // or leave unset until signup
     },
 
+    agentStatus: {
+      type: String,
+      enum: ["offline", "online", "busy"],
+      default: "offline"
+    },
+
+    currentCallId: {
+      type: String,
+      default: null
+    },
+
+
     role: {
       type: String,
       enum: ["user", "companyAdmin", "superadmin"], /// user here is calling agent, not modifying to prevent breaking stuff
@@ -414,7 +426,7 @@ userSchema.static(
     const query = email
       ? { email }
       : // : { phonenumbers: { $in: [phonenumber] } }; // assuming you store phone numbers as array
-        { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
+      { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
 
     const user = await this.findOne(query);
     if (!user) throw new Error("User not found");
