@@ -27,9 +27,9 @@ exports.serveCallmeJS = async (req, res) => {
     return res.status(404).send("// Invalid or expired widget token");
   }
 
-  // const decodedExt = tokenDoc.extensionNumber; // this replaces your base64 decoded ext
+  const decodedExt = tokenDoc.extensionNumber; // this replaces your base64 decoded ext
 
-  const decodedExt = "1010"; // temp hardcode for testing
+  // const decodedExt = "1010"; // temp hardcode for testing
 
   // ② ADD: Look up user by extensionNumber in DB
   // let user = null;

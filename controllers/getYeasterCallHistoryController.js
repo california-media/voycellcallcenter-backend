@@ -1792,6 +1792,31 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     console.log("status sent", status);
     const userId = req.user._id;
 
+    // -----------------------------------------------
+    // ⭐ NEW: Determine company admin and agent group
+    // -----------------------------------------------
+    const loggedInUser = await User.findById(userId);
+
+    // Find company admin ID
+    let companyAdminId =
+      loggedInUser.role === "companyAdmin"
+        ? loggedInUser._id
+        : loggedInUser.createdByWhichCompanyAdmin;
+
+    // Find all agents under this admin
+    let allAgents = await User.find({
+      createdByWhichCompanyAdmin: companyAdminId,
+    }).select("_id");
+
+    // Final allowed user list for search
+    let allowedUserIds = [
+      companyAdminId,               // the admin
+      ...allAgents.map((a) => a._id), // all agents of this admin
+      userId,                        // logged-in user
+    ];
+
+
+
     if (!phoneNumbers || !phoneNumbers.countryCode || !phoneNumbers.number) {
       return res.status(400).json({ message: "Phone number is required" });
     }
@@ -1805,17 +1830,31 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     let rawNumber = String(phoneNumbers.number || "")
       .trim()
       .replace(/\D/g, "");
+    // let contact = await Contact.findOne({
+    //   createdBy: userId,
+    //   "phoneNumbers.countryCode": rawCountry,
+    //   "phoneNumbers.number": rawNumber,
+    // });
+
     let contact = await Contact.findOne({
-      createdBy: userId,
+      createdBy: { $in: allowedUserIds },
       "phoneNumbers.countryCode": rawCountry,
       "phoneNumbers.number": rawNumber,
     });
 
+
+    // let lead = await Lead.findOne({
+    //   createdBy: userId,
+    //   "phoneNumbers.countryCode": rawCountry,
+    //   "phoneNumbers.number": rawNumber,
+    // });
+
     let lead = await Lead.findOne({
-      createdBy: userId,
+      createdBy: { $in: allowedUserIds },
       "phoneNumbers.countryCode": rawCountry,
       "phoneNumbers.number": rawNumber,
     });
+
 
     // let targetDoc = contact || lead;
     // let targetType = contact ? "contact" : lead ? "lead" : "newLead";
