@@ -1590,9 +1590,8 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         "Dec",
       ];
 
-      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${
-        months[dateObj.getUTCMonth()]
-      } ${dateObj.getUTCFullYear()}`;
+      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${months[dateObj.getUTCMonth()]
+        } ${dateObj.getUTCFullYear()}`;
     };
 
     // ------------------------------
@@ -1789,7 +1788,7 @@ exports.getMonthlyCallGraph = async (req, res) => {
 
 exports.addFormDataAfterCallEnd = async (req, res) => {
   try {
-    const { phoneNumbers, status, note, meeting } = req.body;
+    const { phoneNumbers, firstname, lastname, status, note, meeting } = req.body;
     console.log("status sent", status);
     const userId = req.user._id;
 
@@ -1838,6 +1837,8 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       const newLead = await Lead.create({
         ...contactObj, // ✅ COPY ALL FIELDS
         isLead: true, // ✅ MARK AS LEAD
+        firstname: firstname,
+        lastname: lastname,
         status: status, // ✅ SET NEW STATUS
         createdBy: userId,
 
@@ -1869,6 +1870,8 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       const newLead = await Lead.create({
         _id: newID,
         contact_id: newID,
+        firstname: firstname,
+        lastname: lastname,
         phoneNumbers: [
           {
             countryCode: countryCode,
@@ -1896,6 +1899,11 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     // ✅ 4. UPDATE STATUS
     if (status) {
       targetDoc.status = status;
+    }
+
+    if (firstname && lastname) {
+      targetDoc.firstname = firstname;
+      targetDoc.lastname = lastname;
     }
 
     // ✅ 5. ADD NOTE AS TASK
