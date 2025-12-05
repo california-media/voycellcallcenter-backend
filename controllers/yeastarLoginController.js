@@ -148,8 +148,7 @@ async function getYeastarLoginSignature(req, res) {
     if (user.extensionStatus === false) {
       return res.status(400).json({
         status: "error",
-        message:
-          "Not Activated Calling Facility.",
+        message: "Not Activated Calling Facility.",
       });
     }
 
@@ -174,8 +173,8 @@ async function getYeastarLoginSignature(req, res) {
     console.log("🔑 Signature URL:", signatureUrl);
 
     const signResponse = await axios.post(signatureUrl, {
-      username: user.extensionNumber, // Try extension number instead of email
-      // username: "1010",
+      // username: user.extensionNumber,
+      username: "1010",
       sign_type: "sdk",
       expire_time: 0, // No expiration
     });
@@ -195,7 +194,6 @@ async function getYeastarLoginSignature(req, res) {
     const signature = signData.data?.sign;
 
     console.log(signature);
-
 
     if (!signature) {
       throw new Error("No signature returned from Yeastar");
