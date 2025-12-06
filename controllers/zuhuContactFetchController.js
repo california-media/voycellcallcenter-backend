@@ -120,7 +120,7 @@ const handleZohoCallback = async (req, res) => {
             const lastName = contact.Last_Name || '';
             const email = contact.Email?.toLowerCase();
             // const phone = contact.Phone;
-            const rawPhone = contact.Phone;
+            const rawPhone = contact.Phone.replace(/\s+/g, "");
             // let parsedPhone = null;
 
             // if (rawPhone) {
@@ -145,7 +145,7 @@ const handleZohoCallback = async (req, res) => {
                     if (phoneObj) {
                         parsedPhone = {
                             countryCode: phoneObj.countryCallingCode, // e.g. "1"
-                            number: phoneObj.nationalNumber,          // e.g. "5555555555"
+                            number: phoneObj.nationalNumber.replace(/\D/g, ""),          // e.g. "5555555555"
                         };
                     } else {
                         // ❗ fallback: store raw number if parsing fails

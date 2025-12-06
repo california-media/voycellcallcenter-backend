@@ -89,7 +89,7 @@ const handleHubSpotCallback = async (req, res) => {
       //   emailList.some(e => existingEmails.has(e)) ||
       //   phoneList.some(p => existingPhones.has(p));
 
-      const phone = props.phone || '';
+      const phone = props.phone.replace(/\s+/g, "") || '';
 
       const emailList = email ? [email] : [];
 
@@ -100,7 +100,7 @@ const handleHubSpotCallback = async (req, res) => {
           if (parsed) {
             phoneObj = {
               countryCode: parsed.countryCallingCode || '',
-              number: parsed.nationalNumber || '',
+              number: parsed.nationalNumber.replace(/\D/g, "") || '',
             };
           } else {
             // fallback: no country code, just store number

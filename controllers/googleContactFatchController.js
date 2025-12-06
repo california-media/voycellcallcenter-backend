@@ -143,7 +143,7 @@ const handleGoogleCallback = async (req, res) => {
       // });
 
       const phoneListRaw = (person.phoneNumbers || []).map((p) => {
-        let raw = p.value.trim();
+        let raw = p.value.replace(/\s+/g, "");
 
         // Use libphonenumber-js to parse
         const parsed = parsePhoneNumberFromString(raw);
@@ -151,7 +151,7 @@ const handleGoogleCallback = async (req, res) => {
         if (parsed) {
           return {
             countryCode: `+${parsed.countryCallingCode}`, // ✅ Always correct, e.g., +91, +1, +44
-            number: parsed.nationalNumber, // ✅ Clean national number (without country code)
+            number: parsed.nationalNumber.replace(/\D/g, ""), // ✅ Clean national number (without country code)
           };
         } else {
           // fallback: if libphonenumber-js fails
