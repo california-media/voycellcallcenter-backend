@@ -8,6 +8,102 @@ const path = require("path");
 const { logActivityToContact } = require("../utils/activityLogger");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 
+// --------------------------
+// company-wide duplicate helper
+// returns sets and maps for quick lookup and owner info
+// --------------------------
+const buildGlobalDuplicateSets = async (userId) => {
+  const loggedInUser = await User.findById(userId).lean();
+  if (!loggedInUser) throw new Error("User not found");
+
+  // determine the company admin id
+  let companyAdminId = null;
+  if (String(loggedInUser.role) === "companyAdmin") {
+    companyAdminId = loggedInUser._id;
+  } else if (loggedInUser.createdByWhichCompanyAdmin) {
+    companyAdminId = loggedInUser.createdByWhichCompanyAdmin;
+  } else {
+    companyAdminId = loggedInUser._id;
+  }
+
+  // all users in this company (admin + agents)
+  const companyUsers = await User.find({
+    $or: [{ _id: companyAdminId }, { createdByWhichCompanyAdmin: companyAdminId }],
+  }).select("_id").lean();
+
+  const allUserIds = companyUsers.map((u) => u._id);
+
+  // fetch contacts & leads created by any of these users
+  const [contacts, leads] = await Promise.all([
+    Contact.find({ createdBy: { $in: allUserIds } }, "phoneNumbers emailAddresses createdBy contact_id firstname lastname isLead").lean(),
+    Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers emailAddresses createdBy contact_id firstname lastname isLead").lean(),
+  ]);
+
+  const existingPhones = new Set();
+  const existingEmails = new Set();
+
+  // maps: key (variant) -> owner info { model, createdBy, contactId, firstname, lastname }
+  const phoneOwnerMap = new Map();
+  const emailOwnerMap = new Map();
+
+  const addPhoneOwnerVariants = (phoneObj, ownerInfo) => {
+    if (!phoneObj || !phoneObj.number) return;
+    const digits = String(phoneObj.number).replace(/\D/g, "");
+    if (!digits) return;
+    const cc = phoneObj.countryCode ? String(phoneObj.countryCode).replace(/^\+/, "") : "";
+
+    // 3 variants we store/check: +CCdigits, CCdigits, digits
+    if (cc) {
+      const plusVariant = `+${cc}${digits}`;
+      const noPlusVariant = `${cc}${digits}`;
+      existingPhones.add(plusVariant);
+      existingPhones.add(noPlusVariant);
+      if (!phoneOwnerMap.has(plusVariant)) phoneOwnerMap.set(plusVariant, ownerInfo);
+      if (!phoneOwnerMap.has(noPlusVariant)) phoneOwnerMap.set(noPlusVariant, ownerInfo);
+    }
+    existingPhones.add(digits);
+    if (!phoneOwnerMap.has(digits)) phoneOwnerMap.set(digits, ownerInfo);
+  };
+
+  const addEmailOwner = (email, ownerInfo) => {
+    if (!email) return;
+    const e = String(email).toLowerCase().trim();
+    existingEmails.add(e);
+    if (!emailOwnerMap.has(e)) emailOwnerMap.set(e, ownerInfo);
+  };
+
+  // add contact owners
+  for (const c of contacts || []) {
+    const ownerInfo = {
+      model: "Contact",
+      createdBy: c.createdBy,
+      contactId: c.contact_id || c._id,
+      firstname: c.firstname || "",
+      lastname: c.lastname || "",
+      isLead: !!c.isLead,
+    };
+    for (const p of c.phoneNumbers || []) addPhoneOwnerVariants(p, ownerInfo);
+    for (const e of c.emailAddresses || []) addEmailOwner(e, ownerInfo);
+  }
+
+  // add lead owners
+  for (const l of leads || []) {
+    const ownerInfo = {
+      model: "Lead",
+      createdBy: l.createdBy,
+      contactId: l.contact_id || l._id,
+      firstname: l.firstname || "",
+      lastname: l.lastname || "",
+      isLead: !!l.isLead,
+    };
+    for (const p of l.phoneNumbers || []) addPhoneOwnerVariants(p, ownerInfo);
+    for (const e of l.emailAddresses || []) addEmailOwner(e, ownerInfo);
+  }
+
+  return { existingPhones, existingEmails, phoneOwnerMap, emailOwnerMap };
+};
+
+
 const parseBoolean = (val) => {
   if (typeof val === "boolean") return val;
   if (typeof val === "number") return val === 1;
@@ -69,31 +165,105 @@ const addEditContactisLeads = async (req, res) => {
 
     const isCreating = !contact_id || contact_id === "0";
 
-    // ------------------------------------------------------------------
-    // DUPLICATE CHECK FOR EMAIL / PHONE
-    // ------------------------------------------------------------------
-    const duplicateCheck = {
-      $or: [
-        { emailAddresses: { $in: emails }, createdBy: user_id },
-        {
-          "phoneNumbers.number": { $in: phones.map((p) => p.number) },
-          createdBy: user_id,
-        },
-      ],
-    };
+    // // ------------------------------------------------------------------
+    // // DUPLICATE CHECK FOR EMAIL / PHONE
+    // // ------------------------------------------------------------------
+    // const duplicateCheck = {
+    //   $or: [
+    //     { emailAddresses: { $in: emails }, createdBy: user_id },
+    //     {
+    //       "phoneNumbers.number": { $in: phones.map((p) => p.number) },
+    //       createdBy: user_id,
+    //     },
+    //   ],
+    // };
 
-    // If creating → block duplicates across both models
-    if (isCreating) {
-      const exists =
-        (await Contact.findOne(duplicateCheck)) ||
-        (await Lead.findOne(duplicateCheck));
-      if (exists) {
-        return res.status(409).json({
-          status: "error",
-          message: "Contact/Lead already exists with same email or phone",
-        });
+    // ------------------------------------------------------------------
+    // COMPANY-WIDE DUPLICATE CHECK FOR EMAIL / PHONE
+    // ------------------------------------------------------------------
+    // Build company-wide phone/email maps (admin + all agents).
+    const { existingPhones, existingEmails, phoneOwnerMap, emailOwnerMap } =
+      await buildGlobalDuplicateSets(user_id);
+
+    // Normalize incoming emails & phones
+    const incomingEmails = (emails || []).map((e) => String(e).toLowerCase().trim());
+    const incomingPhonesNormalized = (phones || []).map((p) => {
+      // incoming phone may be object { countryCode, number } or string
+      if (!p) return null;
+      if (typeof p === "object") {
+        const cc = p.countryCode ? String(p.countryCode).replace(/^\+/, "") : "";
+        const digits = String(p.number || "").replace(/\D/g, "");
+        const plus = cc ? `+${cc}${digits}` : digits;
+        const noPlus = cc ? `${cc}${digits}` : digits;
+        return { cc, digits, plus, noPlus };
+      } else {
+        // string fallback
+        const parsed = parsePhoneNumberFromString(String(p));
+        if (parsed) {
+          const cc = parsed.countryCallingCode ? String(parsed.countryCallingCode) : "";
+          const digits = String(parsed.nationalNumber || "").replace(/\D/g, "");
+          const plus = cc ? `+${cc}${digits}` : digits;
+          const noPlus = cc ? `${cc}${digits}` : digits;
+          return { cc, digits, plus, noPlus };
+        } else {
+          const digits = String(p).replace(/\D/g, "");
+          return { cc: "", digits, plus: digits, noPlus: digits };
+        }
+      }
+    }).filter(Boolean);
+
+    // Check duplicates for create: if ANY incoming email or phone exists in company -> block create
+    // Prefer phone check first (faster).
+    let duplicateOwner = null;
+    for (const p of incomingPhonesNormalized) {
+      if (!p || !p.digits) continue;
+      if (existingPhones.has(p.plus) || existingPhones.has(p.noPlus) || existingPhones.has(p.digits)) {
+        // get owner info from map
+        duplicateOwner = phoneOwnerMap.get(p.plus) || phoneOwnerMap.get(p.noPlus) || phoneOwnerMap.get(p.digits);
+        break;
       }
     }
+    if (!duplicateOwner) {
+      for (const e of incomingEmails) {
+        if (!e) continue;
+        if (existingEmails.has(e)) {
+          duplicateOwner = emailOwnerMap.get(e);
+          break;
+        }
+      }
+    }
+
+    if (isCreating && duplicateOwner) {
+      const ownerId = duplicateOwner.createdBy;
+      const ownerUser = await User.findById(ownerId).lean();
+      const ownerUserName = ownerUser ? ownerUser.firstname + " " + ownerUser.lastname : "Unknown";
+      return res.status(409).json({
+        status: "error",
+        message: "Duplicate found in company contacts/leads",
+        duplicate: {
+          model: duplicateOwner.model,
+          contactId: duplicateOwner.contactId,
+          name: `${duplicateOwner.firstname} ${duplicateOwner.lastname}`.trim(),
+          ownerUserId: duplicateOwner.createdBy,
+          ownerUserName: ownerUserName,
+
+        },
+      });
+    }
+
+
+    // If creating → block duplicates across both models
+    // if (isCreating) {
+    //   const exists =
+    //     (await Contact.findOne(duplicateCheck)) ||
+    //     (await Lead.findOne(duplicateCheck));
+    //   if (exists) {
+    //     return res.status(409).json({
+    //       status: "error",
+    //       message: "Contact/Lead already exists with same email or phone",
+    //     });
+    //   }
+    // }
 
     // ------------------------------------------------------------------
     // IMAGE UPLOAD
@@ -158,27 +328,98 @@ const addEditContactisLeads = async (req, res) => {
 
     const prevCategory = existing.isLead ? "lead" : "contact";
 
-    // Duplicate check for updates → exclude current doc
-    const duplicate =
-      (await Contact.findOne({
-        ...duplicateCheck,
-        createdBy: req.user._id,
-        contact_id: { $ne: existing.contact_id },
-      })) ||
-      (await Lead.findOne({
-        ...duplicateCheck,
-        createdBy: req.user._id,
-        contact_id: { $ne: existing.contact_id },
-      }));
-    console.log("existing id:", contact_id);
-    console.log("Received duplicate:", duplicate);
+    // // Duplicate check for updates → exclude current doc
+    // const duplicate =
+    //   (await Contact.findOne({
+    //     ...duplicateCheck,
+    //     createdBy: req.user._id,
+    //     contact_id: { $ne: existing.contact_id },
+    //   })) ||
+    //   (await Lead.findOne({
+    //     ...duplicateCheck,
+    //     createdBy: req.user._id,
+    //     contact_id: { $ne: existing.contact_id },
+    //   }));
+    // console.log("existing id:", contact_id);
+    // console.log("Received duplicate:", duplicate);
 
-    if (duplicate) {
+    // if (duplicate) {
+    //   return res.status(409).json({
+    //     status: "error",
+    //     message: "Another record already exists with this email or phone",
+    //   });
+    // }
+
+    // Duplicate check for updates → use company-wide maps but ignore the same existing record
+    // (existing is the document we are updating)
+    // Rebuild incoming normalized phones & emails (reuse variables from above if in scope)
+    const updateIncomingEmails = (emails || []).map(e => String(e).toLowerCase().trim());
+    const updateIncomingPhones = (phones || []).map(p => {
+      if (!p) return null;
+      if (typeof p === "object") {
+        const cc = p.countryCode ? String(p.countryCode).replace(/^\+/, "") : "";
+        const digits = String(p.number || "").replace(/\D/g, "");
+        const plus = cc ? `+${cc}${digits}` : digits;
+        const noPlus = cc ? `${cc}${digits}` : digits;
+        return { cc, digits, plus, noPlus };
+      } else {
+        const parsed = parsePhoneNumberFromString(String(p));
+        if (parsed) {
+          const cc = parsed.countryCallingCode ? String(parsed.countryCallingCode) : "";
+          const digits = String(parsed.nationalNumber || "").replace(/\D/g, "");
+          const plus = cc ? `+${cc}${digits}` : digits;
+          const noPlus = cc ? `${cc}${digits}` : digits;
+          return { cc, digits, plus, noPlus };
+        } else {
+          const digits = String(p).replace(/\D/g, "");
+          return { cc: "", digits, plus: digits, noPlus: digits };
+        }
+      }
+    }).filter(Boolean);
+
+    // check phones
+    let duplicateFoundOnUpdate = null;
+    for (const p of updateIncomingPhones) {
+      if (!p || !p.digits) continue;
+      const owner = phoneOwnerMap.get(p.plus) || phoneOwnerMap.get(p.noPlus) || phoneOwnerMap.get(p.digits);
+      if (!owner) continue;
+      // if owner.contactId is same as existing.contact_id -> that's fine (updating same record)
+      if (String(owner.contactId) === String(existing.contact_id || existing._id)) {
+        continue;
+      }
+      duplicateFoundOnUpdate = owner;
+      break;
+    }
+
+    if (!duplicateFoundOnUpdate) {
+      for (const e of updateIncomingEmails) {
+        const owner = emailOwnerMap.get(e);
+        if (!owner) continue;
+        if (String(owner.contactId) === String(existing.contact_id || existing._id)) {
+          continue;
+        }
+        duplicateFoundOnUpdate = owner;
+        break;
+      }
+    }
+
+    if (duplicateFoundOnUpdate) {
+      const ownerId = duplicateFoundOnUpdate.createdBy;
+      const ownerUser = await User.findById(ownerId).lean();
+      const ownerUserName = ownerUser ? ownerUser.firstname + " " + ownerUser.lastname : "Unknown";
       return res.status(409).json({
         status: "error",
-        message: "Another record already exists with this email or phone",
+        message: "Another record in your company already has this phone/email",
+        duplicate: {
+          model: duplicateFoundOnUpdate.model,
+          contactId: duplicateFoundOnUpdate.contactId,
+          name: `${duplicateFoundOnUpdate.firstname} ${duplicateFoundOnUpdate.lastname}`.trim(),
+          ownerUserId: duplicateFoundOnUpdate.createdBy,
+          ownerUserName: ownerUserName,
+        },
       });
     }
+
 
     // ------------------------------------------------------------------
     // CONVERT (CONTACT ↔ LEAD)
@@ -344,9 +585,8 @@ const addEditContactisLeads = async (req, res) => {
     // 4. Prepare activity
     const activity = {
       action: isLeadReq ? "lead_updated" : "contact_updated",
-      title: `${firstname || existing.firstname} ${
-        lastname || existing.lastname
-      }`,
+      title: `${firstname || existing.firstname} ${lastname || existing.lastname
+        }`,
       type: isLeadReq ? "lead" : "contact",
       description: isLeadReq ? "Lead Updated" : "Contact Updated",
     };
@@ -515,27 +755,22 @@ const toggleContactFavorite = async (req, res) => {
         type: itemType,
         title: isFavourite
           ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} Favorited`
-          : `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } Unfavorited`,
+          : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } Unfavorited`,
         description: isFavourite
-          ? `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } Added to Favorites`
-          : `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } Removed from Favorites`,
+          ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } Added to Favorites`
+          : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } Removed from Favorites`,
       });
 
       return res.status(200).json({
         status: "success",
         message: isFavourite
-          ? `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } added to favorites`
-          : `${
-              itemType.charAt(0).toUpperCase() + itemType.slice(1)
-            } removed from favorites`,
+          ? `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } added to favorites`
+          : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } removed from favorites`,
         data: {
           contact_id: record.contact_id,
           isFavourite: record.isFavourite,
@@ -711,9 +946,8 @@ const updateFirstPhoneOrEmail = async (req, res) => {
     if (!contact) {
       return res.status(404).json({
         status: "error",
-        message: `${
-          itemType.charAt(0).toUpperCase() + itemType.slice(1)
-        } not found or unauthorized`,
+        message: `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
+          } not found or unauthorized`,
       });
     }
 

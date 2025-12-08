@@ -35,8 +35,224 @@ const redirectToGoogle = (req, res) => {
 };
 
 // Step 2: Google redirects here with ?code=... and ?state=...
+// const handleGoogleCallback = async (req, res) => {
+//   const { code } = req.query;
+//   if (!code) {
+//     return res
+//       .status(400)
+//       .json({ status: "error", message: "Missing authorization code" });
+//   }
+
+//   try {
+//     const { tokens } = await oauth2Client.getToken(code);
+//     oauth2Client.setCredentials(tokens);
+
+//     const peopleService = google.people({ version: "v1", auth: oauth2Client });
+
+//     const response = await peopleService.people.connections.list({
+//       resourceName: "people/me",
+//       pageSize: 1000,
+//       personFields: "names,emailAddresses,phoneNumbers",
+//     });
+
+//     const userId = req.query.state || null;
+//     if (!userId) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Missing user ID in state parameter",
+//       });
+//     }
+
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res
+//         .status(404)
+//         .json({ status: "error", message: "User not found" });
+//     }
+
+//     // ------------------------------
+//     // Build sets of existing emails & phones from Contact AND Lead
+//     // ------------------------------
+//     const [contactDocs, leadDocs] = await Promise.all([
+//       Contact.find({ createdBy: userId }, "emailAddresses phoneNumbers").lean(),
+//       Lead.find({ createdBy: userId }, "emailAddresses phoneNumbers").lean(),
+//     ]);
+
+//     const existingEmails = new Set();
+//     const existingPhonesFull = new Set();   // "countryCode-number"
+//     const existingPhonesOnly = new Set();   // "number" only
+
+//     const addFromDoc = (doc) => {
+//       if (!doc) return;
+//       for (const e of doc.emailAddresses || []) {
+//         if (typeof e === "string") existingEmails.add(e.toLowerCase().trim());
+//       }
+//       for (const p of doc.phoneNumbers || []) {
+//         const country = (p.countryCode || "").replace(/^\+/, "").trim();
+//         const numberOnly = (p.number || "").replace(/\D/g, "");
+//         if (!numberOnly) continue;
+//         if (country) existingPhonesFull.add(`${country}-${numberOnly}`);
+//         existingPhonesOnly.add(numberOnly);
+//       }
+//     };
+
+//     for (const c of contactDocs) addFromDoc(c);
+//     for (const l of leadDocs) addFromDoc(l);
+
+//     const connections = response.data.connections || [];
+
+//     // avoid duplicates within same import
+//     const importNewPhones = new Set();
+
+//     const contactsToInsert = [];
+
+//     for (const person of connections) {
+//       const name = person.names?.[0]?.displayName || "";
+//       const [firstname = "", ...lastnameParts] = name.split(" ");
+//       const lastname = lastnameParts.join(" ");
+
+//       const emailListRaw =
+//         (person.emailAddresses || []).map((e) => (e.value || "").toLowerCase().trim());
+//       const emailList = emailListRaw.length > 0 ? [emailListRaw[0]] : [];
+
+//       // parse and normalize phone numbers from Google person
+//       const phoneListRaw = (person.phoneNumbers || []).map((p) => {
+//         const raw = (p.value || "").trim();
+//         const parsed = parsePhoneNumberFromString(raw);
+
+//         if (parsed && parsed.nationalNumber) {
+//           const cc = parsed.countryCallingCode ? String(parsed.countryCallingCode).replace(/^\+/, "") : "";
+//           const num = String(parsed.nationalNumber).replace(/\D/g, "");
+//           return { countryCode: cc, number: num };
+//         } else {
+//           // fallback: remove non-digits, no country code
+//           const numOnly = raw.replace(/\D/g, "");
+//           return { countryCode: "", number: numOnly };
+//         }
+//       }).filter(p => p && p.number);
+
+//       // const phoneList = phoneListRaw.length > 0 ? [phoneListRaw[0]] : [];
+
+//       const phoneList =
+//         phoneListRaw.length > 0
+//           ? [
+//             {
+//               countryCode: phoneListRaw[0].countryCode || "971", // ✅ DEFAULT ADDED HERE
+//               number: phoneListRaw[0].number,
+//             },
+//           ]
+//           : [];
+
+
+//       // DUPLICATE CHECKS:
+//       const isEmailDuplicate = emailList.some((email) => existingEmails.has(email));
+//       let isPhoneDuplicate = false;
+
+//       for (const phone of phoneList) {
+//         const cc = (phone.countryCode || "").replace(/^\+/, "");
+//         const num = (phone.number || "").replace(/\D/g, "");
+//         if (!num) continue;
+
+//         if (cc) {
+//           if (existingPhonesFull.has(`${cc}-${num}`) || importNewPhones.has(`${cc}-${num}`)) {
+//             isPhoneDuplicate = true;
+//             break;
+//           }
+//         } else {
+//           if (existingPhonesOnly.has(num) || importNewPhones.has(num)) {
+//             isPhoneDuplicate = true;
+//             break;
+//           }
+//         }
+//       }
+
+//       if (isEmailDuplicate || isPhoneDuplicate) continue;
+
+//       // Add to importNewPhones to prevent duplicates within same batch
+//       for (const phone of phoneList) {
+//         const cc = (phone.countryCode || "").replace(/^\+/, "");
+//         const num = (phone.number || "").replace(/\D/g, "");
+//         if (!num) continue;
+//         if (cc) importNewPhones.add(`${cc}-${num}`);
+//         importNewPhones.add(num);
+//       }
+
+//       const _id = new mongoose.Types.ObjectId();
+
+//       contactsToInsert.push({
+//         _id,
+//         contact_id: _id,
+//         firstname,
+//         lastname,
+//         emailAddresses: emailList,
+//         phoneNumbers: phoneList,
+//         company: "",
+//         designation: "",
+//         linkedin: "",
+//         instagram: "",
+//         telegram: "",
+//         twitter: "",
+//         facebook: "",
+//         createdBy: userId,
+//         activities: [
+//           {
+//             action: "contact_created",
+//             type: "contact",
+//             title: "Contact Imported from Google",
+//             description: `${firstname} ${lastname}`,
+//           },
+//         ],
+//       });
+//     } // end for connections
+
+//     let savedContacts = [];
+//     if (contactsToInsert.length > 0) {
+//       savedContacts = await Contact.insertMany(contactsToInsert);
+//     }
+
+//     const resultData = {
+//       status: "success",
+//       message: "Google Contacts imported successfully",
+//       imported: savedContacts.length,
+//       contacts: savedContacts,
+//     };
+
+//     return res.send(`
+//         <!DOCTYPE html>
+//         <html>
+//         <head>
+//             <title>Google Connected</title>
+//             <style>
+//                 body { 
+//                     font-family: Arial, sans-serif; 
+//                     text-align: center; 
+//                     padding-top: 50px; 
+//                 }
+//                 .success { color: green; font-size: 18px; margin-bottom: 20px; }
+//             </style>
+//         </head>
+//         <body>
+//             <div class="success">Google Contact fetch Successfully! You can close this window.</div>
+//             <script>
+//                 window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+//                 window.close();
+//             </script>
+//         </body>
+//         </html>
+//     `);
+//   } catch (error) {
+//     return res.send(`
+//             <script>
+//                 window.opener.postMessage({ status: 'error', message: 'Google contact fetch callback failed', error: '${error.message}' }, '*');
+//                 window.close();
+//             </script>
+//         `);
+//   }
+// };
+
 const handleGoogleCallback = async (req, res) => {
-  const { code } = req.query;
+  const { code, state } = req.query;
+
   if (!code) {
     return res
       .status(400)
@@ -44,10 +260,14 @@ const handleGoogleCallback = async (req, res) => {
   }
 
   try {
+    // ✅ Exchange code for token
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    const peopleService = google.people({ version: "v1", auth: oauth2Client });
+    const peopleService = google.people({
+      version: "v1",
+      auth: oauth2Client,
+    });
 
     const response = await peopleService.people.connections.list({
       resourceName: "people/me",
@@ -55,7 +275,8 @@ const handleGoogleCallback = async (req, res) => {
       personFields: "names,emailAddresses,phoneNumbers",
     });
 
-    const userId = req.query.state || null;
+    // ✅ Get user from state
+    const userId = state;
     if (!userId) {
       return res.status(400).json({
         status: "error",
@@ -70,113 +291,158 @@ const handleGoogleCallback = async (req, res) => {
         .json({ status: "error", message: "User not found" });
     }
 
-    // ------------------------------
-    // Build sets of existing emails & phones from Contact AND Lead
-    // ------------------------------
+    // ============================================================
+    // ✅ STEP 1: FIND COMPANY ADMIN
+    // ============================================================
+    let companyAdminId = null;
+
+    if (user.role === "companyAdmin") {
+      companyAdminId = user._id;
+    } else if (user.createdByWhichCompanyAdmin) {
+      companyAdminId = user.createdByWhichCompanyAdmin;
+    } else {
+      companyAdminId = user._id; // fallback
+    }
+
+    // ============================================================
+    // ✅ STEP 2: GET ALL USERS OF THAT COMPANY
+    // ============================================================
+    const companyUsers = await User.find(
+      {
+        $or: [
+          { _id: companyAdminId },
+          { createdByWhichCompanyAdmin: companyAdminId },
+        ],
+      },
+      "_id"
+    ).lean();
+
+    const companyUserIds = companyUsers.map((u) => u._id);
+
+    // ============================================================
+    // ✅ STEP 3: LOAD ALL CONTACTS & LEADS FOR WHOLE COMPANY
+    // ============================================================
     const [contactDocs, leadDocs] = await Promise.all([
-      Contact.find({ createdBy: userId }, "emailAddresses phoneNumbers").lean(),
-      Lead.find({ createdBy: userId }, "emailAddresses phoneNumbers").lean(),
+      Contact.find(
+        { createdBy: { $in: companyUserIds } },
+        "emailAddresses phoneNumbers"
+      ).lean(),
+      Lead.find(
+        { createdBy: { $in: companyUserIds } },
+        "emailAddresses phoneNumbers"
+      ).lean(),
     ]);
 
     const existingEmails = new Set();
-    const existingPhonesFull = new Set();   // "countryCode-number"
-    const existingPhonesOnly = new Set();   // "number" only
+    const existingPhonesFull = new Set(); // countryCode-number
+    const existingPhonesOnly = new Set(); // number only
 
     const addFromDoc = (doc) => {
-      if (!doc) return;
       for (const e of doc.emailAddresses || []) {
-        if (typeof e === "string") existingEmails.add(e.toLowerCase().trim());
+        if (e) existingEmails.add(String(e).toLowerCase().trim());
       }
+
       for (const p of doc.phoneNumbers || []) {
-        const country = (p.countryCode || "").replace(/^\+/, "").trim();
-        const numberOnly = (p.number || "").replace(/\D/g, "");
-        if (!numberOnly) continue;
-        if (country) existingPhonesFull.add(`${country}-${numberOnly}`);
-        existingPhonesOnly.add(numberOnly);
+        const cc = (p.countryCode || "").replace(/^\+/, "").trim();
+        const num = (p.number || "").replace(/\D/g, "");
+        if (!num) continue;
+
+        if (cc) existingPhonesFull.add(`${cc}-${num}`);
+        existingPhonesOnly.add(num);
       }
     };
 
-    for (const c of contactDocs) addFromDoc(c);
-    for (const l of leadDocs) addFromDoc(l);
+    contactDocs.forEach(addFromDoc);
+    leadDocs.forEach(addFromDoc);
 
+    // ============================================================
+    // ✅ STEP 4: IMPORT GOOGLE CONTACTS
+    // ============================================================
     const connections = response.data.connections || [];
-
-    // avoid duplicates within same import
-    const importNewPhones = new Set();
-
     const contactsToInsert = [];
+    const importNewPhones = new Set(); // avoid duplicate inside same batch
 
     for (const person of connections) {
       const name = person.names?.[0]?.displayName || "";
-      const [firstname = "", ...lastnameParts] = name.split(" ");
-      const lastname = lastnameParts.join(" ");
+      const [firstname = "", ...lastArr] = name.split(" ");
+      const lastname = lastArr.join(" ");
 
-      const emailListRaw =
-        (person.emailAddresses || []).map((e) => (e.value || "").toLowerCase().trim());
-      const emailList = emailListRaw.length > 0 ? [emailListRaw[0]] : [];
+      // ✅ Email
+      const emailRaw =
+        person.emailAddresses?.[0]?.value?.toLowerCase().trim() || "";
+      const emailList = emailRaw ? [emailRaw] : [];
 
-      // parse and normalize phone numbers from Google person
-      const phoneListRaw = (person.phoneNumbers || []).map((p) => {
-        const raw = (p.value || "").trim();
+      // ✅ Phone
+      let phoneList = [];
+
+      if (person.phoneNumbers?.length) {
+        const raw = person.phoneNumbers[0].value || "";
         const parsed = parsePhoneNumberFromString(raw);
 
-        if (parsed && parsed.nationalNumber) {
-          const cc = parsed.countryCallingCode ? String(parsed.countryCallingCode).replace(/^\+/, "") : "";
-          const num = String(parsed.nationalNumber).replace(/\D/g, "");
-          return { countryCode: cc, number: num };
+        let number = "";
+        let countryCode = "";
+
+        if (parsed) {
+          number = parsed.nationalNumber;
+          countryCode = parsed.countryCallingCode || "";
         } else {
-          // fallback: remove non-digits, no country code
-          const numOnly = raw.replace(/\D/g, "");
-          return { countryCode: "", number: numOnly };
+          number = raw.replace(/\D/g, "");
         }
-      }).filter(p => p && p.number);
-
-      // const phoneList = phoneListRaw.length > 0 ? [phoneListRaw[0]] : [];
-
-      const phoneList =
-        phoneListRaw.length > 0
-          ? [
-            {
-              countryCode: phoneListRaw[0].countryCode || "971", // ✅ DEFAULT ADDED HERE
-              number: phoneListRaw[0].number,
-            },
-          ]
-          : [];
 
 
-      // DUPLICATE CHECKS:
-      const isEmailDuplicate = emailList.some((email) => existingEmails.has(email));
+
+        if (number) {
+          number = number.replace(/^0+/, "");
+
+          phoneList.push({
+            countryCode: countryCode || "971", // ✅ DEFAULT
+            number,
+          });
+        }
+      }
+
+      // ============================================================
+      // ✅ STEP 5: DUPLICATE CHECK
+      // ============================================================
+      let isEmailDuplicate = emailList.some((e) =>
+        existingEmails.has(e)
+      );
+
       let isPhoneDuplicate = false;
 
       for (const phone of phoneList) {
-        const cc = (phone.countryCode || "").replace(/^\+/, "");
-        const num = (phone.number || "").replace(/\D/g, "");
+        const cc = phone.countryCode.replace(/^\+/, "");
+        const num = phone.number.replace(/\D/g, "");
+
         if (!num) continue;
 
-        if (cc) {
-          if (existingPhonesFull.has(`${cc}-${num}`) || importNewPhones.has(`${cc}-${num}`)) {
-            isPhoneDuplicate = true;
-            break;
-          }
-        } else {
-          if (existingPhonesOnly.has(num) || importNewPhones.has(num)) {
-            isPhoneDuplicate = true;
-            break;
-          }
+        if (
+          existingPhonesFull.has(`${cc}-${num}`) ||
+          existingPhonesOnly.has(num) ||
+          importNewPhones.has(`${cc}-${num}`) ||
+          importNewPhones.has(num)
+        ) {
+          isPhoneDuplicate = true;
+          break;
         }
       }
 
       if (isEmailDuplicate || isPhoneDuplicate) continue;
 
-      // Add to importNewPhones to prevent duplicates within same batch
+      // ============================================================
+      // ✅ STEP 6: PREVENT SAME-BATCH DUPLICATE
+      // ============================================================
       for (const phone of phoneList) {
-        const cc = (phone.countryCode || "").replace(/^\+/, "");
-        const num = (phone.number || "").replace(/\D/g, "");
-        if (!num) continue;
-        if (cc) importNewPhones.add(`${cc}-${num}`);
+        const cc = phone.countryCode.replace(/^\+/, "");
+        const num = phone.number.replace(/\D/g, "");
+
+        importNewPhones.add(`${cc}-${num}`);
         importNewPhones.add(num);
       }
 
+      // ============================================================
+      // ✅ STEP 7: INSERT
+      // ============================================================
       const _id = new mongoose.Types.ObjectId();
 
       contactsToInsert.push({
@@ -203,13 +469,19 @@ const handleGoogleCallback = async (req, res) => {
           },
         ],
       });
-    } // end for connections
+    }
 
+    // ============================================================
+    // ✅ STEP 8: SAVE TO DB
+    // ============================================================
     let savedContacts = [];
     if (contactsToInsert.length > 0) {
       savedContacts = await Contact.insertMany(contactsToInsert);
     }
 
+    // ============================================================
+    // ✅ STEP 9: RETURN RESULT
+    // ============================================================
     const resultData = {
       status: "success",
       message: "Google Contacts imported successfully",
@@ -242,14 +514,16 @@ const handleGoogleCallback = async (req, res) => {
     `);
   } catch (error) {
     return res.send(`
-            <script>
-                window.opener.postMessage({ status: 'error', message: 'Google contact fetch callback failed', error: '${error.message}' }, '*');
-                window.close();
-            </script>
-        `);
+      <script>
+        window.opener.postMessage(
+          { status: 'error', message: 'Google contact fetch failed', error: '${error.message}' },
+          '*'
+        );
+        window.close();
+      </script>
+    `);
   }
 };
-
 
 module.exports = {
   redirectToGoogle,
