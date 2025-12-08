@@ -1590,8 +1590,9 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         "Dec",
       ];
 
-      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${months[dateObj.getUTCMonth()]
-        } ${dateObj.getUTCFullYear()}`;
+      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${
+        months[dateObj.getUTCMonth()]
+      } ${dateObj.getUTCFullYear()}`;
     };
 
     // ------------------------------
@@ -1786,10 +1787,10 @@ exports.getMonthlyCallGraph = async (req, res) => {
   }
 };
 
-
 exports.addFormDataAfterCallEnd = async (req, res) => {
   try {
-    const { phoneNumbers, firstname, lastname, status, note, meeting } = req.body;
+    const { phoneNumbers, firstname, lastname, status, note, meeting } =
+      req.body;
     console.log("status sent", status);
     const userId = req.user._id;
 
@@ -1811,12 +1812,10 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
 
     // Final allowed user list for search
     let allowedUserIds = [
-      companyAdminId,               // the admin
+      companyAdminId, // the admin
       ...allAgents.map((a) => a._id), // all agents of this admin
-      userId,                        // logged-in user
+      userId, // logged-in user
     ];
-
-
 
     if (!phoneNumbers || !phoneNumbers.countryCode || !phoneNumbers.number) {
       return res.status(400).json({ message: "Phone number is required" });
@@ -1843,7 +1842,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       "phoneNumbers.number": rawNumber,
     });
 
-
     // let lead = await Lead.findOne({
     //   createdBy: userId,
     //   "phoneNumbers.countryCode": rawCountry,
@@ -1856,7 +1854,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       "phoneNumbers.number": rawNumber,
     });
 
-
     // let targetDoc = contact || lead;
     // let targetType = contact ? "contact" : lead ? "lead" : "newLead";
 
@@ -1865,7 +1862,11 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
 
     // ✅ CHECK IF CONTACT EXISTS BUT LEAD DOES NOT
     const shouldConvertToLead =
-      contact && !lead && (status === "interested" || status === "callBack");
+      contact &&
+      !lead &&
+      (status === "interested" ||
+        status === "callBack" ||
+        status === "callSuccess");
 
     if (shouldConvertToLead) {
       // ✅ CONVERT CONTACT → LEAD (FULL DATA COPY)

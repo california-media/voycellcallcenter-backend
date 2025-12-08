@@ -337,6 +337,7 @@ const userSchema = new Schema(
         { value: "lost", label: "Lost", group: 3, isDefault: false },
         { value: "callBack", label: "Call Back", group: 4, isDefault: false },
         { value: "noAnswer", label: "No Answer", group: 4, isDefault: false },
+        { value: "callSuccess", label: "Call Success", group: 5, isDefault: true },
       ],
     },
 
