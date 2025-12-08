@@ -18,7 +18,9 @@ const redirectToGoogle = (req, res) => {
   const scopes = ["https://www.googleapis.com/auth/contacts.readonly"];
 
   const user_id = req.user._id; // Use user ID from request context if available
+  const defaultCountryCode = req.query.defaultCountryCode || "971"; // Get from query param or default to 971
   console.log("user_id", user_id);
+  console.log("defaultCountryCode", defaultCountryCode);
 
   const params = querystring.stringify({
     client_id: process.env.GOOGLE_CLIENT_ID,
@@ -27,7 +29,7 @@ const redirectToGoogle = (req, res) => {
     scope: scopes.join(" "),
     access_type: "offline",
     prompt: "consent",
-    state: user_id,
+    state: `${user_id}::${defaultCountryCode}`,
   });
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
@@ -143,7 +145,6 @@ const redirectToGoogle = (req, res) => {
 //           ]
 //           : [];
 
-
 //       // DUPLICATE CHECKS:
 //       const isEmailDuplicate = emailList.some((email) => existingEmails.has(email));
 //       let isPhoneDuplicate = false;
@@ -223,10 +224,10 @@ const redirectToGoogle = (req, res) => {
 //         <head>
 //             <title>Google Connected</title>
 //             <style>
-//                 body { 
-//                     font-family: Arial, sans-serif; 
-//                     text-align: center; 
-//                     padding-top: 50px; 
+//                 body {
+//                     font-family: Arial, sans-serif;
+//                     text-align: center;
+//                     padding-top: 50px;
 //                 }
 //                 .success { color: green; font-size: 18px; margin-bottom: 20px; }
 //             </style>
@@ -276,13 +277,16 @@ const handleGoogleCallback = async (req, res) => {
     });
 
     // ✅ Get user from state
-    const userId = state;
-    if (!userId) {
+    const stateParam = state;
+    if (!stateParam) {
       return res.status(400).json({
         status: "error",
-        message: "Missing user ID in state parameter",
+        message: "Missing state parameter",
       });
     }
+
+    const [userId, defaultCountryCode = "971"] = stateParam.split("::");
+    console.log("userId:", userId, "defaultCountryCode:", defaultCountryCode);
 
     const user = await User.findById(userId);
     if (!user) {
@@ -389,13 +393,11 @@ const handleGoogleCallback = async (req, res) => {
           number = raw.replace(/\D/g, "");
         }
 
-
-
         if (number) {
           number = number.replace(/^0+/, "");
 
           phoneList.push({
-            countryCode: countryCode || "971", // ✅ DEFAULT
+            countryCode: countryCode || defaultCountryCode,
             number,
           });
         }
@@ -404,9 +406,7 @@ const handleGoogleCallback = async (req, res) => {
       // ============================================================
       // ✅ STEP 5: DUPLICATE CHECK
       // ============================================================
-      let isEmailDuplicate = emailList.some((e) =>
-        existingEmails.has(e)
-      );
+      let isEmailDuplicate = emailList.some((e) => existingEmails.has(e));
 
       let isPhoneDuplicate = false;
 

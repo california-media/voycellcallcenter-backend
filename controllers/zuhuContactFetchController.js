@@ -4,124 +4,136 @@ const Contact = require("../models/contactModel"); // adjust as needed
 const Lead = require("../models/leadModel"); // adjust as needed
 const mongoose = require("mongoose");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
-const User = require("../models/userModel"); // adjust as needed    
+const User = require("../models/userModel"); // adjust as needed
 require("dotenv").config();
 
 const buildGlobalDuplicateSets = async (userId) => {
-    const loggedInUser = await User.findById(userId).lean();
-    if (!loggedInUser) throw new Error("User not found");
+  const loggedInUser = await User.findById(userId).lean();
+  if (!loggedInUser) throw new Error("User not found");
 
-    // Determine the company admin id:
-    // - if the logged-in user *is* the company admin (role === 'companyAdmin') -> use their _id
-    // - else if logged-in user has createdByWhichCompanyAdmin -> use that id
-    // - else fallback to the logged in user only
-    let companyAdminId = null;
-    if (String(loggedInUser.role) === "companyAdmin") {
-        companyAdminId = loggedInUser._id;
-    } else if (loggedInUser.createdByWhichCompanyAdmin) {
-        companyAdminId = loggedInUser.createdByWhichCompanyAdmin;
-    } else {
-        companyAdminId = loggedInUser._id;
+  // Determine the company admin id:
+  // - if the logged-in user *is* the company admin (role === 'companyAdmin') -> use their _id
+  // - else if logged-in user has createdByWhichCompanyAdmin -> use that id
+  // - else fallback to the logged in user only
+  let companyAdminId = null;
+  if (String(loggedInUser.role) === "companyAdmin") {
+    companyAdminId = loggedInUser._id;
+  } else if (loggedInUser.createdByWhichCompanyAdmin) {
+    companyAdminId = loggedInUser.createdByWhichCompanyAdmin;
+  } else {
+    companyAdminId = loggedInUser._id;
+  }
+
+  // Now fetch the admin + all users that have createdByWhichCompanyAdmin = companyAdminId
+  const companyUsers = await User.find({
+    $or: [
+      { _id: companyAdminId },
+      { createdByWhichCompanyAdmin: companyAdminId },
+    ],
+  })
+    .select("_id")
+    .lean();
+
+  const allUserIds = companyUsers.map((u) => u._id);
+
+  const [contacts, leads] = await Promise.all([
+    Contact.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
+    Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
+  ]);
+
+  const existingPhones = new Set();
+
+  const addPhoneVariants = (phoneObj) => {
+    if (!phoneObj || !phoneObj.number) return;
+    const digits = String(phoneObj.number).replace(/\D/g, "");
+    if (!digits) return;
+    if (phoneObj.countryCode) {
+      // add both "+CCdigits" and "CC-digits" style safety if you prefer
+      existingPhones.add(`+${phoneObj.countryCode}${digits}`);
+      existingPhones.add(`${phoneObj.countryCode}${digits}`);
     }
+    // always add bare digits
+    existingPhones.add(digits);
+  };
 
-    // Now fetch the admin + all users that have createdByWhichCompanyAdmin = companyAdminId
-    const companyUsers = await User.find({
-        $or: [
-            { _id: companyAdminId },
-            { createdByWhichCompanyAdmin: companyAdminId }
-        ]
-    }).select("_id").lean();
+  for (const c of contacts || []) {
+    for (const p of c.phoneNumbers || []) addPhoneVariants(p);
+  }
+  for (const l of leads || []) {
+    for (const p of l.phoneNumbers || []) addPhoneVariants(p);
+  }
 
-    const allUserIds = companyUsers.map(u => u._id);
-
-    const [contacts, leads] = await Promise.all([
-        Contact.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
-        Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean()
-    ]);
-
-    const existingPhones = new Set();
-
-    const addPhoneVariants = (phoneObj) => {
-        if (!phoneObj || !phoneObj.number) return;
-        const digits = String(phoneObj.number).replace(/\D/g, "");
-        if (!digits) return;
-        if (phoneObj.countryCode) {
-            // add both "+CCdigits" and "CC-digits" style safety if you prefer
-            existingPhones.add(`+${phoneObj.countryCode}${digits}`);
-            existingPhones.add(`${phoneObj.countryCode}${digits}`);
-        }
-        // always add bare digits
-        existingPhones.add(digits);
-    };
-
-    for (const c of contacts || []) {
-        for (const p of c.phoneNumbers || []) addPhoneVariants(p);
-    }
-    for (const l of leads || []) {
-        for (const p of l.phoneNumbers || []) addPhoneVariants(p);
-    }
-
-    return { existingPhones, addPhoneVariants };
+  return { existingPhones, addPhoneVariants };
 };
 
-
 const redirectToZoho = (req, res) => {
+  const domain = req.body.domain || "com"; // or get from user profile/settings
+  const defaultCountryCode = req.query.defaultCountryCode || "971";
+  const scopes = ["ZohoCRM.modules.contacts.READ"];
+  const userId = req.user._id;
+  console.log("defaultCountryCode:", defaultCountryCode);
+  // Step 1: Redirect to Zoho OAuth
+  const params = querystring.stringify({
+    scope: scopes.join(","),
+    client_id: process.env.ZOHO_CLIENT_ID,
+    response_type: "code",
+    access_type: "offline",
+    redirect_uri: process.env.ZOHO_REDIRECT_URI,
+    state: `${userId}::${domain}::${defaultCountryCode}`, // Include region and default country code in state
+  });
 
-    const domain = req.body.domain || 'com'; // or get from user profile/settings
-    const scopes = [
-        'ZohoCRM.modules.contacts.READ'
-    ];
-    const userId = req.user._id;
-    // Step 1: Redirect to Zoho OAuth   
-    const params = querystring.stringify({
-        scope: scopes.join(','),
-        client_id: process.env.ZOHO_CLIENT_ID,
-        response_type: 'code',
-        access_type: 'offline',
-        redirect_uri: process.env.ZOHO_REDIRECT_URI,
-        state: `${userId}::${domain}` // Include region in state
-    });
-
-    const authUrl = `https://accounts.zoho.${domain}/oauth/v2/auth?${params}`;
-    return res.json({ status: 'success', url: authUrl });
+  const authUrl = `https://accounts.zoho.${domain}/oauth/v2/auth?${params}`;
+  return res.json({ status: "success", url: authUrl });
 };
 
 const handleZohoCallback = async (req, res) => {
-    const { code, state } = req.query;
-    if (!code) return res.status(400).json({ status: "error" });
+  const { code, state } = req.query;
+  if (!code) return res.status(400).json({ status: "error" });
 
-    const [userId, domain] = state.split("::");
+  const stateParts = state.split("::");
+  const userId = stateParts[0];
+  const domain = stateParts[1] || "com";
+  const defaultCountryCode = stateParts[2] || "971";
+  console.log(
+    "userId:",
+    userId,
+    "domain:",
+    domain,
+    "defaultCountryCode:",
+    defaultCountryCode
+  );
 
-    try {
-        const tokenRes = await axios.post(
-            `https://accounts.zoho.${domain}/oauth/v2/token`,
-            querystring.stringify({
-                grant_type: "authorization_code",
-                client_id: process.env.ZOHO_CLIENT_ID,
-                client_secret: process.env.ZOHO_CLIENT_SECRET,
-                redirect_uri: process.env.ZOHO_REDIRECT_URI,
-                code
-            }),
-            { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-        );
+  try {
+    const tokenRes = await axios.post(
+      `https://accounts.zoho.${domain}/oauth/v2/token`,
+      querystring.stringify({
+        grant_type: "authorization_code",
+        client_id: process.env.ZOHO_CLIENT_ID,
+        client_secret: process.env.ZOHO_CLIENT_SECRET,
+        redirect_uri: process.env.ZOHO_REDIRECT_URI,
+        code,
+      }),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
 
-        const accessToken = tokenRes.data.access_token;
+    const accessToken = tokenRes.data.access_token;
 
-        const contactRes = await axios.get(
-            `https://www.zohoapis.${domain}/crm/v2/Contacts`,
-            { headers: { Authorization: `Zoho-oauthtoken ${accessToken}` } }
-        );
+    const contactRes = await axios.get(
+      `https://www.zohoapis.${domain}/crm/v2/Contacts`,
+      { headers: { Authorization: `Zoho-oauthtoken ${accessToken}` } }
+    );
 
-        const { existingPhones, addPhoneVariants } =
-            await buildGlobalDuplicateSets(userId);
+    const { existingPhones, addPhoneVariants } = await buildGlobalDuplicateSets(
+      userId
+    );
 
-        const contactsToInsert = [];
+    const contactsToInsert = [];
 
-        for (const contact of contactRes.data.data || []) {
-            const firstname = contact.First_Name || "";
-            const lastname = contact.Last_Name || "";
-            const email = contact.Email ? contact.Email.toLowerCase() : "";
-            const rawPhone = (contact.Phone || "").replace(/\s+/g, "");
+    for (const contact of contactRes.data.data || []) {
+      const firstname = contact.First_Name || "";
+      const lastname = contact.Last_Name || "";
+      const email = contact.Email ? contact.Email.toLowerCase() : "";
+      const rawPhone = (contact.Phone || "").replace(/\s+/g, "");
 
             let phoneObj = null;
             if (rawPhone) {
@@ -135,54 +147,63 @@ const handleZohoCallback = async (req, res) => {
                 }
             }
 
-            if (phoneObj && phoneObj.number && !phoneObj.countryCode) phoneObj.countryCode = "971";
+      if (phoneObj && phoneObj.number && !phoneObj.countryCode)
+        phoneObj.countryCode = defaultCountryCode;
 
-            const emailList = email ? [email] : [];
-            const phoneList = phoneObj && phoneObj.number ? [phoneObj] : [];
+      const emailList = email ? [email] : [];
+      const phoneList = phoneObj && phoneObj.number ? [phoneObj] : [];
 
-            // const emailDuplicate = emailList.some(e => existingEmails.has(e));
-            // const phoneDuplicate = phoneList.some(p => {
-            //     const digits = p.number;
-            //     const full = p.countryCode ? `+${p.countryCode}${digits}` : digits;
-            //     return existingPhones.has(full) || existingPhones.has(digits);
-            // });
+      // const emailDuplicate = emailList.some(e => existingEmails.has(e));
+      // const phoneDuplicate = phoneList.some(p => {
+      //     const digits = p.number;
+      //     const full = p.countryCode ? `+${p.countryCode}${digits}` : digits;
+      //     return existingPhones.has(full) || existingPhones.has(digits);
+      // });
 
-            const phoneDuplicate = phoneList.some(p => {
-                const digits = String(p.number || "").replace(/\D/g, "");
-                if (!digits) return false;
-                const full = p.countryCode ? `+${String(p.countryCode).replace(/^\+/, "")}${digits}` : digits;
-                // check both normalized full (+CCdigits) and bare digits
-                return existingPhones.has(full) || existingPhones.has(digits) || existingPhones.has(`${String(p.countryCode).replace(/^\+/, "")}${digits}`);
-            });
+      const phoneDuplicate = phoneList.some((p) => {
+        const digits = String(p.number || "").replace(/\D/g, "");
+        if (!digits) return false;
+        const full = p.countryCode
+          ? `+${String(p.countryCode).replace(/^\+/, "")}${digits}`
+          : digits;
+        // check both normalized full (+CCdigits) and bare digits
+        return (
+          existingPhones.has(full) ||
+          existingPhones.has(digits) ||
+          existingPhones.has(
+            `${String(p.countryCode).replace(/^\+/, "")}${digits}`
+          )
+        );
+      });
 
-            if (/*emailDuplicate ||*/ phoneDuplicate) continue;
+      if (/*emailDuplicate ||*/ phoneDuplicate) continue;
 
-            const _id = new mongoose.Types.ObjectId();
-            contactsToInsert.push({
-                _id,
-                contact_id: _id,
-                firstname,
-                lastname,
-                emailaddresses: emailList,
-                phonenumbers: phoneList,
-                createdBy: userId
-            });
+      const _id = new mongoose.Types.ObjectId();
+      contactsToInsert.push({
+        _id,
+        contact_id: _id,
+        firstname,
+        lastname,
+        emailaddresses: emailList,
+        phonenumbers: phoneList,
+        createdBy: userId,
+      });
 
-            // emailList.forEach(e => existingEmails.add(e));
-            phoneList.forEach(p => addPhoneVariants(p));
-        }
+      // emailList.forEach(e => existingEmails.add(e));
+      phoneList.forEach((p) => addPhoneVariants(p));
+    }
 
-        const savedContacts = await Contact.insertMany(contactsToInsert);
+    const savedContacts = await Contact.insertMany(contactsToInsert);
 
-        //         // Step 6: Send response back to frontend
-        const resultData = {
-            status: 'success',
-            message: 'Zoho Contacts imported successfully',
-            contacts: savedContacts
-        };
-        console.log('Result Data:', resultData);
+    //         // Step 6: Send response back to frontend
+    const resultData = {
+      status: "success",
+      message: "Zoho Contacts imported successfully",
+      contacts: savedContacts,
+    };
+    console.log("Result Data:", resultData);
 
-        return res.send(`
+    return res.send(`
         <!DOCTYPE html>
           <html>
           <head><title>Zoho contact fetch successfully</title></head>
@@ -195,18 +216,18 @@ const handleZohoCallback = async (req, res) => {
           </body>
           </html>
     `);
-    } catch (error) {
-        console.error("Zoho Error:", error);
-        return res.send(`
+  } catch (error) {
+    console.error("Zoho Error:", error);
+    return res.send(`
       <script>
         window.opener.postMessage({ status: "error", message: "Zoho Import Failed" }, "*");
         window.close();
       </script>
     `);
-    }
+  }
 };
 
 module.exports = {
-    redirectToZoho,
-    handleZohoCallback
+  redirectToZoho,
+  handleZohoCallback,
 };

@@ -1,11 +1,11 @@
-const axios = require('axios');
-const querystring = require('querystring');
-const Contact = require('../models/contactModel'); // adjust as needed
-const Lead = require('../models/leadModel'); // adjust as needed
-const mongoose = require('mongoose');
+const axios = require("axios");
+const querystring = require("querystring");
+const Contact = require("../models/contactModel"); // adjust as needed
+const Lead = require("../models/leadModel"); // adjust as needed
+const mongoose = require("mongoose");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
-const User = require('../models/userModel'); // adjust as needed
-require('dotenv').config();
+const User = require("../models/userModel"); // adjust as needed
+require("dotenv").config();
 
 // const buildGlobalDuplicateSets = async (userId) => {
 //   const loggedInUser = await User.findById(userId).lean();
@@ -69,7 +69,6 @@ require('dotenv').config();
 //   return { existingPhones, addPhoneVariants };
 // };
 
-
 // Step 1: Redirect to HubSpot OAuth
 
 const buildGlobalDuplicateSets = async (userId) => {
@@ -93,15 +92,17 @@ const buildGlobalDuplicateSets = async (userId) => {
   const companyUsers = await User.find({
     $or: [
       { _id: companyAdminId },
-      { createdByWhichCompanyAdmin: companyAdminId }
-    ]
-  }).select("_id").lean();
+      { createdByWhichCompanyAdmin: companyAdminId },
+    ],
+  })
+    .select("_id")
+    .lean();
 
-  const allUserIds = companyUsers.map(u => u._id);
+  const allUserIds = companyUsers.map((u) => u._id);
 
   const [contacts, leads] = await Promise.all([
     Contact.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
-    Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean()
+    Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
   ]);
 
   const existingPhones = new Set();
@@ -129,28 +130,30 @@ const buildGlobalDuplicateSets = async (userId) => {
   return { existingPhones, addPhoneVariants };
 };
 
-
 const redirectToHubSpot = (req, res) => {
-  const scopes = [
-    'crm.objects.contacts.read',
-    'oauth'
-  ];
+  const scopes = ["crm.objects.contacts.read", "oauth"];
   const user_id = req.user._id;
+  const defaultCountryCode = req.query.defaultCountryCode || "971";
+  console.log("defaultCountryCode:", defaultCountryCode);
   const params = querystring.stringify({
     client_id: process.env.HUBSPOT_CLIENT_ID,
     redirect_uri: process.env.HUBSPOT_REDIRECT_URI,
-    scope: scopes.join(' '),
-    state: user_id,
-    response_type: 'code',
+    scope: scopes.join(" "),
+    state: `${user_id}::${defaultCountryCode}`,
+    response_type: "code",
   });
 
   const url = `https://app.hubspot.com/oauth/authorize?${params}`;
-  res.json({ status: 'success', url });
+  res.json({ status: "success", url });
 };
 
 const handleHubSpotCallback = async (req, res) => {
-  const { code, state: userId } = req.query;
-  if (!code || !userId) return res.status(400).json({ status: "error", message: "Missing code" });
+  const { code, state } = req.query;
+  if (!code || !state)
+    return res.status(400).json({ status: "error", message: "Missing code" });
+
+  const [userId, defaultCountryCode = "971"] = state.split("::");
+  console.log("userId:", userId, "defaultCountryCode:", defaultCountryCode);
 
   try {
     // ✅ TOKEN
@@ -161,7 +164,7 @@ const handleHubSpotCallback = async (req, res) => {
         client_id: process.env.HUBSPOT_CLIENT_ID,
         client_secret: process.env.HUBSPOT_CLIENT_SECRET,
         redirect_uri: process.env.HUBSPOT_REDIRECT_URI,
-        code
+        code,
       }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
@@ -173,12 +176,13 @@ const handleHubSpotCallback = async (req, res) => {
       "https://api.hubapi.com/crm/v3/objects/contacts",
       {
         headers: { Authorization: `Bearer ${accessToken}` },
-        params: { limit: 100, properties: "firstname,lastname,email,phone" }
+        params: { limit: 100, properties: "firstname,lastname,email,phone" },
       }
     );
 
-    const { existingPhones, addPhoneVariants } =
-      await buildGlobalDuplicateSets(userId);
+    const { existingPhones, addPhoneVariants } = await buildGlobalDuplicateSets(
+      userId
+    );
 
     const contactsToInsert = [];
 
@@ -202,7 +206,8 @@ const handleHubSpotCallback = async (req, res) => {
         }
       }
 
-      if (phoneObj && phoneObj.number && !phoneObj.countryCode) phoneObj.countryCode = "971";
+      if (phoneObj && phoneObj.number && !phoneObj.countryCode)
+        phoneObj.countryCode = defaultCountryCode;
 
       const emailList = email ? [email] : [];
       const phoneList = phoneObj && phoneObj.number ? [phoneObj] : [];
@@ -214,14 +219,21 @@ const handleHubSpotCallback = async (req, res) => {
       //   return existingPhones.has(full) || existingPhones.has(digits);
       // });
 
-      const phoneDuplicate = phoneList.some(p => {
+      const phoneDuplicate = phoneList.some((p) => {
         const digits = String(p.number || "").replace(/\D/g, "");
         if (!digits) return false;
-        const full = p.countryCode ? `+${String(p.countryCode).replace(/^\+/, "")}${digits}` : digits;
+        const full = p.countryCode
+          ? `+${String(p.countryCode).replace(/^\+/, "")}${digits}`
+          : digits;
         // check both normalized full (+CCdigits) and bare digits
-        return existingPhones.has(full) || existingPhones.has(digits) || existingPhones.has(`${String(p.countryCode).replace(/^\+/, "")}${digits}`);
+        return (
+          existingPhones.has(full) ||
+          existingPhones.has(digits) ||
+          existingPhones.has(
+            `${String(p.countryCode).replace(/^\+/, "")}${digits}`
+          )
+        );
       });
-
 
       if (/*emailDuplicate ||*/ phoneDuplicate) continue;
 
@@ -233,18 +245,18 @@ const handleHubSpotCallback = async (req, res) => {
         lastname,
         emailAddresses: emailList,
         phoneNumbers: phoneList,
-        createdBy: userId
+        createdBy: userId,
       });
 
       // emailList.forEach(e => existingEmails.add(e));
-      phoneList.forEach(p => addPhoneVariants(p));
+      phoneList.forEach((p) => addPhoneVariants(p));
     }
 
     const savedContacts = await Contact.insertMany(contactsToInsert);
 
     const resultData = {
-      status: 'success',
-      message: 'HubSpot Contacts imported successfully',
+      status: "success",
+      message: "HubSpot Contacts imported successfully",
       contacts: savedContacts,
     };
 
@@ -271,7 +283,6 @@ const handleHubSpotCallback = async (req, res) => {
     `);
   }
 };
-
 
 module.exports = {
   redirectToHubSpot,
