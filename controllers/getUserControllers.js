@@ -179,7 +179,6 @@ const getUserData = async (req, res) => {
     //   }
     // }
 
-
     const data = {
       id: user._id,
       firstname: user.firstname,
@@ -222,6 +221,7 @@ const getUserData = async (req, res) => {
       yestarBaseURL: YEASTAR_BASE_URL || null,
       contactStatuses: user.contactStatuses || [],
       leadStatuses: user.leadStatuses || [],
+      accountStatus: user.accountStatus === "active",
       // yeastarSignature: yeastarSignature,
       // pbxURL: pbxURL,
     };
