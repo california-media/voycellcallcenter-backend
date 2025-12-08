@@ -4,7 +4,7 @@ const User = require("../models/userModel");
 const crypto = require("crypto");
 const { randomBytes, createHmac } = require("crypto");
 // const { randomBytes } = require("crypto");
-const { sendVerificationEmail } = require("../utils/emailUtils");
+const { sendVerificationEmail, sendMagicLinkEmail } = require("../utils/emailUtils");
 const googleClient = new OAuth2Client(
   "401067515093-9j7faengj216m6uc9csubrmo3men1m7p.apps.googleusercontent.com"
 );
@@ -954,23 +954,40 @@ const unifiedLogin = async (req, res) => {
 
 const generateMagicLink = async (req, res) => {
   try {
-    const userId = req.user._id; // from auth middleware
+    const userId = req.user._id; // ✅ from auth middleware
 
+    // ✅ Find user email
+    const user = await User.findById(userId).select("email");
+
+    if (!user || !user.email) {
+      return res.status(400).json({
+        status: "error",
+        message: "User email not found",
+      });
+    }
+
+    // ✅ Generate secure token
     const magicToken = randomBytes(32).toString("hex");
 
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // ✅ 10 minutes
+    // ✅ Set expiry (10 minutes)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
+    // ✅ Save token to DB
     await User.findByIdAndUpdate(userId, {
       magicLoginToken: magicToken,
       magicLoginExpires: expiresAt,
     });
 
+    // ✅ Create full magic link
     const magicLink = `${process.env.FRONTEND_URL}/link-login?token=${magicToken}`;
+
+    // ✅ SEND MAGIC LINK TO USER EMAIL ✅✅✅
+    await sendMagicLinkEmail(user.email, magicLink);
 
     return res.json({
       status: "success",
-      message: "Magic link generated",
-      magicLink, // ✅ send to frontend for share
+      message: "Magic login link sent to your email successfully",
+      magicLink, // for testing purposes
       expiresAt,
     });
   } catch (err) {
@@ -1049,7 +1066,7 @@ const loginWithMagicLink = async (req, res) => {
       data: {
         token: jwtToken,
         role: user.role,
-        signupMethod: user.signupMethod,
+        registeredWith: user.signupMethod,
       },
     });
   } catch (err) {

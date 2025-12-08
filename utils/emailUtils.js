@@ -589,9 +589,86 @@ const sendEmailChangeVerification = async (
     await transporter.sendMail(mailOptions);
 };
 
+const sendMagicLinkEmail = async (email, link) => {
+    const mailOptions = {
+        from: '"VoyCell Call Center" <noreply@contacts.management>',
+        to: email,
+        subject: "VoyCell Secure Magic Login Link",
+        html: `
+    <html>
+    <head>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          background-color: #ffffff;
+          color: #2d313a;
+          padding: 0;
+          margin: 0;
+        }
+        .container {
+          max-width: 600px;
+          margin: auto;
+          padding: 20px;
+        }
+        .button {
+          background: #4CAF50;
+          color: #fff !important;
+          padding: 14px 24px;
+          text-decoration: none;
+          border-radius: 6px;
+          font-weight: bold;
+          display: inline-block;
+        }
+        .footer {
+          font-size: 13px;
+          color: #6c757d;
+          margin-top: 30px;
+          text-align: center;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+
+        <center>
+          <img src="${process.env.FRONTEND_URL}/assets/img/voycell-logo.png" style="width:180px;" />
+        </center>
+
+        <h2>Login to VoyCell using Magic Link</h2>
+
+        <p>Hello,</p>
+
+        <p>You requested a secure magic link to log into your VoyCell account.</p>
+
+        <p><b>This link will expire in 10 minutes and can only be used once.</b></p>
+
+        <center>
+        <div style="margin: 20px 0;">${link}</div>
+        <div>
+            <a href="https://voycellcallcenter.vercel.app" class="button">Login Securely</a>
+        </div>
+        </center>
+
+        <p>If you did not request this login, you can safely ignore this email.</p>
+
+        <div class="footer">
+          <p>VoyCell Call Center Team</p>
+          <p>${process.env.FRONTEND_URL}</p>
+        </div>
+
+      </div>
+    </body>
+    </html>
+    `,
+    };
+
+    await transporter.sendMail(mailOptions);
+};
+
 module.exports = {
     sendVerificationEmail,
     //   sendHelpSupportReply,
     sendHelpSupportReplyNotification,
     sendEmailChangeVerification,
+    sendMagicLinkEmail,
 };
