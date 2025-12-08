@@ -179,15 +179,13 @@ exports.getAgentDetails = async (req, res) => {
 
 exports.editCompanyAdminAndAgent = async (req, res) => {
   try {
-    const { userId, extensionNumber, telephone, sipSecret, status, newEmail } =
-      req.body;
+    const { userId, extensionNumber, telephone, status, newEmail } = req.body;
 
     console.log(
       "Received body:",
       userId,
       extensionNumber,
       telephone,
-      sipSecret,
       status,
       newEmail
     );
@@ -256,15 +254,13 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     const isActivating =
       status === true || status === "active" || status === "Active";
 
-    // If activation is requested, require all three fields to be provided and non-empty.
+    // If activation is requested, require both fields to be provided and non-empty.
     if (isActivating) {
       const missing = [];
       if (!extensionNumber || String(extensionNumber).trim() === "")
         missing.push("Extension Number");
       if (!telephone || String(telephone).trim() === "")
         missing.push("Telephone");
-      if (!sipSecret || String(sipSecret).trim() === "")
-        missing.push("SIP Secret");
 
       if (missing.length > 0) {
         return res.status(400).json({
@@ -276,22 +272,9 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
       }
     }
 
-    // SIP Secret complexity validation: must contain at least one digit, one lowercase and one uppercase letter
-    const sip = sipSecret || (user && user.sipSecret) || "";
-    if (sip) {
-      const sipRegex = /(?=.*\d)(?=.*[a-z])(?=.*[A-Z])/;
-      if (!sipRegex.test(String(sip))) {
-        return res.status(400).json({
-          error:
-            "SIP Secret must contain at least one lowercase letter, one uppercase letter and one number.",
-        });
-      }
-    }
-
     if (extensionNumber !== undefined)
       updateData.extensionNumber = extensionNumber;
     if (telephone !== undefined) updateData.telephone = telephone;
-    if (sipSecret !== undefined) updateData.sipSecret = sipSecret;
 
     if (status !== undefined)
       updateData.extensionStatus = isActivating ? true : false;
