@@ -128,10 +128,10 @@ const handleZohoCallback = async (req, res) => {
                 try {
                     const parsed = parsePhoneNumberFromString(rawPhone);
                     phoneObj = parsed
-                        ? { countryCode: parsed.countryCallingCode || "", number: parsed.nationalNumber.replace(/\D/g, "") }
-                        : { countryCode: "", number: rawPhone.replace(/\D/g, "") };
+                        ? { countryCode: parsed.countryCallingCode || "", number: parsed.nationalNumber.replace(/\D/g, "").replace(/^0+/, "") }
+                        : { countryCode: "", number: rawPhone.replace(/\D/g, "").replace(/^0+/, "") };
                 } catch {
-                    phoneObj = { countryCode: "", number: rawPhone.replace(/\D/g, "") };
+                    phoneObj = { countryCode: "", number: rawPhone.replace(/\D/g, "").replace(/^0+/, "") };
                 }
             }
 
