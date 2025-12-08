@@ -1,6 +1,7 @@
 const { google } = require("googleapis");
 const querystring = require("querystring");
 const Contact = require("../models/contactModel"); // ✅ Adjust path as needed
+const Lead = require("../models/leadModel"); // make sure to import
 const mongoose = require("mongoose"); // ⬅️ Make sure this is imported at the top
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const { title } = require("process");
@@ -34,19 +35,13 @@ const redirectToGoogle = (req, res) => {
 };
 
 // Step 2: Google redirects here with ?code=... and ?state=...
-
 const handleGoogleCallback = async (req, res) => {
   const { code } = req.query;
-  // const useTestMode = req.user.stripe_test_mode || false;
   if (!code) {
     return res
       .status(400)
       .json({ status: "error", message: "Missing authorization code" });
   }
-  console.log("hello abc");
-
-  console.log(code);
-
 
   try {
     const { tokens } = await oauth2Client.getToken(code);
@@ -60,8 +55,6 @@ const handleGoogleCallback = async (req, res) => {
       personFields: "names,emailAddresses,phoneNumbers",
     });
 
-
-
     const userId = req.query.state || null;
     if (!userId) {
       return res.status(400).json({
@@ -70,7 +63,6 @@ const handleGoogleCallback = async (req, res) => {
       });
     }
 
-    // ✅ Fetch user & plan details
     const user = await User.findById(userId);
     if (!user) {
       return res
@@ -78,40 +70,39 @@ const handleGoogleCallback = async (req, res) => {
         .json({ status: "error", message: "User not found" });
     }
 
-    // Get current plan from subscription
+    // ------------------------------
+    // Build sets of existing emails & phones from Contact AND Lead
+    // ------------------------------
+    const [contactDocs, leadDocs] = await Promise.all([
+      Contact.find({ createdBy: userId }, "emailAddresses phoneNumbers").lean(),
+      Lead.find({ createdBy: userId }, "emailAddresses phoneNumbers").lean(),
+    ]);
 
-    // const currentPlan = await getUserCurrentPlan(user, useTestMode);
-    // const userPlan = currentPlan ? currentPlan.name.toLowerCase() : "starter"; // default starter
-    // const currentContactCount = await Contact.countDocuments({
-    //   createdBy: userId,
-    // });
+    const existingEmails = new Set();
+    const existingPhonesFull = new Set();   // "countryCode-number"
+    const existingPhonesOnly = new Set();   // "number" only
 
-    let maxLimit = Infinity;
-    // if (userPlan === "free") {
-    //   maxLimit = 1000; // free users limited to 1000
-    // }
+    const addFromDoc = (doc) => {
+      if (!doc) return;
+      for (const e of doc.emailAddresses || []) {
+        if (typeof e === "string") existingEmails.add(e.toLowerCase().trim());
+      }
+      for (const p of doc.phoneNumbers || []) {
+        const country = (p.countryCode || "").replace(/^\+/, "").trim();
+        const numberOnly = (p.number || "").replace(/\D/g, "");
+        if (!numberOnly) continue;
+        if (country) existingPhonesFull.add(`${country}-${numberOnly}`);
+        existingPhonesOnly.add(numberOnly);
+      }
+    };
+
+    for (const c of contactDocs) addFromDoc(c);
+    for (const l of leadDocs) addFromDoc(l);
 
     const connections = response.data.connections || [];
 
-    // Fetch existing contact emails and phones for this user
-    const existingContacts = await Contact.find(
-      { createdBy: userId },
-      "emailaddresses phonenumbers"
-    );
-    const existingEmails = new Set();
-    const existingPhones = new Set();
-
-    for (const contact of existingContacts) {
-      for (const email of contact.emailaddresses || []) {
-        existingEmails.add(email.toLowerCase());
-      }
-      // for (const phone of contact.phonenumbers || []) {
-      //   existingPhones.add(phone);
-      // }
-      for (const phone of contact.phonenumbers || []) {
-        existingPhones.add(`${phone.countryCode}-${phone.number}`);
-      }
-    }
+    // avoid duplicates within same import
+    const importNewPhones = new Set();
 
     const contactsToInsert = [];
 
@@ -120,59 +111,71 @@ const handleGoogleCallback = async (req, res) => {
       const [firstname = "", ...lastnameParts] = name.split(" ");
       const lastname = lastnameParts.join(" ");
 
-      // const emailList = person.emailAddresses?.map(e => e.value.toLowerCase()) || [];
-      // const phoneList = person.phoneNumbers?.map(p => p.value.replace(/\+/g, '')) || []; // ⬅️ Cleaned
-
       const emailListRaw =
-        person.emailAddresses?.map((e) => e.value.toLowerCase()) || [];
-      // const phoneListRaw = person.phoneNumbers?.map(p => p.value.replace(/\+/g, '')) || [];
-
+        (person.emailAddresses || []).map((e) => (e.value || "").toLowerCase().trim());
       const emailList = emailListRaw.length > 0 ? [emailListRaw[0]] : [];
-      // const phoneList = phoneListRaw.length > 0 ? [phoneListRaw[0]] : [];
 
-      // Convert Google phone numbers to [{ countryCode, number }]
-      // const phoneList = (person.phoneNumbers || []).map(p => {
-      //   let raw = p.value.trim();
-
-      //   // Extract country code (if starts with +XX) and number
-      //   let match = raw.match(/^(\+\d{1,4})?\s*(.*)$/);
-      //   let countryCode = match && match[1] ? match[1] : "";
-      //   let number = match && match[2] ? match[2].replace(/\s+/g, "") : raw;
-
-      //   return { countryCode, number };
-      // });
-
+      // parse and normalize phone numbers from Google person
       const phoneListRaw = (person.phoneNumbers || []).map((p) => {
-        let raw = p.value.replace(/\s+/g, "");
-
-        // Use libphonenumber-js to parse
+        const raw = (p.value || "").trim();
         const parsed = parsePhoneNumberFromString(raw);
 
-        if (parsed) {
-          return {
-            countryCode: `+${parsed.countryCallingCode}`, // ✅ Always correct, e.g., +91, +1, +44
-            number: parsed.nationalNumber.replace(/\D/g, ""), // ✅ Clean national number (without country code)
-          };
+        if (parsed && parsed.nationalNumber) {
+          const cc = parsed.countryCallingCode ? String(parsed.countryCallingCode).replace(/^\+/, "") : "";
+          const num = String(parsed.nationalNumber).replace(/\D/g, "");
+          return { countryCode: cc, number: num };
         } else {
-          // fallback: if libphonenumber-js fails
-          return {
-            countryCode: "",
-            number: raw.replace(/\D/g, ""), // keep only digits
-          };
+          // fallback: remove non-digits, no country code
+          const numOnly = raw.replace(/\D/g, "");
+          return { countryCode: "", number: numOnly };
         }
-      });
+      }).filter(p => p && p.number);
 
-      const phoneList = phoneListRaw.length > 0 ? [phoneListRaw[0]] : [];
+      // const phoneList = phoneListRaw.length > 0 ? [phoneListRaw[0]] : [];
 
-      // Skip if any email or phone matches existing
-      const isDuplicate =
-        emailList.some((email) => existingEmails.has(email)) ||
-        // phoneList.some(phone => existingPhones.has(phone));
-        phoneList.some((phone) =>
-          existingPhones.has(`${phone.countryCode}-${phone.number}`)
-        );
+      const phoneList =
+        phoneListRaw.length > 0
+          ? [
+            {
+              countryCode: phoneListRaw[0].countryCode || "971", // ✅ DEFAULT ADDED HERE
+              number: phoneListRaw[0].number,
+            },
+          ]
+          : [];
 
-      if (isDuplicate) continue;
+
+      // DUPLICATE CHECKS:
+      const isEmailDuplicate = emailList.some((email) => existingEmails.has(email));
+      let isPhoneDuplicate = false;
+
+      for (const phone of phoneList) {
+        const cc = (phone.countryCode || "").replace(/^\+/, "");
+        const num = (phone.number || "").replace(/\D/g, "");
+        if (!num) continue;
+
+        if (cc) {
+          if (existingPhonesFull.has(`${cc}-${num}`) || importNewPhones.has(`${cc}-${num}`)) {
+            isPhoneDuplicate = true;
+            break;
+          }
+        } else {
+          if (existingPhonesOnly.has(num) || importNewPhones.has(num)) {
+            isPhoneDuplicate = true;
+            break;
+          }
+        }
+      }
+
+      if (isEmailDuplicate || isPhoneDuplicate) continue;
+
+      // Add to importNewPhones to prevent duplicates within same batch
+      for (const phone of phoneList) {
+        const cc = (phone.countryCode || "").replace(/^\+/, "");
+        const num = (phone.number || "").replace(/\D/g, "");
+        if (!num) continue;
+        if (cc) importNewPhones.add(`${cc}-${num}`);
+        importNewPhones.add(num);
+      }
 
       const _id = new mongoose.Types.ObjectId();
 
@@ -183,8 +186,6 @@ const handleGoogleCallback = async (req, res) => {
         lastname,
         emailAddresses: emailList,
         phoneNumbers: phoneList,
-        // emailaddresses: Array.isArray(emailList) ? emailList : (emailList ? [emailList] : []),
-        // phonenumbers: Array.isArray(phoneList) ? phoneList : (phoneList ? [phoneList] : []),
         company: "",
         designation: "",
         linkedin: "",
@@ -196,60 +197,25 @@ const handleGoogleCallback = async (req, res) => {
         activities: [
           {
             action: "contact_created",
-            type: "contact", // ✅ this is important
+            type: "contact",
             title: "Contact Imported from Google",
             description: `${firstname} ${lastname}`,
           },
         ],
       });
-    }
-
-    // let savedContacts = [];
-    // if (contactsToInsert.length > 0) {
-    //   savedContacts = await Contact.insertMany(contactsToInsert);
-    // }
-
-    // ✅ Apply plan rules before saving
-    // let allowedContacts = contactsToInsert;
-
-    // if (currentContactCount >= maxLimit) {
-    //   allowedContacts = []; // already at max
-    // } else if (currentContactCount + contactsToInsert.length > maxLimit) {
-    //   const remainingSlots = maxLimit - currentContactCount;
-    //   allowedContacts = contactsToInsert.slice(0, remainingSlots); // trim
-    // }
+    } // end for connections
 
     let savedContacts = [];
-    // if (allowedContacts.length > 0) {
-    // }
-    savedContacts = await Contact.insertMany(contactsToInsert);
-
-    // return res.json({
-    //   status: 'success',
-    //   contacts: savedContacts, // ✅ only imported contacts
-    // });
-
-    // const resultData = {
-    //   status: 'success',
-    //   message: 'Google Contacts imported successfully',
-    //   contacts: savedContacts, // ✅ only imported contacts
-    // };
+    if (contactsToInsert.length > 0) {
+      savedContacts = await Contact.insertMany(contactsToInsert);
+    }
 
     const resultData = {
       status: "success",
       message: "Google Contacts imported successfully",
       imported: savedContacts.length,
-      // skipped: contactsToInsert.length - savedContacts.length,
-      // totalContacts: currentContactCount + savedContacts.length,
       contacts: savedContacts,
     };
-
-    // return res.send(`
-    //     <script>
-    //         window.opener.postMessage(${resultData}, '*');
-    //         window.close();
-    //     </script>
-    // `);
 
     return res.send(`
         <!DOCTYPE html>
@@ -275,12 +241,6 @@ const handleGoogleCallback = async (req, res) => {
         </html>
     `);
   } catch (error) {
-    // console.error('Google Contact Fetch Error:', error);
-    // return res.status(500).json({
-    //   status: 'error',
-    //   message: 'Failed to fetch Google contacts',
-    //   error: error.message,
-    // });
     return res.send(`
             <script>
                 window.opener.postMessage({ status: 'error', message: 'Google contact fetch callback failed', error: '${error.message}' }, '*');
@@ -289,6 +249,7 @@ const handleGoogleCallback = async (req, res) => {
         `);
   }
 };
+
 
 module.exports = {
   redirectToGoogle,

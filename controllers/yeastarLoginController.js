@@ -216,8 +216,8 @@ async function getYeastarLoginSignature(req, res) {
     return res.status(200).json({
       status: "success",
       data: {
-        // username: user.extensionNumber, // Extension number is used for SDK login
-        username: "1010",
+        username: user.extensionNumber, // Extension number is used for SDK login
+        // username: "1010",
         secret: signature, // Login signature from Yeastar API
         pbxURL: pbxURL, // PBX URL without /openapi/v1.0
         userInfo: {

@@ -1,6 +1,7 @@
 const querystring = require("querystring");
 const axios = require("axios");
 const Contact = require("../models/contactModel"); // adjust as needed
+const Lead = require("../models/leadModel"); // adjust as needed
 const mongoose = require("mongoose");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 require("dotenv").config();
