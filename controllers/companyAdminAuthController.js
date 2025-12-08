@@ -954,10 +954,21 @@ const unifiedLogin = async (req, res) => {
 
 const generateMagicLink = async (req, res) => {
   try {
-    const userId = req.user._id; // ✅ from auth middleware
+    // const userId = req.user._id; // ✅ from auth middleware
+
+    const email = req.body.email;
+
+    const user = await User.findOne({ email: email });
+    const userId = user ? user._id : null;
+    if (!user) {
+      return res.status(404).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
 
     // ✅ Find user email
-    const user = await User.findById(userId).select("email");
+    // const user = await User.findById(userId).select("email");
 
     if (!user || !user.email) {
       return res.status(400).json({
@@ -988,6 +999,7 @@ const generateMagicLink = async (req, res) => {
       status: "success",
       message: "Magic login link sent to your email successfully",
       magicLink, // for testing purposes
+      magicToken,
       expiresAt,
     });
   } catch (err) {
@@ -1001,30 +1013,41 @@ const generateMagicLink = async (req, res) => {
 
 const loginWithMagicLink = async (req, res) => {
   try {
-    const { magicLink } = req.body;
+    // const { magicLink } = req.body;
 
-    // ✅ 1. CHECK FULL LINK IS PROVIDED
-    if (!magicLink) {
-      return res.status(400).json({
-        status: "error",
-        message: "Magic link is required",
-      });
-    }
+    // // ✅ 1. CHECK FULL LINK IS PROVIDED
+    // if (!magicLink) {
+    //   return res.status(400).json({
+    //     status: "error",
+    //     message: "Magic link is required",
+    //   });
+    // }
 
-    let token;
+    const { token, magicLink } = req.body;
 
-    try {
+    const magicToken = ""
+
+    if (magicLink && !token) {
       // ✅ 2. EXTRACT TOKEN FROM FULL URL
-      const url = new URL(magicLink);
-      token = url.searchParams.get("token");
-    } catch (err) {
+      try {
+        const url = new URL(magicLink);
+        token = url.searchParams.get("token");
+      } catch (err) {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid magic link format",
+        });
+      }
+    } else if (token) {
+      magicToken = token;
+    } else {
       return res.status(400).json({
         status: "error",
-        message: "Invalid magic link format",
+        message: "Magic link or token is required",
       });
     }
 
-    if (!token) {
+    if (!magicToken) {
       return res.status(400).json({
         status: "error",
         message: "Magic token not found in link",
@@ -1033,7 +1056,7 @@ const loginWithMagicLink = async (req, res) => {
 
     // ✅ 3. FIND USER USING TOKEN
     const user = await User.findOne({
-      magicLoginToken: token,
+      magicLoginToken: magicToken,
       magicLoginExpires: { $gt: new Date() }, // ✅ must not be expired
     });
 
