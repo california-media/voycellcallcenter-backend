@@ -365,11 +365,24 @@ const handleGoogleCallback = async (req, res) => {
     const connections = response.data.connections || [];
     const contactsToInsert = [];
     const importNewPhones = new Set(); // avoid duplicate inside same batch
+    let count = 0;
 
     for (const person of connections) {
       const name = person.names?.[0]?.displayName || "";
       const [firstname = "", ...lastArr] = name.split(" ");
       const lastname = lastArr.join(" ");
+      const parsedBefore = parsePhoneNumberFromString(firstname);
+
+      if (parsedBefore.isValid() && !person.phoneNumbers) {
+        console.log("Phone number found in name, moving to phoneNumbers");
+        person.phoneNumbers = [{ value: firstname }];
+      } else if (
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(firstname) &&
+        !person.emailAddresses
+      ) {
+        console.log("Email found in name, moving to emailAddresses");
+        person.emailAddresses = [{ value: firstname }];
+      }
 
       // ✅ Email
       const emailRaw =
@@ -395,12 +408,23 @@ const handleGoogleCallback = async (req, res) => {
 
         if (number) {
           number = number.replace(/^0+/, "");
-
           phoneList.push({
             countryCode: countryCode || defaultCountryCode,
             number,
           });
         }
+      }
+      // ============================================================
+      // ✅ SKIP EMPTY CONTACTS
+      // ============================================================
+      // Skip if no name, email, or phone
+      if (
+        !firstname &&
+        !lastname &&
+        emailList.length === 0 &&
+        phoneList.length === 0
+      ) {
+        continue;
       }
 
       // ============================================================
@@ -409,7 +433,6 @@ const handleGoogleCallback = async (req, res) => {
       let isEmailDuplicate = emailList.some((e) => existingEmails.has(e));
 
       let isPhoneDuplicate = false;
-
       for (const phone of phoneList) {
         const cc = phone.countryCode.replace(/^\+/, "");
         const num = phone.number.replace(/\D/g, "");
@@ -427,17 +450,29 @@ const handleGoogleCallback = async (req, res) => {
         }
       }
 
-      if (isEmailDuplicate || isPhoneDuplicate) continue;
+      if (isEmailDuplicate || isPhoneDuplicate) {
+        count++;
+        continue;
+      }
 
       // ============================================================
-      // ✅ STEP 6: PREVENT SAME-BATCH DUPLICATE
+      // ✅ STEP 6: PREVENT SAME-BATCH DUPLICATE & UPDATE EXISTING SETS
       // ============================================================
+      // Add to same-batch tracking
       for (const phone of phoneList) {
         const cc = phone.countryCode.replace(/^\+/, "");
         const num = phone.number.replace(/\D/g, "");
 
         importNewPhones.add(`${cc}-${num}`);
         importNewPhones.add(num);
+        // Also update the main sets so subsequent imports in same session work
+        existingPhonesFull.add(`${cc}-${num}`);
+        existingPhonesOnly.add(num);
+      }
+
+      // Update email set too
+      for (const email of emailList) {
+        existingEmails.add(email);
       }
 
       // ============================================================
@@ -474,9 +509,21 @@ const handleGoogleCallback = async (req, res) => {
     // ============================================================
     // ✅ STEP 8: SAVE TO DB
     // ============================================================
+    console.log(`\n📊 Google Import Summary:`);
+    console.log(`Total Google contacts fetched: ${connections.length}`);
+    console.log(
+      `Contacts to insert (after deduplication): ${contactsToInsert.length}`
+    );
+    console.log(`Duplicates skipped: ${count}`);
+
     let savedContacts = [];
     if (contactsToInsert.length > 0) {
       savedContacts = await Contact.insertMany(contactsToInsert);
+      console.log(`✅ Successfully saved: ${savedContacts.length} contacts`);
+    } else {
+      console.log(
+        `ℹ️  No new contacts to import (all were duplicates or empty)`
+      );
     }
 
     // ============================================================

@@ -135,23 +135,44 @@ const handleZohoCallback = async (req, res) => {
       const email = contact.Email ? contact.Email.toLowerCase() : "";
       const rawPhone = (contact.Phone || "").replace(/\s+/g, "");
 
-            let phoneObj = null;
-            if (rawPhone) {
-                try {
-                    const parsed = parsePhoneNumberFromString(rawPhone);
-                    phoneObj = parsed
-                        ? { countryCode: parsed.countryCallingCode || "", number: parsed.nationalNumber.replace(/\D/g, "").replace(/^0+/, "") }
-                        : { countryCode: "", number: rawPhone.replace(/\D/g, "").replace(/^0+/, "") };
-                } catch {
-                    phoneObj = { countryCode: "", number: rawPhone.replace(/\D/g, "").replace(/^0+/, "") };
-                }
-            }
+      let phoneObj = null;
+      if (rawPhone) {
+        try {
+          const parsed = parsePhoneNumberFromString(rawPhone);
+          phoneObj = parsed
+            ? {
+                countryCode: parsed.countryCallingCode || "",
+                number: parsed.nationalNumber
+                  .replace(/\D/g, "")
+                  .replace(/^0+/, ""),
+              }
+            : {
+                countryCode: "",
+                number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
+              };
+        } catch {
+          phoneObj = {
+            countryCode: "",
+            number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
+          };
+        }
+      }
 
       if (phoneObj && phoneObj.number && !phoneObj.countryCode)
         phoneObj.countryCode = defaultCountryCode;
 
       const emailList = email ? [email] : [];
       const phoneList = phoneObj && phoneObj.number ? [phoneObj] : [];
+
+      // ✅ Skip empty contacts (no name, email, or phone)
+      if (
+        !firstname &&
+        !lastname &&
+        emailList.length === 0 &&
+        phoneList.length === 0
+      ) {
+        continue;
+      }
 
       // const emailDuplicate = emailList.some(e => existingEmails.has(e));
       // const phoneDuplicate = phoneList.some(p => {
@@ -176,7 +197,17 @@ const handleZohoCallback = async (req, res) => {
         );
       });
 
-      if (/*emailDuplicate ||*/ phoneDuplicate) continue;
+      if (/*emailDuplicate ||*/ phoneDuplicate) {
+        console.log(
+          `Skipping duplicate: ${firstname} ${lastname}, phone: ${phoneList[0]?.number}`
+        );
+        continue;
+      }
+
+      // Update existing phone set to prevent duplicates in same session
+      for (const p of phoneList) {
+        addPhoneVariants(p);
+      }
 
       const _id = new mongoose.Types.ObjectId();
       contactsToInsert.push({
@@ -193,7 +224,16 @@ const handleZohoCallback = async (req, res) => {
       phoneList.forEach((p) => addPhoneVariants(p));
     }
 
+    console.log(`\n📊 Zoho Import Summary:`);
+    console.log(
+      `Total Zoho contacts fetched: ${(contactRes.data.data || []).length}`
+    );
+    console.log(
+      `Contacts to insert (after deduplication): ${contactsToInsert.length}`
+    );
+
     const savedContacts = await Contact.insertMany(contactsToInsert);
+    console.log(`✅ Successfully saved: ${savedContacts.length} contacts`);
 
     //         // Step 6: Send response back to frontend
     const resultData = {

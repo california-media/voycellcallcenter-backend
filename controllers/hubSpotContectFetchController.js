@@ -199,26 +199,43 @@ const handleHubSpotCallback = async (req, res) => {
         try {
           const parsed = parsePhoneNumberFromString(rawPhone);
           phoneObj = parsed
-            ? { countryCode: parsed.countryCallingCode || "", number: parsed.nationalNumber.replace(/\D/g, "").replace(/^0+/, "") }
-            : { countryCode: "", number: rawPhone.replace(/\D/g, "").replace(/^0+/, "") };
+            ? {
+                countryCode: parsed.countryCallingCode || "",
+                number: parsed.nationalNumber
+                  .replace(/\D/g, "")
+                  .replace(/^0+/, ""),
+              }
+            : {
+                countryCode: "",
+                number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
+              };
         } catch {
-          phoneObj = { countryCode: "", number: rawPhone.replace(/\D/g, "").replace(/^0+/, "") };
+          phoneObj = {
+            countryCode: "",
+            number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
+          };
         }
       }
 
       if (phoneObj && phoneObj.number && !phoneObj.countryCode)
-        phoneObj.countryCode = defaultCountryCode;
+        if (phoneObj && phoneObj.number && !phoneObj.countryCode)
+          // ✅ Apply default country code BEFORE duplicate check
+          phoneObj.countryCode = defaultCountryCode;
 
       const emailList = email ? [email] : [];
       const phoneList = phoneObj && phoneObj.number ? [phoneObj] : [];
 
-      // const emailDuplicate = emailList.some(e => existingEmails.has(e));
-      // const phoneDuplicate = phoneList.some(p => {
-      //   const digits = p.number;
-      //   const full = p.countryCode ? `+${p.countryCode}${digits}` : digits;
-      //   return existingPhones.has(full) || existingPhones.has(digits);
-      // });
+      // ✅ Skip empty contacts (no name, email, or phone)
+      if (
+        !firstname &&
+        !lastname &&
+        emailList.length === 0 &&
+        phoneList.length === 0
+      ) {
+        continue;
+      }
 
+      // ✅ Duplicate check AFTER country code is applied
       const phoneDuplicate = phoneList.some((p) => {
         const digits = String(p.number || "").replace(/\D/g, "");
         if (!digits) return false;
@@ -235,7 +252,17 @@ const handleHubSpotCallback = async (req, res) => {
         );
       });
 
-      if (/*emailDuplicate ||*/ phoneDuplicate) continue;
+      if (/*emailDuplicate ||*/ phoneDuplicate) {
+        console.log(
+          `Skipping duplicate: ${firstname} ${lastname}, phone: ${phoneList[0]?.number}`
+        );
+        continue;
+      }
+
+      // Update existing phone set to prevent duplicates in same session
+      for (const p of phoneList) {
+        addPhoneVariants(p);
+      }
 
       const _id = new mongoose.Types.ObjectId();
       contactsToInsert.push({
@@ -252,7 +279,18 @@ const handleHubSpotCallback = async (req, res) => {
       phoneList.forEach((p) => addPhoneVariants(p));
     }
 
+    console.log(`\n📊 HubSpot Import Summary:`);
+    console.log(
+      `Total HubSpot contacts fetched: ${
+        (contactRes.data.results || []).length
+      }`
+    );
+    console.log(
+      `Contacts to insert (after deduplication): ${contactsToInsert.length}`
+    );
+
     const savedContacts = await Contact.insertMany(contactsToInsert);
+    console.log(`✅ Successfully saved: ${savedContacts.length} contacts`);
 
     const resultData = {
       status: "success",
