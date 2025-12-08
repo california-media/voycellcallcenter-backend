@@ -372,7 +372,7 @@ const handleGoogleCallback = async (req, res) => {
       const [firstname = "", ...lastArr] = fullName.split(" ");
       const lastname = lastArr.join(" ");
 
-      if (firstname && /\d/.test(firstname)) {
+      if (firstname && /\d/.test(firstname) && !person.phoneNumbers) {
         console.log("Email found in name, moving to emailAddresses");
 
         person.phoneNumbers = [{ value: firstname }];
