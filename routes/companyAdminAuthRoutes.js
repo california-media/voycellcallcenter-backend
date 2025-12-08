@@ -5,7 +5,9 @@ const {
   signupWithPhoneNumber,
   unifiedLogin,
   resendVerificationLink,
-  logoutUser
+  logoutUser,
+  generateMagicLink,
+  loginWithMagicLink,
 } = require("../controllers/companyAdminAuthController");
 const { verifyEmailChange } = require("../controllers/admin/superAdminController");
 
@@ -55,6 +57,11 @@ router.post("/signup/email", signupWithEmail);
 router.post("/signup/phonenumber", signupWithPhoneNumber);
 
 router.post("/resendVerificationLink", resendVerificationLink);
+
+router.post("/login/magic-link", loginWithMagicLink);
+
+router.post("/generateMagicLink", checkForAuthentication(), generateMagicLink);
+
 router.post("/verifyEmailChange", verifyEmailChange);
 
 

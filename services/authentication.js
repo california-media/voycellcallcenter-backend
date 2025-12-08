@@ -1,11 +1,22 @@
 const JWT = require("jsonwebtoken");
 const secret = "mysecretkey";
 
+// const createTokenforUser = (user) => {
+//   const payload = {
+//     _id: user._id,
+//   };
+//   return (token = JWT.sign(payload, secret));
+// };
+
 const createTokenforUser = (user) => {
   const payload = {
     _id: user._id,
+    sessionId: user.activeSessionId, // ✅ session lock
   };
-  return (token = JWT.sign(payload, secret));
+
+  return JWT.sign(payload, secret, {
+    expiresIn: "7d", // ✅ security
+  });
 };
 
 const validateToken = (token) => {

@@ -75,6 +75,21 @@ const userSchema = new Schema(
       default: null
     },
 
+    activeSessionId: {
+      type: String,
+      default: null,
+    },
+
+    magicLoginToken: {
+      type: String,
+      default: null,
+    },
+
+    magicLoginExpires: {
+      type: Date,
+      default: null,
+    },
+
 
     role: {
       type: String,

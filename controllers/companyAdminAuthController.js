@@ -2,6 +2,8 @@ const { OAuth2Client } = require("google-auth-library");
 const { createTokenforUser } = require("../services/authentication");
 const User = require("../models/userModel");
 const crypto = require("crypto");
+const { randomBytes, createHmac } = require("crypto");
+// const { randomBytes } = require("crypto");
 const { sendVerificationEmail } = require("../utils/emailUtils");
 const googleClient = new OAuth2Client(
   "401067515093-9j7faengj216m6uc9csubrmo3men1m7p.apps.googleusercontent.com"
@@ -841,57 +843,21 @@ const unifiedLogin = async (req, res) => {
   try {
     const {
       email = "",
-      phonenumber = "",
-      countryCode = "",
       password = "",
-      googleToken,
-      appleToken,
-      apiType = "mobile",
     } = req.body;
 
-    if ((email || phonenumber) && password && !googleToken && !appleToken) {
+    if (email && password) {
       try {
         const trimmedEmail = email?.trim()?.toLowerCase();
-
-        // raw inputs
-        const rawPhoneInput = phonenumber || "";
-        const rawCountryInput = countryCode || "";
-        // const apiType = apiType || "mobile";
-
-        // Normalize phone using helper (handles "917046658651", "+9170466...", separate cc+num, etc.)
-        const { countryCode: normCountry, number: normNumber } = normalizePhone(
-          {
-            phonenumber: rawPhoneInput,
-            countryCode: rawCountryInput,
-            apiType,
-          }
-        );
 
         // Build query conditions
         const queryConditions = [];
         if (trimmedEmail) queryConditions.push({ email: trimmedEmail });
 
-        if (normNumber && normCountry) {
-          // we have both number and country
-          queryConditions.push({
-            phonenumbers: {
-              $elemMatch: { number: normNumber, countryCode: normCountry },
-            },
-          });
-        } else if (normNumber) {
-          // only number parsed — try to match by stored number or legacy string
-          queryConditions.push({
-            $or: [
-              { "phonenumbers.number": normNumber },
-              { phonenumbers: normNumber }, // legacy array-of-strings case
-            ],
-          });
-        }
-
         if (queryConditions.length === 0) {
           return res.status(400).json({
             status: "error",
-            message: "Email or phone number is required",
+            message: "Email is required",
           });
         }
 
@@ -925,45 +891,7 @@ const unifiedLogin = async (req, res) => {
           });
         }
 
-        // If logging in by phone AND we have both country & number, require OTP verification completed
-        if (normNumber && normCountry && !user.isVerified) {
-          return res.status(403).json({
-            status: "error",
-            message: "Please complete signup and verify OTP first",
-          });
-        }
-
-        // Prevent wrong login method
-        if (user.signupMethod === "google") {
-          return res.status(400).json({
-            status: "error",
-            message:
-              "This user signed up with Google. Please use Google login.",
-          });
-        }
-        if (user.signupMethod === "linkedin") {
-          return res.status(400).json({
-            status: "error",
-            message:
-              "This user signed up with linkedin. Please use linkedin login.",
-          });
-        }
-        if (user.signupMethod === "apple") {
-          return res.status(400).json({
-            status: "error",
-            message: "This user signed up with Apple. Please use Apple login.",
-          });
-        }
-
-        if (user.signupMethod === "phoneNumber" && trimmedEmail) {
-          return res.status(400).json({
-            status: "error",
-            message:
-              "This user signed up with phone number. Please login with phone number and password.",
-          });
-        }
-
-        if (user.signupMethod === "email" && (normNumber || rawPhoneInput)) {
+        if (user.signupMethod === "email" && !trimmedEmail) {
           return res.status(400).json({
             status: "error",
             message:
@@ -971,13 +899,30 @@ const unifiedLogin = async (req, res) => {
           });
         }
 
-        // Generate token (pass normalized phone fields)
-        const token = await User.matchPasswordAndGenerateToken({
-          email: trimmedEmail,
-          phonenumber: normNumber,
-          countryCode: normCountry,
-          password,
-        });
+
+        // ✅ MANUAL PASSWORD CHECK
+        const hash = createHmac("sha256", user.salt)
+          .update(password)
+          .digest("hex");
+
+        if (hash !== user.password) {
+          return res.status(401).json({
+            status: "error",
+            message: "Invalid credentials",
+          });
+        }
+
+        // ✅ CREATE NEW SESSION (DESTROYS OLD LOGIN)
+        const newSessionId = randomBytes(32).toString("hex");
+
+        user.activeSessionId = newSessionId;
+        user.isActive = true;
+        user.lastSeen = new Date();
+        await user.save();
+        console.log(newSessionId);
+
+        // ✅ CREATE NEW TOKEN WITH SESSION ID
+        const token = createTokenforUser(user);
 
         const now = new Date();
         user.isActive = true; // mark as active
@@ -998,197 +943,121 @@ const unifiedLogin = async (req, res) => {
         });
       }
     }
-
-    // === GOOGLE LOGIN ===
-    if (googleToken && !email && !password && !appleToken && !phonenumber) {
-      try {
-        const ticket = await googleClient.verifyIdToken({
-          idToken: googleToken,
-          // audience: "308171825690-9tdne4lk5cof1rcmosck65i5iij46bvh.apps.googleusercontent.com",
-          audience:
-            "308171825690-ukpu99fsh0jsojolv0j4vrhidait4s5b.apps.googleusercontent.com",
-        });
-
-        const { email } = ticket.getPayload();
-        let user = await User.findOne({ email });
-        let isFirstTime = false;
-
-        if (!user) {
-          isFirstTime = true;
-
-          const referralCodeParam =
-            req.body.referralCode || req.query.ref || "";
-          let referredBy = null;
-
-          if (referralCodeParam) {
-            const referringUser = await User.findOne({
-              referralCode: referralCodeParam,
-            });
-
-            if (!referringUser) {
-              return res.status(400).json({
-                status: "error",
-                message: "Invalid referral code",
-              });
-            }
-
-            const previouslyReferred = await User.findOne({
-              email,
-              $or: [
-                { referredBy: referringUser._id },
-                { referralCode: referralCodeParam },
-              ],
-            });
-
-            if (previouslyReferred) {
-              return res.status(400).json({
-                status: "error",
-                message:
-                  "This referral link has already been used with this email. Please sign up manually.",
-              });
-            }
-
-            referredBy = referringUser._id;
-          }
-
-          const now = new Date();
-
-          const referralCodeRaw = email + Date.now();
-          const referralCode = crypto
-            .createHash("sha256")
-            .update(referralCodeRaw)
-            .digest("hex")
-            .slice(0, 16);
-
-          user = await User.create({
-            email,
-            firstname,
-            lastname,
-            provider: "google",
-            signupMethod: "google",
-            isVerified: true,
-            referralCode, // ✅ Store generated referral code
-            referredBy, // ✅ Store who referred this user
-          });
-
-          // ✅ Add new user to referring user's myReferrals
-          if (referredBy) {
-            const referrer = await User.findById(referredBy);
-            if (referrer) {
-              referrer.myReferrals.push({
-                _id: user._id,
-                firstname: user.firstname,
-                lastname: user.lastname,
-                email: user.email,
-                phonenumbers: user.phonenumbers || [],
-                signupDate: new Date(),
-              });
-
-              await referrer.save();
-            }
-
-            await user.save();
-          }
-        }
-
-        const token = createTokenforUser(user);
-        const now = new Date();
-        return res.json({
-          status: "success",
-          message: "Google login successful",
-          data: {
-            token: token,
-            registeredWith: user.signupMethod,
-            isFirstTime: isFirstTime,
-          },
-        });
-      } catch (err) {
-        console.log(err);
-        return res
-          .status(500)
-          .json({ status: "error", message: "Google login failed" });
-      }
-    }
-
-    // === APPLE LOGIN ===
-    if (appleToken && !email && !password && !googleToken && !phonenumber) {
-      try {
-        let id_token = appleToken;
-
-        if (!id_token.includes(".")) {
-          const decoded = Buffer.from(id_token, "base64").toString("utf8");
-          if (!decoded.includes(".")) {
-            return res
-              .status(400)
-              .json({ message: "Invalid Apple token format" });
-          }
-          id_token = decoded;
-        }
-
-        const appleUser = await appleSignin.verifyIdToken(id_token, {
-          audience: "com.contactmanagement",
-          ignoreExpiration: true,
-        });
-
-        const appleEmail = appleUser.email || "noemail@apple.com";
-        let user = await User.findOne({ email: appleEmail });
-
-        // if (!user) {
-        //   user = await User.create({
-        //     email: appleEmail,
-        //     provider: "apple",
-        //     firstname: appleUser.firstname || "Apple",
-        //     lastname: appleUser.lastname || "User",
-        //   });
-        // }
-
-        // if (!user) {
-        //   const serialNumber = await getNextSerialNumber();
-        //   user = await User.create({
-        //     email: appleEmail,
-        //     provider: "apple",
-        //     firstname: appleUser.firstname || "Apple",
-        //     lastname: appleUser.lastname || "User",
-        //     serialNumber
-        //   });
-        // }
-
-        if (!user) {
-          const firstname = appleUser.firstname || "Apple";
-          const lastname = appleUser.lastname || "User";
-
-          const now = new Date();
-
-          user = await User.create({
-            email: appleEmail,
-            provider: "apple",
-            firstname,
-            lastname,
-            signupMethod: "apple",
-          });
-        }
-
-        const token = createTokenforUser(user);
-        const now = new Date();
-        return res.json({
-          status: "success",
-          message: "Apple login successful",
-          data: {
-            token,
-          },
-        });
-      } catch (err) {
-        return res
-          .status(500)
-          .json({ status: "error", message: "Apple login failed" });
-      }
-    }
-
     return res
       .status(400)
       .json({ status: "error", message: "Invalid login request" });
   } catch (err) {
+    console.log(err);
     return res.status(500).json({ status: "error", message: "Login failed" });
+  }
+};
+
+const generateMagicLink = async (req, res) => {
+  try {
+    const userId = req.user._id; // from auth middleware
+
+    const magicToken = randomBytes(32).toString("hex");
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // ✅ 10 minutes
+
+    await User.findByIdAndUpdate(userId, {
+      magicLoginToken: magicToken,
+      magicLoginExpires: expiresAt,
+    });
+
+    const magicLink = `${process.env.FRONTEND_URL}/link-login?token=${magicToken}`;
+
+    return res.json({
+      status: "success",
+      message: "Magic link generated",
+      magicLink, // ✅ send to frontend for share
+      expiresAt,
+    });
+  } catch (err) {
+    console.log("Magic link error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to generate magic link",
+    });
+  }
+};
+
+const loginWithMagicLink = async (req, res) => {
+  try {
+    const { magicLink } = req.body;
+
+    // ✅ 1. CHECK FULL LINK IS PROVIDED
+    if (!magicLink) {
+      return res.status(400).json({
+        status: "error",
+        message: "Magic link is required",
+      });
+    }
+
+    let token;
+
+    try {
+      // ✅ 2. EXTRACT TOKEN FROM FULL URL
+      const url = new URL(magicLink);
+      token = url.searchParams.get("token");
+    } catch (err) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid magic link format",
+      });
+    }
+
+    if (!token) {
+      return res.status(400).json({
+        status: "error",
+        message: "Magic token not found in link",
+      });
+    }
+
+    // ✅ 3. FIND USER USING TOKEN
+    const user = await User.findOne({
+      magicLoginToken: token,
+      magicLoginExpires: { $gt: new Date() }, // ✅ must not be expired
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Invalid or expired magic link",
+      });
+    }
+
+    // ✅ 4. DESTROY OLD SESSION (LOGOUT OLD DEVICE)
+    const newSessionId = randomBytes(32).toString("hex");
+
+    user.activeSessionId = newSessionId;
+    user.isActive = true;
+    user.lastSeen = new Date();
+
+    // ✅ 5. DELETE MAGIC TOKEN (ONE-TIME USE)
+    user.magicLoginToken = null;
+    user.magicLoginExpires = null;
+
+    await user.save();
+
+    // ✅ 6. CREATE NEW JWT
+    const jwtToken = createTokenforUser(user);
+
+    return res.json({
+      status: "success",
+      message: "Login successful via magic link",
+      data: {
+        token: jwtToken,
+        role: user.role,
+        signupMethod: user.signupMethod,
+      },
+    });
+  } catch (err) {
+    console.log("Magic login error:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Magic link login failed",
+    });
   }
 };
 
@@ -1217,4 +1086,6 @@ module.exports = {
   unifiedLogin,
   resendVerificationLink,
   logoutUser,
+  generateMagicLink,
+  loginWithMagicLink,
 };
