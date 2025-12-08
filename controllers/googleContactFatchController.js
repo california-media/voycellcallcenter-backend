@@ -368,13 +368,22 @@ const handleGoogleCallback = async (req, res) => {
     let count = 0;
 
     for (const person of connections) {
-      const name = person.names?.[0]?.displayName || "";
-      const [firstname = "", ...lastArr] = name.split(" ");
+      const fullName = person.names?.[0]?.displayName || "";
+      const [firstname = "", ...lastArr] = fullName.split(" ");
       const lastname = lastArr.join(" ");
-      const parsedBefore = parsePhoneNumberFromString(firstname);
+      let parsedBefore;
+      try {
+        parsedBefore = parsePhoneNumberFromString(
+          "+" + firstname.replace(/^0+/, "")
+        );
+      } catch (err) {
+        console.log("Error parsing phone number:", err);
+      }
 
-      if (parsedBefore.isValid() && !person.phoneNumbers) {
-        console.log("Phone number found in name, moving to phoneNumbers");
+      if (firstname && /\d/.test(firstname)) {
+        console.log("Email found in name, moving to emailAddresses");
+
+        parsedBefore = parsePhoneNumberFromString(firstname);
         person.phoneNumbers = [{ value: firstname }];
       } else if (
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(firstname) &&
