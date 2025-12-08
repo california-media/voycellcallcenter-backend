@@ -60,7 +60,7 @@ router.post("/resendVerificationLink", resendVerificationLink);
 
 router.post("/login/magic-link", loginWithMagicLink);
 
-router.post("/generateMagicLink", checkForAuthentication(), generateMagicLink);
+router.post("/generateMagicLink", generateMagicLink);
 
 router.post("/verifyEmailChange", verifyEmailChange);
 

@@ -645,7 +645,7 @@ const sendMagicLinkEmail = async (email, link) => {
         <center>
         <div style="margin: 20px 0;">${link}</div>
         <div>
-            <a href="https://voycellcallcenter.vercel.app" class="button">Login Securely</a>
+            <a href="${link}" class="button">Login Securely</a>
         </div>
         </center>
 
