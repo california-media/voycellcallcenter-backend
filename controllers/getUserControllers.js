@@ -201,7 +201,34 @@ const getUserData = async (req, res) => {
       lastSeen: user.lastSeen,
       phonenumbers: phonenumbersForResponse,
       popupSettings: user.popupSettings || {},
-
+      accounts: [
+        {
+          type: "google",
+          id: user.googleId,
+          email: user.googleEmail,
+          googleAccessToken: user.googleAccessToken,
+          googleRefreshToken: user.googleRefreshToken,
+          isConnected: user.googleConnected,
+        },
+        {
+          type: "microsoft",
+          id: user.microsoftId,
+          email: user.microsoftEmail,
+          microsoftAccessToken: user.microsoftAccessToken,
+          microsoftRefreshToken: user.microsoftRefreshToken,
+          isConnected: user.microsoftConnected,
+        },
+        {
+          type: "smtp",
+          id: user.smtpId,
+          smtpHost: user.smtpHost,
+          smtpPort: user.smtpPort,
+          email: user.smtpUser,
+          smtpPass: user.smtpPass,
+          smtpSecure: user.smtpSecure,
+          isConnected: user.smtpConnected,
+        },
+      ],
       isVerified: user.isVerified,
       userInfo: user.userInfo || {
         helps: [],
