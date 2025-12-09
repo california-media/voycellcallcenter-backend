@@ -135,21 +135,36 @@ const handleZohoCallback = async (req, res) => {
       const email = contact.Email ? contact.Email.toLowerCase() : "";
       const rawPhone = (contact.Phone || "").replace(/\s+/g, "");
 
+      // ✅ ✅ ✅ NEW GOOGLE-LIKE FIX ✅ ✅ ✅
+      if (firstname && /\d/.test(firstname) && !rawPhone) {
+        console.log("📞 Number found in firstname, moving to phone");
+        rawPhone = String(firstname);
+        firstname = "";
+      }
+      else if (
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(firstname) &&
+        !email
+      ) {
+        console.log("📧 Email found in firstname, moving to email");
+        email = firstname.toLowerCase();
+        firstname = "";
+      }
+
       let phoneObj = null;
       if (rawPhone) {
         try {
           const parsed = parsePhoneNumberFromString(rawPhone);
           phoneObj = parsed
             ? {
-                countryCode: parsed.countryCallingCode || "",
-                number: parsed.nationalNumber
-                  .replace(/\D/g, "")
-                  .replace(/^0+/, ""),
-              }
+              countryCode: parsed.countryCallingCode || "",
+              number: parsed.nationalNumber
+                .replace(/\D/g, "")
+                .replace(/^0+/, ""),
+            }
             : {
-                countryCode: "",
-                number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
-              };
+              countryCode: "",
+              number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
+            };
         } catch {
           phoneObj = {
             countryCode: "",

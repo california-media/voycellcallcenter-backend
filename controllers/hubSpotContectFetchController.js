@@ -7,68 +7,6 @@ const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const User = require("../models/userModel"); // adjust as needed
 require("dotenv").config();
 
-// const buildGlobalDuplicateSets = async (userId) => {
-//   const loggedInUser = await User.findById(userId).lean();
-
-//   if (!loggedInUser) throw new Error("User not found");
-
-//   let allUserIds = [];
-
-//   // ✅ If company ADMIN → take all users under company
-//   if (loggedInUser.companyAdmin) {
-//     const companyUsers = await User.find({
-//       companyAdmin: loggedInUser.companyAdmin,
-//     }).select("_id");
-
-//     allUserIds = companyUsers.map(u => u._id);
-//   }
-//   // ✅ If AGENT → take all under same companyAdmin
-//   else if (loggedInUser.createdBy) {
-//     const companyUsers = await User.find({
-//       $or: [
-//         { _id: loggedInUser.createdBy },
-//         { createdBy: loggedInUser.createdBy }
-//       ]
-//     }).select("_id");
-
-//     allUserIds = companyUsers.map(u => u._id);
-//   }
-//   // ✅ Fallback → only self
-//   else {
-//     allUserIds = [userId];
-//   }
-
-//   const [contacts, leads] = await Promise.all([
-//     Contact.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
-//     Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean()
-//   ]);
-
-//   // const existingEmails = new Set();
-//   const existingPhones = new Set();
-
-//   const addPhoneVariants = (phoneObj) => {
-//     if (!phoneObj || !phoneObj.number) return;
-//     const digits = String(phoneObj.number).replace(/\D/g, "");
-//     if (!digits) return;
-//     if (phoneObj.countryCode) {
-//       existingPhones.add(`+${phoneObj.countryCode}${digits}`);
-//     }
-//     existingPhones.add(digits);
-//   };
-
-//   for (const c of contacts) {
-//     // for (const e of c.emailAddresses || []) existingEmails.add(e.toLowerCase());
-//     for (const p of c.phoneNumbers || []) addPhoneVariants(p);
-//   }
-
-//   for (const l of leads) {
-//     // for (const e of l.emailAddresses || []) existingEmails.add(e.toLowerCase());
-//     for (const p of l.phoneNumbers || []) addPhoneVariants(p);
-//   }
-
-//   return { existingPhones, addPhoneVariants };
-// };
-
 // Step 1: Redirect to HubSpot OAuth
 
 const buildGlobalDuplicateSets = async (userId) => {
@@ -193,6 +131,22 @@ const handleHubSpotCallback = async (req, res) => {
       const email = props.email ? props.email.toLowerCase() : "";
 
       const rawPhone = (props.phone || "").replace(/\s+/g, "");
+
+      // ✅ ✅ ✅ NEW GOOGLE-LIKE FIX ✅ ✅ ✅
+      if (firstname && /\d/.test(firstname) && !rawPhone) {
+        console.log("📞 Number found in firstname, moving to phone");
+        rawPhone = String(firstname);
+        firstname = "";
+      }
+      else if (
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(firstname) &&
+        !email
+      ) {
+        console.log("📧 Email found in firstname, moving to email");
+        email = firstname.toLowerCase();
+        firstname = "";
+      }
+
       let phoneObj = null;
 
       if (rawPhone) {
@@ -200,15 +154,15 @@ const handleHubSpotCallback = async (req, res) => {
           const parsed = parsePhoneNumberFromString(rawPhone);
           phoneObj = parsed
             ? {
-                countryCode: parsed.countryCallingCode || "",
-                number: parsed.nationalNumber
-                  .replace(/\D/g, "")
-                  .replace(/^0+/, ""),
-              }
+              countryCode: parsed.countryCallingCode || "",
+              number: parsed.nationalNumber
+                .replace(/\D/g, "")
+                .replace(/^0+/, ""),
+            }
             : {
-                countryCode: "",
-                number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
-              };
+              countryCode: "",
+              number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
+            };
         } catch {
           phoneObj = {
             countryCode: "",
@@ -281,8 +235,7 @@ const handleHubSpotCallback = async (req, res) => {
 
     console.log(`\n📊 HubSpot Import Summary:`);
     console.log(
-      `Total HubSpot contacts fetched: ${
-        (contactRes.data.results || []).length
+      `Total HubSpot contacts fetched: ${(contactRes.data.results || []).length
       }`
     );
     console.log(

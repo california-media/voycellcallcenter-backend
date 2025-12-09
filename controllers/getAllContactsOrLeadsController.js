@@ -129,6 +129,9 @@
 
 const Contact = require("../models/contactModel");
 const Lead = require("../models/leadModel");
+const User = require("../models/userModel");
+const mongoose = require("mongoose");
+
 /**
  * Escape string for RegExp
  */
@@ -540,6 +543,116 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
       status: "error",
       message: "Internal server error",
       error: err.message,
+    });
+  }
+};
+
+exports.searchByPhone = async (req, res) => {
+  try {
+    const { phone } = req.body; // ✅ search input
+    const requesterId = req.user._id;
+    const requesterRole = req.user.role;
+
+    if (!phone) {
+      return res.status(400).json({
+        status: "error",
+        message: "Phone number is required",
+      });
+    }
+
+    // ✅ Build smart regex for partial match (works for 917046658651, 70466)
+    const phoneRegex = new RegExp(phone.replace(/\D/g, ""), "i");
+
+    let ownerIds = [];
+
+    // ✅ CASE 1: If logged-in user is Company Admin
+    if (requesterRole === "companyAdmin") {
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: requesterId,
+      }).select("_id");
+
+      ownerIds = agents.map((a) => a._id);
+      ownerIds.push(requesterId); // ✅ include admin himself
+    }
+
+    // ✅ CASE 2: If logged-in user is Agent/User
+    else {
+      const currentUser = await User.findById(requesterId).select(
+        "createdByWhichCompanyAdmin"
+      );
+
+      if (currentUser?.createdByWhichCompanyAdmin) {
+        const agents = await User.find({
+          createdByWhichCompanyAdmin:
+            currentUser.createdByWhichCompanyAdmin,
+        }).select("_id");
+
+        ownerIds = agents.map((a) => a._id);
+        ownerIds.push(currentUser.createdByWhichCompanyAdmin);
+      } else {
+        ownerIds = [requesterId];
+      }
+    }
+
+    // ✅ FINAL FILTER
+    const ownerFilter = {
+      createdBy: { $in: ownerIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    };
+
+    const phoneFilter = {
+      phoneNumbers: {
+        $elemMatch: {
+          number: { $regex: phoneRegex },
+        },
+      },
+    };
+
+    // ✅ SEARCH CONTACTS
+    const contacts = await Contact.find({
+      ...ownerFilter,
+      ...phoneFilter,
+    }).populate("createdBy", "firstname lastname role");
+
+    // ✅ SEARCH LEADS
+    const leads = await Lead.find({
+      ...ownerFilter,
+      ...phoneFilter,
+    }).populate("createdBy", "firstname lastname role");
+
+    // ✅ RESPONSE FORMAT
+    const formattedContacts = contacts.map((c) => ({
+      type: "contact",
+      firstname: c.firstname,
+      lastname: c.lastname,
+      phoneNumbers: c.phoneNumbers,
+      ownerName: `${c.createdBy?.firstname || ""} ${c.createdBy?.lastname || ""
+        }`,
+      ownerRole: c.createdBy?.role || "user",
+      contactId: c.contact_id,
+    }));
+
+    const formattedLeads = leads.map((l) => ({
+      type: "lead",
+      firstname: l.firstname,
+      lastname: l.lastname,
+      phoneNumbers: l.phoneNumbers,
+      ownerName: `${l.createdBy?.firstname || ""} ${l.createdBy?.lastname || ""
+        }`,
+      ownerRole: l.createdBy?.role || "user",
+      leadId: l.contact_id,
+    }));
+
+    return res.status(200).json({
+      status: "success",
+      message: "Search completed successfully",
+      totalResults: formattedContacts.length + formattedLeads.length,
+      results: [...formattedContacts, ...formattedLeads],
+    });
+  } catch (error) {
+    console.error("Search Error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal Server Error",
     });
   }
 };
