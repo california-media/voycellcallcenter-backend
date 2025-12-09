@@ -103,7 +103,13 @@ exports.adminRegisterUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Admin Register Error:", error);
+    console.error(
+      "Admin Register Error, deleting user with email: ",
+      req.body.email,
+      error
+    );
+
+    await User.deleteOne({ email: req.body.email });
     return res.status(500).json({
       status: "error",
       message: "User creation failed",
