@@ -37,11 +37,12 @@ const buildGlobalDuplicateSets = async (userId) => {
   const allUserIds = companyUsers.map((u) => u._id);
 
   const [contacts, leads] = await Promise.all([
-    Contact.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
-    Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
+    Contact.find({ createdBy: { $in: allUserIds } }, "phoneNumbers emailAddresses").lean(),
+    Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers emailAddresses").lean(),
   ]);
 
   const existingPhones = new Set();
+  const existingEmails = new Set();
 
   const addPhoneVariants = (phoneObj) => {
     if (!phoneObj || !phoneObj.number) return;
@@ -56,14 +57,21 @@ const buildGlobalDuplicateSets = async (userId) => {
     existingPhones.add(digits);
   };
 
+  const addEmailVariants = (email) => {
+    if (!email) return;
+    existingEmails.add(email.toLowerCase());
+  };
+
   for (const c of contacts || []) {
     for (const p of c.phoneNumbers || []) addPhoneVariants(p);
+    for (const e of c.emailAddresses || []) addEmailVariants(e);
   }
   for (const l of leads || []) {
     for (const p of l.phoneNumbers || []) addPhoneVariants(p);
+    for (const e of l.emailAddresses || []) addEmailVariants(e);
   }
 
-  return { existingPhones, addPhoneVariants };
+  return { existingPhones, existingEmails, addPhoneVariants, addEmailVariants };
 };
 
 const redirectToZoho = (req, res) => {
@@ -123,7 +131,7 @@ const handleZohoCallback = async (req, res) => {
       { headers: { Authorization: `Zoho-oauthtoken ${accessToken}` } }
     );
 
-    const { existingPhones, addPhoneVariants } = await buildGlobalDuplicateSets(
+    const { existingPhones, existingEmails, addPhoneVariants, addEmailVariants } = await buildGlobalDuplicateSets(
       userId
     );
 
@@ -196,6 +204,8 @@ const handleZohoCallback = async (req, res) => {
       //     return existingPhones.has(full) || existingPhones.has(digits);
       // });
 
+      const emailDuplicate = emailList.some((e) => existingEmails.has(e));
+
       const phoneDuplicate = phoneList.some((p) => {
         const digits = String(p.number || "").replace(/\D/g, "");
         if (!digits) return false;
@@ -212,7 +222,7 @@ const handleZohoCallback = async (req, res) => {
         );
       });
 
-      if (/*emailDuplicate ||*/ phoneDuplicate) {
+      if (emailDuplicate || phoneDuplicate) {
         console.log(
           `Skipping duplicate: ${firstname} ${lastname}, phone: ${phoneList[0]?.number}`
         );
@@ -222,6 +232,10 @@ const handleZohoCallback = async (req, res) => {
       // Update existing phone set to prevent duplicates in same session
       for (const p of phoneList) {
         addPhoneVariants(p);
+      }
+
+      for (const e of emailList) {
+        addEmailVariants(e);
       }
 
       const _id = new mongoose.Types.ObjectId();
@@ -235,7 +249,7 @@ const handleZohoCallback = async (req, res) => {
         createdBy: userId,
       });
 
-      // emailList.forEach(e => existingEmails.add(e));
+      emailList.forEach((e) => addEmailVariants(e));
       phoneList.forEach((p) => addPhoneVariants(p));
     }
 
