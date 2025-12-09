@@ -137,11 +137,7 @@ const handleHubSpotCallback = async (req, res) => {
         console.log("📞 Number found in firstname, moving to phone");
         rawPhone = String(firstname);
         firstname = "";
-      }
-      else if (
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(firstname) &&
-        !email
-      ) {
+      } else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(firstname) && !email) {
         console.log("📧 Email found in firstname, moving to email");
         email = firstname.toLowerCase();
         firstname = "";
@@ -154,15 +150,15 @@ const handleHubSpotCallback = async (req, res) => {
           const parsed = parsePhoneNumberFromString(rawPhone);
           phoneObj = parsed
             ? {
-              countryCode: parsed.countryCallingCode || "",
-              number: parsed.nationalNumber
-                .replace(/\D/g, "")
-                .replace(/^0+/, ""),
-            }
+                countryCode: parsed.countryCallingCode || "",
+                number: parsed.nationalNumber
+                  .replace(/\D/g, "")
+                  .replace(/^0+/, ""),
+              }
             : {
-              countryCode: "",
-              number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
-            };
+                countryCode: "",
+                number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
+              };
         } catch {
           phoneObj = {
             countryCode: "",
@@ -188,6 +184,7 @@ const handleHubSpotCallback = async (req, res) => {
       ) {
         continue;
       }
+      const emailDuplicate = emailList.some((e) => existingEmails.has(e));
 
       // ✅ Duplicate check AFTER country code is applied
       const phoneDuplicate = phoneList.some((p) => {
@@ -206,7 +203,7 @@ const handleHubSpotCallback = async (req, res) => {
         );
       });
 
-      if (/*emailDuplicate ||*/ phoneDuplicate) {
+      if (emailDuplicate || phoneDuplicate) {
         console.log(
           `Skipping duplicate: ${firstname} ${lastname}, phone: ${phoneList[0]?.number}`
         );
@@ -235,7 +232,8 @@ const handleHubSpotCallback = async (req, res) => {
 
     console.log(`\n📊 HubSpot Import Summary:`);
     console.log(
-      `Total HubSpot contacts fetched: ${(contactResponse.data.results || []).length
+      `Total HubSpot contacts fetched: ${
+        (contactResponse.data.results || []).length
       }`
     );
     console.log(
