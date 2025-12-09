@@ -150,6 +150,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
       isFavourite = false,
       status = "",
     } = req.body;
+    console.log("search value:", search);
 
     const createdBy = req.user._id;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -210,36 +211,39 @@ exports.getAllContactsOrLeads = async (req, res) => {
               input: {
                 $toLower: { $concat: ["$firstname", " ", "$lastname"] },
               },
-              regex: raw.toLowerCase(),
+              regex: escapeRegex(raw.toLowerCase()),
+              options: "i",
             },
           },
         },
       ];
 
-      // Match phone number or country code individually
-      or.push({ "phoneNumbers.number": { $regex: regexInsensitive } });
-      or.push({ "phoneNumbers.countryCode": { $regex: regexInsensitive } });
-
-      // If numeric search: also match concatenated countryCode+number using regex on both fields
+      // Extract only digits for phone search (handles +92 3303521767 → 923303521767)
       const digitsOnly = raw.replace(/\D/g, "");
+
       if (digitsOnly.length > 0) {
-        const phoneRegex = new RegExp(escapeRegex(digitsOnly));
+        // Search in concatenated countryCode + number
         or.push({
-          $or: [
-            { "phoneNumbers.number": { $regex: phoneRegex } },
-            { "phoneNumbers.countryCode": { $regex: phoneRegex } },
-            // Match when number starts or ends with search digits
-            {
-              "phoneNumbers.number": {
-                $regex: new RegExp(`${escapeRegex(digitsOnly)}$`),
+          $expr: {
+            $regexMatch: {
+              input: {
+                $reduce: {
+                  input: "$phoneNumbers",
+                  initialValue: "",
+                  in: {
+                    $concat: [
+                      "$$value",
+                      { $ifNull: ["$$this.countryCode", ""] },
+                      { $ifNull: ["$$this.number", ""] },
+                      "|", // separator to allow multiple phone numbers
+                    ],
+                  },
+                },
               },
+              regex: escapeRegex(digitsOnly),
+              options: "i",
             },
-            {
-              "phoneNumbers.number": {
-                $regex: new RegExp(`^${escapeRegex(digitsOnly)}`),
-              },
-            },
-          ],
+          },
         });
       }
 
@@ -551,7 +555,8 @@ exports.searchByPhone = async (req, res) => {
   try {
     const { phone } = req.query; // ✅ search input from query params
     const requesterId = req.user._id;
-    const requesterRole = req.user.role;
+    const user = await User.findById(requesterId).select("role");
+    const requesterRole = user.role;
 
     if (!phone) {
       return res.status(400).json({
@@ -577,13 +582,12 @@ exports.searchByPhone = async (req, res) => {
       const agents = await User.find({
         createdByWhichCompanyAdmin: requesterId,
       }).select("_id");
-
       ownerIds = agents.map((a) => a._id);
       ownerIds.push(requesterId); // ✅ include admin himself
     }
 
     // ✅ CASE 2: If logged-in user is Agent/User
-    else {
+    else if (requesterRole === "user") {
       const currentUser = await User.findById(requesterId).select(
         "createdByWhichCompanyAdmin"
       );
