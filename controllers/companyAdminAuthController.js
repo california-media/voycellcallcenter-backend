@@ -1010,43 +1010,37 @@ const generateMagicLink = async (req, res) => {
     });
   }
 };
-
 const loginWithMagicLink = async (req, res) => {
   try {
-    // const { magicLink } = req.body;
+    let { token, magicLink } = req.body; // ✅ USE let (NOT const)
 
-    // // ✅ 1. CHECK FULL LINK IS PROVIDED
-    // if (!magicLink) {
-    //   return res.status(400).json({
-    //     status: "error",
-    //     message: "Magic link is required",
-    //   });
-    // }
+    let magicToken = ""; // ✅ USE let
 
-    const { token, magicLink } = req.body;
-
-    const magicToken = ""
-
+    // ✅ If full magic link is provided
     if (magicLink && !token) {
-      // ✅ 2. EXTRACT TOKEN FROM FULL URL
       try {
-        const url = new URL(magicLink);
-        token = url.searchParams.get("token");
+        const url = new URL(magicLink); // ✅ This works with your URL
+        magicToken = url.searchParams.get("token"); // ✅ FIXED
       } catch (err) {
         return res.status(400).json({
           status: "error",
           message: "Invalid magic link format",
         });
       }
-    } else if (token) {
+    }
+    // ✅ If only token is provided
+    else if (token) {
       magicToken = token;
-    } else {
+    }
+    // ✅ If nothing provided
+    else {
       return res.status(400).json({
         status: "error",
         message: "Magic link or token is required",
       });
     }
 
+    // ✅ Check token finally exists
     if (!magicToken) {
       return res.status(400).json({
         status: "error",
@@ -1054,10 +1048,10 @@ const loginWithMagicLink = async (req, res) => {
       });
     }
 
-    // ✅ 3. FIND USER USING TOKEN
+    // ✅ FIND USER WITH VALID TOKEN
     const user = await User.findOne({
       magicLoginToken: magicToken,
-      magicLoginExpires: { $gt: new Date() }, // ✅ must not be expired
+      magicLoginExpires: { $gt: new Date() },
     });
 
     if (!user) {
@@ -1067,20 +1061,20 @@ const loginWithMagicLink = async (req, res) => {
       });
     }
 
-    // ✅ 4. DESTROY OLD SESSION (LOGOUT OLD DEVICE)
+    // ✅ DESTROY OLD SESSION
     const newSessionId = randomBytes(32).toString("hex");
 
     user.activeSessionId = newSessionId;
     user.isActive = true;
     user.lastSeen = new Date();
 
-    // ✅ 5. DELETE MAGIC TOKEN (ONE-TIME USE)
+    // ✅ ONE TIME USE TOKEN
     user.magicLoginToken = null;
     user.magicLoginExpires = null;
 
     await user.save();
 
-    // ✅ 6. CREATE NEW JWT
+    // ✅ CREATE JWT
     const jwtToken = createTokenforUser(user);
 
     return res.json({
@@ -1100,6 +1094,7 @@ const loginWithMagicLink = async (req, res) => {
     });
   }
 };
+
 
 const logoutUser = async (req, res) => {
   try {
