@@ -549,7 +549,7 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
 
 exports.searchByPhone = async (req, res) => {
   try {
-    const { phone } = req.body; // ✅ search input
+    const { phone } = req.query; // ✅ search input from query params
     const requesterId = req.user._id;
     const requesterRole = req.user.role;
 
@@ -560,8 +560,15 @@ exports.searchByPhone = async (req, res) => {
       });
     }
 
-    // ✅ Build smart regex for partial match (works for 917046658651, 70466)
-    const phoneRegex = new RegExp(phone.replace(/\D/g, ""), "i");
+    // ✅ Extract only digits from search input (handles +968 3459232323 → 9683459232323)
+    const searchDigits = phone.replace(/\D/g, "");
+
+    if (!searchDigits) {
+      return res.status(400).json({
+        status: "error",
+        message: "Please enter valid phone number digits",
+      });
+    }
 
     let ownerIds = [];
 
@@ -583,8 +590,7 @@ exports.searchByPhone = async (req, res) => {
 
       if (currentUser?.createdByWhichCompanyAdmin) {
         const agents = await User.find({
-          createdByWhichCompanyAdmin:
-            currentUser.createdByWhichCompanyAdmin,
+          createdByWhichCompanyAdmin: currentUser.createdByWhichCompanyAdmin,
         }).select("_id");
 
         ownerIds = agents.map((a) => a._id);
@@ -599,25 +605,99 @@ exports.searchByPhone = async (req, res) => {
       createdBy: { $in: ownerIds.map((id) => new mongoose.Types.ObjectId(id)) },
     };
 
-    const phoneFilter = {
-      phoneNumbers: {
-        $elemMatch: {
-          number: { $regex: phoneRegex },
+    // ✅ SEARCH CONTACTS using aggregation to concat countryCode + number
+    const contacts = await Contact.aggregate([
+      {
+        $match: ownerFilter,
+      },
+      {
+        $addFields: {
+          fullPhoneNumbers: {
+            $map: {
+              input: "$phoneNumbers",
+              as: "phone",
+              in: {
+                $concat: [
+                  { $ifNull: ["$$phone.countryCode", ""] },
+                  { $ifNull: ["$$phone.number", ""] },
+                ],
+              },
+            },
+          },
         },
       },
-    };
+      {
+        $match: {
+          fullPhoneNumbers: {
+            $elemMatch: {
+              $regex: searchDigits,
+              $options: "i",
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "createdBy",
+          foreignField: "_id",
+          as: "createdByUser",
+        },
+      },
+      {
+        $unwind: {
+          path: "$createdByUser",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+    ]);
 
-    // ✅ SEARCH CONTACTS
-    const contacts = await Contact.find({
-      ...ownerFilter,
-      ...phoneFilter,
-    }).populate("createdBy", "firstname lastname role");
-
-    // ✅ SEARCH LEADS
-    const leads = await Lead.find({
-      ...ownerFilter,
-      ...phoneFilter,
-    }).populate("createdBy", "firstname lastname role");
+    // ✅ SEARCH LEADS using aggregation
+    const leads = await Lead.aggregate([
+      {
+        $match: ownerFilter,
+      },
+      {
+        $addFields: {
+          fullPhoneNumbers: {
+            $map: {
+              input: "$phoneNumbers",
+              as: "phone",
+              in: {
+                $concat: [
+                  { $ifNull: ["$$phone.countryCode", ""] },
+                  { $ifNull: ["$$phone.number", ""] },
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          fullPhoneNumbers: {
+            $elemMatch: {
+              $regex: searchDigits,
+              $options: "i",
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "createdBy",
+          foreignField: "_id",
+          as: "createdByUser",
+        },
+      },
+      {
+        $unwind: {
+          path: "$createdByUser",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+    ]);
 
     // ✅ RESPONSE FORMAT
     const formattedContacts = contacts.map((c) => ({
@@ -625,9 +705,12 @@ exports.searchByPhone = async (req, res) => {
       firstname: c.firstname,
       lastname: c.lastname,
       phoneNumbers: c.phoneNumbers,
-      ownerName: `${c.createdBy?.firstname || ""} ${c.createdBy?.lastname || ""
-        }`,
-      ownerRole: c.createdBy?.role || "user",
+      ownerName: `${c.createdByUser?.firstname || ""} ${
+        c.createdByUser?.lastname || ""
+      }`,
+      ownerEmail: c.createdByUser?.email || "",
+      ownerRole: c.createdByUser?.role || "user",
+      ownerId: c.createdByUser?._id?.toString() || "",
       contactId: c.contact_id,
     }));
 
@@ -636,9 +719,12 @@ exports.searchByPhone = async (req, res) => {
       firstname: l.firstname,
       lastname: l.lastname,
       phoneNumbers: l.phoneNumbers,
-      ownerName: `${l.createdBy?.firstname || ""} ${l.createdBy?.lastname || ""
-        }`,
-      ownerRole: l.createdBy?.role || "user",
+      ownerName: `${l.createdByUser?.firstname || ""} ${
+        l.createdByUser?.lastname || ""
+      }`,
+      ownerEmail: l.createdByUser?.email || "",
+      ownerRole: l.createdByUser?.role || "user",
+      ownerId: l.createdByUser?._id?.toString() || "",
       leadId: l.contact_id,
     }));
 
