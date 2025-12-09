@@ -235,7 +235,7 @@ const handleHubSpotCallback = async (req, res) => {
 
     console.log(`\n📊 HubSpot Import Summary:`);
     console.log(
-      `Total HubSpot contacts fetched: ${(contactRes.data.results || []).length
+      `Total HubSpot contacts fetched: ${(contactResponse.data.results || []).length
       }`
     );
     console.log(
