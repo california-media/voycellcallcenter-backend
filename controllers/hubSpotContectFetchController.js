@@ -39,11 +39,12 @@ const buildGlobalDuplicateSets = async (userId) => {
   const allUserIds = companyUsers.map((u) => u._id);
 
   const [contacts, leads] = await Promise.all([
-    Contact.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
-    Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers").lean(),
+    Contact.find({ createdBy: { $in: allUserIds } }, "phoneNumbers emailAddresses").lean(),
+    Lead.find({ createdBy: { $in: allUserIds } }, "phoneNumbers emailAddresses").lean(),
   ]);
 
   const existingPhones = new Set();
+  const existingEmails = new Set();
 
   const addPhoneVariants = (phoneObj) => {
     if (!phoneObj || !phoneObj.number) return;
@@ -58,14 +59,21 @@ const buildGlobalDuplicateSets = async (userId) => {
     existingPhones.add(digits);
   };
 
+  const addEmailVariants = (email) => {
+    if (!email) return;
+    existingEmails.add(email.toLowerCase());
+  };
+
   for (const c of contacts || []) {
     for (const p of c.phoneNumbers || []) addPhoneVariants(p);
+    for (const e of c.emailAddresses || []) addEmailVariants(e);
   }
   for (const l of leads || []) {
     for (const p of l.phoneNumbers || []) addPhoneVariants(p);
+    for (const e of l.emailAddresses || []) addEmailVariants(e);
   }
 
-  return { existingPhones, addPhoneVariants };
+  return { existingPhones, existingEmails, addPhoneVariants, addEmailVariants };
 };
 
 const redirectToHubSpot = (req, res) => {
@@ -118,7 +126,7 @@ const handleHubSpotCallback = async (req, res) => {
       }
     );
 
-    const { existingPhones, addPhoneVariants } = await buildGlobalDuplicateSets(
+    const { existingPhones, existingEmails, addPhoneVariants, addEmailVariants } = await buildGlobalDuplicateSets(
       userId
     );
 
@@ -150,15 +158,15 @@ const handleHubSpotCallback = async (req, res) => {
           const parsed = parsePhoneNumberFromString(rawPhone);
           phoneObj = parsed
             ? {
-                countryCode: parsed.countryCallingCode || "",
-                number: parsed.nationalNumber
-                  .replace(/\D/g, "")
-                  .replace(/^0+/, ""),
-              }
+              countryCode: parsed.countryCallingCode || "",
+              number: parsed.nationalNumber
+                .replace(/\D/g, "")
+                .replace(/^0+/, ""),
+            }
             : {
-                countryCode: "",
-                number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
-              };
+              countryCode: "",
+              number: rawPhone.replace(/\D/g, "").replace(/^0+/, ""),
+            };
         } catch {
           phoneObj = {
             countryCode: "",
@@ -214,6 +222,9 @@ const handleHubSpotCallback = async (req, res) => {
       for (const p of phoneList) {
         addPhoneVariants(p);
       }
+      for (const e of emailList) {
+        addEmailVariants(e);
+      }
 
       const _id = new mongoose.Types.ObjectId();
       contactsToInsert.push({
@@ -232,8 +243,7 @@ const handleHubSpotCallback = async (req, res) => {
 
     console.log(`\n📊 HubSpot Import Summary:`);
     console.log(
-      `Total HubSpot contacts fetched: ${
-        (contactResponse.data.results || []).length
+      `Total HubSpot contacts fetched: ${(contactResponse.data.results || []).length
       }`
     );
     console.log(
