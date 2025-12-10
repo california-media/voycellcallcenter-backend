@@ -26,6 +26,8 @@ const PORT = process.env.PORT || 3003;
 const userRoutes = require("./routes/companyAdminAuthRoutes");
 const yeastarRoutes = require("./routes/yeastarRoutes");
 ////for linkux web UI login signature
+const deleteTemplateRoutes = require("./routes/deleteTemplateRoutes");
+
 const yeastarLoginRoutes = require("./routes/yeastarLoginRoutes");
 const scriptRoutes = require("./routes/scriptRoutes");
 const callmeServeRoute = require("./routes/callmeServeRoute");
@@ -97,6 +99,8 @@ app.use(
 app.use("/getUser", checkForAuthentication(), getUserRoutes);
 app.use("/changePassword", checkForAuthentication(), changePassword);
 app.use("/deleteUser", checkForAuthentication(), deleteUserRoutes);
+app.use("/deleteTemplate", checkForAuthentication(), deleteTemplateRoutes);
+
 app.use("/email", emailPasswordResetRoutes);
 app.use(
   "/addEditContactLeads",
