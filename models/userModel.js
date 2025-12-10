@@ -2,6 +2,45 @@ const { createHmac, randomBytes } = require("crypto");
 const { Schema, model, mongoose } = require("mongoose");
 const { createTokenforUser } = require("../services/authentication");
 
+const whatsappTemplateSchema = new Schema(
+  {
+    whatsappTemplate_id: {
+      type: mongoose.Types.ObjectId,
+      default: () => new mongoose.Types.ObjectId(),
+    },
+    whatsappTemplateTitle: String,
+    whatsappTemplateMessage: String,
+    whatsappTemplateIsFavourite: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    timestamps: true,
+    _id: false,
+  }
+);
+
+const emailTemplateSchema = new Schema(
+  {
+    emailTemplate_id: {
+      type: mongoose.Types.ObjectId,
+      default: () => new mongoose.Types.ObjectId(),
+    },
+    emailTemplateTitle: String,
+    emailTemplateSubject: String,
+    emailTemplateBody: String,
+    emailTemplateIsFavourite: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    timestamps: true,
+    _id: false,
+  }
+);
+
 const userSchema = new Schema(
   {
     firstname: {
@@ -46,6 +85,93 @@ const userSchema = new Schema(
         },
       },
     ],
+
+    whatsappTemplates: {
+      type: [whatsappTemplateSchema],
+      default: () => [
+        {
+          whatsappTemplate_id: new mongoose.Types.ObjectId(),
+          whatsappTemplateTitle: "Welcome Message",
+          whatsappTemplateMessage:
+            "Hey {{firstName}}! 👋 Welcome to our platform. Let me know if you need any help getting started.",
+          whatsappTemplateIsFavourite: true,
+        },
+        {
+          whatsappTemplate_id: new mongoose.Types.ObjectId(),
+          whatsappTemplateTitle: "Follow-up",
+          whatsappTemplateMessage:
+            "Hi {{firstName}}, just checking in to see if you had a chance to review our last conversation.",
+          whatsappTemplateIsFavourite: false,
+        },
+        {
+          whatsappTemplate_id: new mongoose.Types.ObjectId(),
+          whatsappTemplateTitle: "Meeting Reminder",
+          whatsappTemplateMessage:
+            "Reminder: Your meeting with us is scheduled for {{meetingDate}}. Let us know if you need to reschedule.",
+          whatsappTemplateIsFavourite: false,
+        },
+        {
+          whatsappTemplate_id: new mongoose.Types.ObjectId(),
+          whatsappTemplateTitle: "Thank You",
+          whatsappTemplateMessage:
+            "Thanks a lot for your time today, {{firstName}}! 😊 Looking forward to staying in touch.",
+          whatsappTemplateIsFavourite: true,
+        },
+        {
+          whatsappTemplate_id: new mongoose.Types.ObjectId(),
+          whatsappTemplateTitle: "Support Offer",
+          whatsappTemplateMessage:
+            "Hi {{firstName}}, if you have any questions or need assistance, feel free to reply to this message. We're here to help! 🙌",
+          whatsappTemplateIsFavourite: false,
+        },
+      ],
+    },
+
+    emailTemplates: {
+      type: [emailTemplateSchema],
+      default: () => [
+        {
+          emailTemplate_id: new mongoose.Types.ObjectId(),
+          emailTemplateTitle: "Welcome Email",
+          emailTemplateSubject: "Welcome to Our Platform!",
+          emailTemplateBody:
+            "Hi {{firstName}},\n\nThank you for joining us! We're excited to have you on board.\n\nBest,\nTeam",
+          emailTemplateIsFavourite: true,
+        },
+        {
+          emailTemplate_id: new mongoose.Types.ObjectId(),
+          emailTemplateTitle: "Follow-up Email",
+          emailTemplateSubject: "Just checking in",
+          emailTemplateBody:
+            "Hi {{firstName}},\n\nI wanted to follow up on our last conversation. Let me know if you have any questions.\n\nRegards,\n{{senderName}}",
+          emailTemplateIsFavourite: false,
+        },
+        {
+          emailTemplate_id: new mongoose.Types.ObjectId(),
+          emailTemplateTitle: "Meeting Reminder",
+          emailTemplateSubject: "Upcoming Meeting Reminder",
+          emailTemplateBody:
+            "Hi {{firstName}},\n\nThis is a quick reminder for our meeting scheduled on {{meetingDate}}.\n\nThanks,\n{{senderName}}",
+          emailTemplateIsFavourite: false,
+        },
+        {
+          emailTemplate_id: new mongoose.Types.ObjectId(),
+          emailTemplateTitle: "Thank You Email",
+          emailTemplateSubject: "Thank You!",
+          emailTemplateBody:
+            "Hi {{firstName}},\n\nJust wanted to thank you for your time today. Looking forward to our next steps.\n\nCheers,\n{{senderName}}",
+          emailTemplateIsFavourite: true,
+        },
+        {
+          emailTemplate_id: new mongoose.Types.ObjectId(),
+          emailTemplateTitle: "Feedback Request",
+          emailTemplateSubject: "We'd love your feedback!",
+          emailTemplateBody:
+            "Hi {{firstName}},\n\nWe hope you're enjoying our service. We'd appreciate it if you could share your thoughts or suggestions.\n\nWarm regards,\nTeam",
+          emailTemplateIsFavourite: false,
+        },
+      ],
+    },
 
     emailVerificationToken: String,
     pendingEmailChange: {

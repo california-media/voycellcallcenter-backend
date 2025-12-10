@@ -9,11 +9,11 @@ const nodemailer = require("nodemailer");
 
 
 const transporter = nodemailer.createTransport({
-    service: "gmail",
-    // service: "smtp",
+    // service: "gmail",
+    service: "smtp",
     host: process.env.MAIL_HOST,
     port: Number(process.env.MAIL_PORT),
-    secure: true, // Gmail on port 587 uses TLS (not SSL)
+    secure: false, // Gmail on port 587 uses TLS (not SSL)
     auth: {
         user: process.env.MAIL_USERNAME,
         pass: process.env.MAIL_PASSWORD,
@@ -26,7 +26,7 @@ const transporter = nodemailer.createTransport({
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const sendVerificationEmail = async (email, link) => {
     const mailOptions = {
-        from: '"VoyCell Call Center" <noreply@contacts.management>',
+        from: '"VoyCell Call Center" <noreply@voycell.com>',
         to: email,
         subject: "voyCell : Verify Your E-mail",
         html: `<html lang="en">
@@ -591,7 +591,7 @@ const sendEmailChangeVerification = async (
 
 const sendMagicLinkEmail = async (email, link) => {
     const mailOptions = {
-        from: '"VoyCell Call Center" <noreply@contacts.management>',
+        from: '"VoyCell Call Center" <noreply@voycell.com>',
         to: email,
         subject: "VoyCell Secure Magic Login Link",
         html: `
