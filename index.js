@@ -19,7 +19,7 @@ const serverless = require("serverless-http");
 
 console.log("Connecting to MongoDB...");
 const { checkForAuthentication } = require("./middlewares/authentication");
-const checkAccountStatus = require("./middlewares/checkAccountStatus")
+const checkAccountStatus = require("./middlewares/checkAccountStatus");
 const checkRole = require("./middlewares/roleCheck");
 const { error } = require("console");
 const PORT = process.env.PORT || 3003;
@@ -52,6 +52,7 @@ const changePassword = require("./routes/changePasswordRoutes");
 const deleteUserRoutes = require("./routes/deleteUserRoutes");
 const getProfileEventRoutes = require("./routes/getProfileEventRoutes");
 const apiKeyRoutes = require("./routes/apiKeyRoutes");
+const addEditTempleteRoutes = require("./routes/addEditTempleteRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -116,6 +117,7 @@ app.use("/task", checkForAuthentication(), addeditTaskRoutes);
 app.use("/tag", checkForAuthentication(), addedittagRoutes);
 app.use("/meeting", checkForAuthentication(), meetingRoutes);
 app.use("/getProfileEvent", checkForAuthentication(), getProfileEventRoutes);
+app.use("/addEditTemplete", checkForAuthentication(), addEditTempleteRoutes);
 app.use("/faq", checkForAuthentication(), faqRoutes);
 app.use(
   "/help-support",

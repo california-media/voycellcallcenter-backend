@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const User = require("../models/User");
+const User = require("../models/userModel");
 
 const addEditTemplate = async (req, res) => {
   try {
@@ -33,7 +33,9 @@ const addEditTemplate = async (req, res) => {
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ status: "error", message: "User not found" });
+      return res
+        .status(404)
+        .json({ status: "error", message: "User not found" });
     }
 
     let updatedTemplate;
@@ -159,7 +161,9 @@ const addEditTemplate = async (req, res) => {
     // ✅ FINAL RESPONSE
     return res.status(200).json({
       status: "success",
-      message: template_id ? "Template Updated Successfully" : "Template Added Successfully",
+      message: template_id
+        ? "Template Updated Successfully"
+        : "Template Added Successfully",
       templateType,
       data: updatedTemplate,
     });
