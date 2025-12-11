@@ -150,7 +150,6 @@ exports.getAllContactsOrLeads = async (req, res) => {
       isFavourite = false,
       status = "",
     } = req.body;
-    console.log("search value:", search);
 
     const createdBy = req.user._id;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
