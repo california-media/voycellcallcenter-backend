@@ -193,12 +193,12 @@ const userSchema = new Schema(
     agentStatus: {
       type: String,
       enum: ["offline", "online", "busy"],
-      default: "offline"
+      default: "offline",
     },
 
     currentCallId: {
       type: String,
-      default: null
+      default: null,
     },
 
     activeSessionId: {
@@ -215,7 +215,6 @@ const userSchema = new Schema(
       type: Date,
       default: null,
     },
-
 
     role: {
       type: String,
@@ -281,9 +280,10 @@ const userSchema = new Schema(
       popupText: {
         type: String,
         default:
-          "Enter your phone number and we’ll call you back in 30 seconds!",
+          "Enter your phone number and we'll call you back in 30 seconds!",
       },
       calltoaction: { type: String, default: "📞 Call Me" },
+      phoneIconColor: { type: String, default: "black" }, // 'black' or 'white'
       // Add this near popupSettings in userSchema
       allowedOrigin: {
         type: String,
@@ -494,7 +494,12 @@ const userSchema = new Schema(
         { value: "lost", label: "Lost", group: 3, isDefault: false },
         { value: "callBack", label: "Call Back", group: 4, isDefault: false },
         { value: "noAnswer", label: "No Answer", group: 4, isDefault: false },
-        { value: "callSuccess", label: "Call Success", group: 5, isDefault: true },
+        {
+          value: "callSuccess",
+          label: "Call Success",
+          group: 5,
+          isDefault: true,
+        },
       ],
     },
 
@@ -584,7 +589,7 @@ userSchema.static(
     const query = email
       ? { email }
       : // : { phonenumbers: { $in: [phonenumber] } }; // assuming you store phone numbers as array
-      { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
+        { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
 
     const user = await this.findOne(query);
     if (!user) throw new Error("User not found");

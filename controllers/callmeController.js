@@ -54,7 +54,6 @@
 
 //   //   console.log(allowedOrigin);
 
-
 //   //   const allowed = allowedOrigin.trim().replace(/\/+$/, "").toLowerCase();
 
 //   //   const referer = (req.get("referer") || req.get("referrer") || "")
@@ -111,8 +110,6 @@
 //     return requestOrigin === allowedOrigin;
 //   }
 
-
-
 //   if (tokenDoc.allowedOrigin && !requestOriginMatches(req, tokenDoc.allowedOrigin)) {
 //     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
 //     return res
@@ -120,13 +117,10 @@
 //       .send(`// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOrigin}`);
 //   }
 
-
 //   // const user = await User.findById(userId);
 //   // const decodedExt = user.extensionNumber;
 
-
 //   // console.log(user.extensionNumber);
-
 
 //   // ③ MERGE settings: prefer DB values, fall back to query params
 //   const popupSettings = (user && user.popupSettings) ? user.popupSettings : {};
@@ -319,7 +313,6 @@
 //     }
 //   }
 
-
 //   /* ---------------- Timer UI ---------------- */
 //   function showTimer() {
 //     const form = document.getElementById('callme-form');
@@ -372,11 +365,11 @@ const ScriptToken = require("../models/ScriptToken");
 exports.serveCallmeJS = async (req, res) => {
   // Query params the widget accepts (all optional)
   const { token } = req.params;
-
   const {
     themeColor: themeColorQuery = "#4CAF50",
     popupHeading: popupHeadingQuery = "📞 Request a Call Back",
-    popupText: popupTextQuery = "Enter your phone number and we’ll call you back in 30 seconds!",
+    popupText:
+      popupTextQuery = "Enter your phone number and we’ll call you back in 30 seconds!",
     calltoaction: calltoactionQuery = "📞 Call Me Now",
     headingColor: headingColorQuery = "#4CAF50",
     floatingButtonColor: floatingButtonColorQuery = "#4CAF50",
@@ -397,7 +390,11 @@ exports.serveCallmeJS = async (req, res) => {
 
   function getRequestOrigin(req) {
     const originHeader = (req.get("origin") || "").trim();
-    const refererHeader = (req.get("referer") || req.get("referrer") || "").trim();
+    const refererHeader = (
+      req.get("referer") ||
+      req.get("referrer") ||
+      ""
+    ).trim();
 
     try {
       if (originHeader) {
@@ -422,23 +419,48 @@ exports.serveCallmeJS = async (req, res) => {
     return requestOrigin === allowedOrigin;
   }
 
-  if (tokenDoc.allowedOrigin && !requestOriginMatches(req, tokenDoc.allowedOrigin)) {
+  if (
+    tokenDoc.allowedOrigin &&
+    !requestOriginMatches(req, tokenDoc.allowedOrigin)
+  ) {
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     return res
       .status(403)
-      .send(`// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOrigin}`);
+      .send(
+        `// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOrigin}`
+      );
   }
 
   // ③ MERGE settings: prefer DB values, fall back to query params
-  const popupSettings = (user && user.popupSettings) ? user.popupSettings : {};
-  const themeColor = (popupSettings.themeColor && popupSettings.themeColor.trim()) ? popupSettings.themeColor : themeColorQuery;
-  const popupHeading = (popupSettings.popupHeading && popupSettings.popupHeading.trim()) ? popupSettings.popupHeading : popupHeadingQuery;
-  const popupText = (popupSettings.popupText && popupSettings.popupText.trim()) ? popupSettings.popupText : popupTextQuery;
-  const calltoaction = (popupSettings.calltoaction && popupSettings.calltoaction.trim()) ? popupSettings.calltoaction : calltoactionQuery;
-  const headingColor = (popupSettings.headingColor && popupSettings.headingColor.trim()) ? popupSettings.headingColor : headingColorQuery;
-  const floatingButtonColor = (popupSettings.floatingButtonColor && popupSettings.floatingButtonColor.trim()) ? popupSettings.floatingButtonColor : floatingButtonColorQuery;
+  const popupSettings = user && user.popupSettings ? user.popupSettings : {};
+  const themeColor =
+    popupSettings.themeColor && popupSettings.themeColor.trim()
+      ? popupSettings.themeColor
+      : themeColorQuery;
+  const popupHeading =
+    popupSettings.popupHeading && popupSettings.popupHeading.trim()
+      ? popupSettings.popupHeading
+      : popupHeadingQuery;
+  const popupText =
+    popupSettings.popupText && popupSettings.popupText.trim()
+      ? popupSettings.popupText
+      : popupTextQuery;
+  const calltoaction =
+    popupSettings.calltoaction && popupSettings.calltoaction.trim()
+      ? popupSettings.calltoaction
+      : calltoactionQuery;
+  const headingColor =
+    popupSettings.headingColor && popupSettings.headingColor.trim()
+      ? popupSettings.headingColor
+      : headingColorQuery;
+  const floatingButtonColor =
+    popupSettings.floatingButtonColor &&
+    popupSettings.floatingButtonColor.trim()
+      ? popupSettings.floatingButtonColor
+      : floatingButtonColorQuery;
 
-  const API_BASE_URL = process.env.API_BASE_URL || (req.protocol + "://" + req.get("host"));
+  const API_BASE_URL =
+    process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
   const apiUrl = API_BASE_URL.replace(/\/+$/, "") + "/api/yeastar/make-call";
 
   // Build JS to send to browser
@@ -451,6 +473,9 @@ exports.serveCallmeJS = async (req, res) => {
   const FLOATING_BUTTON_COLOR = ${JSON.stringify(floatingButtonColor)};
   const POPUP_TEXT = ${JSON.stringify(popupText)};
   const CALL_TO_ACTION = ${JSON.stringify(calltoaction)};
+  const PHONE_ICON_COLOR = ${JSON.stringify(
+    popupSettings.phoneIconColor || "black"
+  )};
   const API_URL = ${JSON.stringify(apiUrl)};
   const API_BASE_URL = ${JSON.stringify(API_BASE_URL)};
 
@@ -534,9 +559,14 @@ exports.serveCallmeJS = async (req, res) => {
     }
 
     // markup inside either shadow or normal DOM
+    const phoneIconFill = PHONE_ICON_COLOR === 'white' ? '#fff' : '#000';
     const inner = \`
       <div class="callme-root">
-        <button id="callme-float" class="callme-btn" aria-label="Request call" title="Request call">📞</button>
+        <button id="callme-float" class="callme-btn" aria-label="Request call" title="Request call">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z" fill="\${phoneIconFill}"/>
+          </svg>
+        </button>
         <div id="callme-overlay" class="callme-overlay" role="dialog" aria-hidden="true">
           <div class="callme-popup" role="document" id="callme-popup">
             <button class="close-btn" id="callme-close" aria-label="Close popup">&times;</button>

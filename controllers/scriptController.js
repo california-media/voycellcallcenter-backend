@@ -76,8 +76,7 @@ exports.generateScriptTag = async (req, res) => {
     if (user.extensionStatus === false) {
       return res.status(400).json({
         status: "error",
-        message:
-          "Not Activated Calling Facility.",
+        message: "Not Activated Calling Facility.",
       });
     }
 
@@ -109,6 +108,10 @@ exports.generateScriptTag = async (req, res) => {
         req.body.calltoaction ||
         user.popupSettings?.calltoaction ||
         "📞 Call Me",
+      phoneIconColor:
+        req.body.phoneIconColor ||
+        user.popupSettings?.phoneIconColor ||
+        "black",
     };
 
     // === 3️⃣ Save allowedOrigin in user (optional for tracking) ===
