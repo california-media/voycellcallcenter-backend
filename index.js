@@ -27,6 +27,9 @@ const userRoutes = require("./routes/companyAdminAuthRoutes");
 const yeastarRoutes = require("./routes/yeastarRoutes");
 ////for linkux web UI login signature
 const deleteTemplateRoutes = require("./routes/deleteTemplateRoutes");
+const sendEmail = require("./routes/sendEmailRoutes");
+const whatsappEmailActivityRoutes = require("./routes/whatsappEmailActivityRoutes");
+
 
 const yeastarLoginRoutes = require("./routes/yeastarLoginRoutes");
 const scriptRoutes = require("./routes/scriptRoutes");
@@ -40,6 +43,8 @@ const addEditContactLeadsRoutes = require("./routes/addEditContact&LeadsRoutes")
 const getAllContactsOrLeadsRoutes = require("./routes/getAllContactsOrLeadsRoutes");
 const contactAndLeadStatusPiplineRoutes = require("./routes/contactAndLeadStatusPiplineRoutes");
 const addeditTaskRoutes = require("./routes/taskRoutes");
+const getContactActivitiesRoutes = require("./routes/getActivityRoutes");
+
 const addedittagRoutes = require("./routes/tagRoute");
 const accountConnect = require("./routes/accountConnectRoutes");
 const disconnectAccountRoutes = require("./routes/disconnectAccountRoutes");
@@ -96,11 +101,17 @@ app.use(
   upload.single("profileImage"),
   editProfileRoutes
 );
+app.use("/sendEmail", checkForAuthentication(), sendEmail);
+
 app.use("/getUser", checkForAuthentication(), getUserRoutes);
 app.use("/changePassword", checkForAuthentication(), changePassword);
 app.use("/deleteUser", checkForAuthentication(), deleteUserRoutes);
 app.use("/deleteTemplate", checkForAuthentication(), deleteTemplateRoutes);
-
+app.use(
+  "/whatsapp-email-call-activity",
+  checkForAuthentication(),
+  whatsappEmailActivityRoutes
+);
 app.use("/email", emailPasswordResetRoutes);
 app.use(
   "/addEditContactLeads",
@@ -111,6 +122,11 @@ app.use(
   "/getAllContactsOrLeads",
   checkForAuthentication(),
   getAllContactsOrLeadsRoutes
+);
+app.use(
+  "/getContactActivities",
+  checkForAuthentication(),
+  getContactActivitiesRoutes
 );
 app.use(
   "/contactAndLeadStatusPipline",

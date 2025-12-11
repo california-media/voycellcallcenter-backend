@@ -8,165 +8,6 @@ const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
 
-// exports.sendEmail = async (req, res) => {
-//     const { emailProvider, fromEmail, fromGoogleRefreshToken, fromMicrosoftAccessToken, to, subject, text, html } = req.body;
-//     const userId = req.user?._id;
-
-//     if (!emailProvider || !to || !subject) {
-//         return res.status(400).json({
-//             status: 'error',
-//             message: 'Missing required fields: emailProvider, to, subject',
-//         });
-//     }
-
-//     try {
-//         if (emailProvider === 'google') {
-//             if (!fromEmail || !fromGoogleRefreshToken) {
-//                 return res.status(400).json({
-//                     status: 'error',
-//                     message: 'Missing Google credentials: fromEmail, fromGoogleRefreshToken',
-//                 });
-//             }
-
-//             const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
-//             oAuth2Client.setCredentials({ refresh_token: fromGoogleRefreshToken });
-
-//             const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-
-//             let messageParts = [
-//                 `From: ${fromEmail}`,
-//                 `To: ${to}`,
-//                 `Subject: ${subject}`,
-//                 'Content-Type: text/html; charset=utf-8',
-//                 '',
-//                 html || text || '',
-//             ];
-
-//             const message = messageParts.join('\n');
-//             const encodedMessage = Buffer.from(message)
-//                 .toString('base64')
-//                 .replace(/\+/g, '-')
-//                 .replace(/\//g, '_')
-//                 .replace(/=+$/, '');
-
-//             await gmail.users.messages.send({
-//                 userId: 'me',
-//                 requestBody: { raw: encodedMessage },
-//             });
-
-//             return res.json({
-//                 status: 'success',
-//                 message: 'Email sent SuccessFully',
-//             });
-//         }
-
-//         else if (emailProvider === 'microsoft') {
-//             if (!fromEmail || !fromMicrosoftAccessToken) {
-//                 return res.status(400).json({
-//                     status: 'error',
-//                     message: 'Missing Microsoft credentials: fromEmail, fromMicrosoftAccessToken',
-//                 });
-//             }
-
-//             const emailContent = {
-//                 message: {
-//                     subject: subject,
-//                     body: {
-//                         contentType: html ? 'HTML' : 'Text',
-//                         content: html || text,
-//                     },
-//                     toRecipients: [
-//                         {
-//                             emailAddress: {
-//                                 address: to,
-//                             },
-//                         },
-//                     ],
-//                     from: {
-//                         emailAddress: {
-//                             address: fromEmail,
-//                         },
-//                     },
-//                 },
-//                 saveToSentItems: true,
-//             };
-
-//             await axios.post(
-//                 'https://graph.microsoft.com/v1.0/me/sendMail',
-//                 emailContent,
-//                 {
-//                     headers: {
-//                         Authorization: `Bearer ${fromMicrosoftAccessToken}`,
-//                         'Content-Type': 'application/json',
-//                     },
-//                 }
-//             );
-
-//             return res.json({
-//                 status: 'success',
-//                 message: 'Email sent SuccessFully',
-//             });
-//         }
-
-//         else if (emailProvider === 'smtp') {
-//             if (!userId) {
-//                 return res.status(401).json({
-//                     status: 'error',
-//                     message: 'User authentication required for SMTP',
-//                 });
-//             }
-
-//             const user = await User.findById(userId);
-//             if (!user || !user.smtpConnected || !user.smtpHost || !user.smtpPort || !user.smtpUser || !user.smtpPass) {
-//                 return res.status(400).json({
-//                     status: 'error',
-//                     message: 'SMTP not connected or incomplete SMTP settings for this user',
-//                 });
-//             }
-
-//             const transporter = nodemailer.createTransport({
-//                 host: user.smtpHost,
-//                 port: user.smtpPort,
-//                 secure: user.smtpSecure,
-//                 auth: {
-//                     user: user.smtpUser,
-//                     pass: user.smtpPass,
-//                 },
-//             });
-
-//             const mailOptions = {
-//                 from: `"Contacts Management" <${user.smtpUser}>`,
-//                 to,
-//                 subject,
-//                 text: text || '',
-//                 html: html || '',
-//             };
-
-//             await transporter.sendMail(mailOptions);
-
-//             return res.json({
-//                 status: 'success',
-//                 message: 'Email sent SuccessFully',
-//             });
-//         }
-
-//         else {
-//             return res.status(400).json({
-//                 status: 'error',
-//                 message: 'Invalid type. Allowed types: google, microsoft, smtp',
-//             });
-//         }
-
-//     } catch (error) {
-//         console.error('Send Email Error:', error);
-//         res.status(500).json({
-//             status: 'error',
-//             message: 'Failed to send email',
-//             error: error.response?.data || error.message,
-//         });
-//     }
-// };
-
 exports.sendEmail = async (req, res) => {
     const {
         emailProvider,
@@ -208,6 +49,119 @@ exports.sendEmail = async (req, res) => {
 
         const provider = String(emailProvider || "").toLowerCase();
 
+        // ---------- GOOGLE ----------
+        // if (provider === "google") {
+        //   // server-side token + email are authoritative
+        //   if (!user.googleConnected || !user.googleRefreshToken || !user.googleEmail) {
+        //     return res.status(401).json({
+        //       status: "error",
+        //       message: "Google account not connected on server. Please connect your Google account from the web dashboard before sending email.",
+        //     });
+        //   }
+
+        //   // If client supplies a fromEmail, ensure it matches server email
+        //   if (fromEmail && fromEmail.trim().toLowerCase() !== user.googleEmail.trim().toLowerCase()) {
+        //     return res.status(400).json({
+        //       status: "error",
+        //       message: "Provided fromEmail does not match the connected Google account. Use the connected Google email or reconnect.",
+        //     });
+        //   }
+
+        //   // Use server's refresh token
+        //   const refreshToken = user.googleRefreshToken;
+        //   const finalFrom = user.googleEmail;
+
+        //   // Build OAuth2 client
+        //   const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+        //   oAuth2Client.setCredentials({ refresh_token: refreshToken });
+
+        //   // Try to get new access token using refresh token
+        //   let accessToken;
+        //   try {
+        //     const atResponse = await oAuth2Client.getAccessToken();
+        //     // getAccessToken returns an object { token } or a string in some versions
+        //     accessToken = typeof atResponse === "string" ? atResponse : atResponse?.token || null;
+
+        //     if (!accessToken) {
+        //       throw new Error("No access token returned from Google.");
+        //     }
+
+        //     // Save the fresh access token to DB (optional but helpful)
+        //     user.googleAccessToken = accessToken;
+        //     await user.save();
+        //   } catch (err) {
+        //     // token refresh failed: mark google as disconnected and clear tokens to prevent future misuse
+        //     console.error("Google token refresh error:", err?.response?.data || err?.message || err);
+
+        //     try {
+        //       user.googleConnected = false;
+        //       user.googleRefreshToken = null;
+        //       user.googleAccessToken = null;
+        //       await user.save();
+        //     } catch (saveErr) {
+        //       console.error("Failed to clear google tokens in DB:", saveErr);
+        //     }
+
+        //     return res.status(401).json({
+        //       status: "error",
+        //       message: "Google authentication failed. Please reconnect your Google account.",
+        //       error: err?.response?.data?.error || err?.message || err,
+        //     });
+        //   }
+
+        //   // Compose email and send via nodemailer (OAuth2)
+        //   try {
+        //     const transporter = nodemailer.createTransport({
+        //       service: "gmail",
+        //       auth: {
+        //         type: "OAuth2",
+        //         user: finalFrom,
+        //         clientId: CLIENT_ID,
+        //         clientSecret: CLIENT_SECRET,
+        //         refreshToken: refreshToken,
+        //         accessToken: accessToken,
+        //       },
+        //     });
+
+        //     const mailOptions = {
+        //       from: finalFrom,
+        //       to,
+        //       subject,
+        //       text: text || "",
+        //       html: html || "",
+        //     };
+
+        //     await transporter.sendMail(mailOptions);
+
+        //     return res.status(200).json({ status: "success", message: "Email sent successfully via Google." });
+        //   } catch (sendErr) {
+        //     console.error("Gmail send error:", sendErr?.response || sendErr?.message || sendErr);
+
+        //     // If it's an auth-related failure, clear tokens so client must reconnect
+        //     const errMsg = sendErr?.message || sendErr;
+        //     if (String(errMsg).toLowerCase().includes("invalid") || String(errMsg).toLowerCase().includes("token")) {
+        //       try {
+        //         user.googleConnected = false;
+        //         user.googleRefreshToken = null;
+        //         user.googleAccessToken = null;
+        //         await user.save();
+        //       } catch (saveErr) {
+        //         console.error("Failed to clear google tokens after send error:", saveErr);
+        //       }
+        //       return res.status(401).json({
+        //         status: "error",
+        //         message: "Google authentication failed while sending. Please reconnect your Google account.",
+        //         error: errMsg,
+        //       });
+        //     }
+
+        //     return res.status(500).json({
+        //       status: "error",
+        //       message: "Failed to send email via Google.",
+        //       error: sendErr?.response?.data || sendErr?.message || sendErr,
+        //     });
+        //   }
+        // }
 
         if (provider === "google") {
             if (!user.googleConnected || !user.googleRefreshToken || !user.googleEmail) {
@@ -279,7 +233,7 @@ exports.sendEmail = async (req, res) => {
 
                 return res.status(200).json({
                     status: "success",
-                    message: "Email sent successfully",
+                    message: "Email Sent",
                 });
             } catch (sendErr) {
                 console.error("Gmail API send error:", sendErr?.response?.data || sendErr?.message || sendErr);
@@ -368,7 +322,7 @@ exports.sendEmail = async (req, res) => {
                     headers: { Authorization: `Bearer ${finalAccessToken}`, "Content-Type": "application/json" },
                 });
 
-                return res.status(200).json({ status: "success", message: "Email sent successfully" });
+                return res.status(200).json({ status: "success", message: "Email Sent" });
             } catch (sendErr) {
                 console.error("Microsoft sendMail error:", sendErr?.response?.data || sendErr?.message || sendErr);
 
@@ -454,7 +408,7 @@ exports.sendEmail = async (req, res) => {
 
             try {
                 await transporter.sendMail(mailOptions);
-                return res.status(200).json({ status: "success", message: "Email sent successfully." });
+                return res.status(200).json({ status: "success", message: "Email Sent." });
             } catch (sendErr) {
                 console.error("SMTP sendMail error:", sendErr?.response || sendErr?.message || sendErr);
                 // If auth error, clear smtpConnected
