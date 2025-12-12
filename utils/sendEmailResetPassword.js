@@ -7,7 +7,7 @@ const sendEmail = async (to, subject, html) => {
     // service: "gmail",
     host: process.env.MAIL_HOST,
     port: Number(process.env.MAIL_PORT),
-    secure: true, // Gmail on port 587 uses TLS (not SSL)
+    secure: false, // Gmail on port 587 uses TLS (not SSL)
     auth: {
       user: process.env.MAIL_USERNAME,
       pass: process.env.MAIL_PASSWORD,
