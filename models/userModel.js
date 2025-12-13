@@ -285,10 +285,15 @@ const userSchema = new Schema(
       calltoaction: { type: String, default: "📞 Call Me" },
       phoneIconColor: { type: String, default: "black" }, // 'black' or 'white'
       // Add this near popupSettings in userSchema
+      // allowedOrigin: {
+      //   type: String,
+      //   default: "", // store the website URL (origin) where the script is allowed, e.g. "https://example.com"
+      // },
       allowedOrigin: {
-        type: String,
-        default: "", // store the website URL (origin) where the script is allowed, e.g. "https://example.com"
-      },
+        type: [String], // ✅ multiple origins
+        default: [],
+      }
+
     },
 
     extensionNumber: { type: String, default: null },
@@ -589,7 +594,7 @@ userSchema.static(
     const query = email
       ? { email }
       : // : { phonenumbers: { $in: [phonenumber] } }; // assuming you store phone numbers as array
-        { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
+      { phonenumbers: { $elemMatch: { countryCode, number: phonenumber } } };
 
     const user = await this.findOne(query);
     if (!user) throw new Error("User not found");
