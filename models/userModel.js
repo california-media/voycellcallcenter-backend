@@ -359,6 +359,22 @@ const userSchema = new Schema(
     smtpSecure: { type: Boolean, default: true },
     smtpConnected: { type: Boolean, default: false },
 
+    // zohoId: { type: String },
+    // zohoEmail: { type: String },
+    // zohoAccessToken: { type: String },
+    // zohoRefreshToken: { type: String },
+    // zohoConnected: { type: Boolean, default: false },
+
+    zoho: {
+      dc: { type: String },              // in | com | eu | au
+      accountsUrl: { type: String },
+      apiBaseUrl: { type: String },
+      accessToken: { type: String },
+      refreshToken: { type: String }
+    },
+
+
+
     password: {
       type: String,
       required: function () {

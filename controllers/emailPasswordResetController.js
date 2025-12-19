@@ -64,7 +64,7 @@ exports.forgotPassword = async (req, res) => {
 <body>
   <div class="container">
     <div class="header">
-      <img src="https://voycellcallcenter.vercel.app/assets/img/voycell-logo.webp" alt="Company Logo">
+      <img src="https://app.voycell.com/assets/img/voycell-logo.webp" alt="Company Logo">
     </div>
     <h2>Password Reset Request</h2>
     <p>Hello,</p>
@@ -74,7 +74,7 @@ exports.forgotPassword = async (req, res) => {
     </p>
     <p>If you didn’t request this, you can safely ignore this email. This password reset link will expire in 1 hour.</p>
     <div class="footer">
-      <p>&copy; ${new Date().getFullYear()} VoyCell Call Center. All rights reserved.</p>
+      <p>&copy; ${new Date().getFullYear()} VOYCELL Call Center. All rights reserved.</p>
     </div>
   </div>
 </body>
