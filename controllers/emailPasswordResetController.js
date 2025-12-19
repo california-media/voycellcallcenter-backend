@@ -74,7 +74,7 @@ exports.forgotPassword = async (req, res) => {
     </p>
     <p>If you didn’t request this, you can safely ignore this email. This password reset link will expire in 1 hour.</p>
     <div class="footer">
-      <p>&copy; ${new Date().getFullYear()} VOYCELL Call Center. All rights reserved.</p>
+      <p>&copy; ${new Date().getFullYear()} VOYCELL. All rights reserved.</p>
     </div>
   </div>
 </body>

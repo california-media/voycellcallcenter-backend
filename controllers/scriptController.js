@@ -62,7 +62,7 @@ const ScriptToken = require("../models/ScriptToken");
 const User = require("../models/userModel");
 
 const FRONTEND_BASE =
-  process.env.FRONTEND_BASE || "https://voycellcallcenter.vercel.app";
+  process.env.FRONTEND_BASE || "https://app.vercel.com";
 
 exports.generateScriptTag = async (req, res) => {
   try {

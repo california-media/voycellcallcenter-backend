@@ -23,7 +23,7 @@ const sendEmail = async (to, subject, html) => {
   //   html: `<html lang="en">
 
   await transporter.sendMail({
-    from: '"VOYCELL Call Center" <noreply@contacts.management>',
+    from: '"VOYCELL" <noreply@voycell.com>',
     to,
     subject,
     html,

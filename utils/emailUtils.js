@@ -26,14 +26,14 @@ const transporter = nodemailer.createTransport({
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const sendVerificationEmail = async (email, link) => {
     const mailOptions = {
-        from: '"VOYCELL Call Center" <noreply@voycell.com>',
+        from: '"VOYCELL" <noreply@voycell.com>',
         to: email,
         subject: "VOYCELL : Verify Your E-mail",
         html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>Verify Your VOYCELL Call Center Account</title>
+    <title>Verify Your VOYCELL Account</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -89,10 +89,10 @@ const sendVerificationEmail = async (email, link) => {
     <div class="container">
 
         <center> <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
-                    alt="VOYCELL Call Center Logo" style="width:200px; display:block;"></center>
+                    alt="VOYCELL Logo" style="width:200px; display:block;"></center>
         <p><strong>Hello,</strong></p>
 
-        <p>Congratulations on creating your <strong>VOYCELL Call Center CRM</strong> account — a powerful step toward
+        <p>Congratulations on creating your <strong>VOYCELL CRM</strong> account — a powerful step toward
             organizing, connecting, and growing your professional network.</p>
 
         <p>To ensure the security of your account and activate all features, please verify your email address:</p>
@@ -101,7 +101,7 @@ const sendVerificationEmail = async (email, link) => {
 
         <p>We look forward to helping you along your journey!</p>
 
-        <p>Warm regards,<br>Contacts Management</p>
+        <p>Warm regards,<br>VOYCELL</p>
 
         <center><a href="${link}" class="button">VERIFY MY ACCOUNT</a></center>
 
@@ -113,7 +113,7 @@ const sendVerificationEmail = async (email, link) => {
             <!-- Left Column (Image) -->
             <div style="float:left; width:110px; margin-right:10px;">
                 <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
-                    alt="VOYCELL Call Center logo" style="width:100px; display:block;">
+                    alt="VOYCELL logo" style="width:100px; display:block;">
             </div>
 
             <!-- Right Column (Text) -->
@@ -123,7 +123,7 @@ const sendVerificationEmail = async (email, link) => {
                 <span style="color:rgb(45,49,58); font-size:14px; letter-spacing:0.25px;">Be Extraordinary,</span><br>
 
                 <span>
-                    <b>VOYCELL Call Center Team</b><br>
+                    <b>VOYCELL Team</b><br>
                     <a href="${FRONTEND_URL}" target="_blank" style="color:#007BFF; text-decoration:none;">
                        ${FRONTEND_URL}
                     </a>
@@ -136,7 +136,7 @@ const sendVerificationEmail = async (email, link) => {
 
 
         <div class="footer">
-            <p>Follow Contacts Management social media on:</p>
+            <p>Follow VOYCELL social media on:</p>
             <div class="social-icons">
                 <a href="#"><img
                         src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/facebookIcon.png"
@@ -154,7 +154,7 @@ const sendVerificationEmail = async (email, link) => {
             </div>
             <br><br>
             <div class="app-buttons">
-                <p>Download the Contacts Managementt App:</p>
+                <p>Download the VOYCELL App:</p>
                 <a href="#"><img
                         src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/appStoreIcon.png"
                         alt="App Store"></a>
@@ -163,7 +163,7 @@ const sendVerificationEmail = async (email, link) => {
                         alt="Google Play"></a>
             </div>
 
-            <p>Need help? Visit <a href="#">support@VOYCELL</a> </p>
+            <p>Need help? Visit <a href="#">support@voycell.com</a> </p>
             <p>Sent with ❤️ from VOYCELL</p>
             <p><a href="#" target="_blank">Privacy Policy</a></p>
         </div>
@@ -301,14 +301,14 @@ const sendHelpSupportReplyNotification = async (
         }/my-tickets?ticketId=${ticketId}`;
 
     const mailOptions = {
-        from: '"VOYCELL Call Center" <noreply@contacts.management>',
+        from: '"VOYCELL" <noreply@voycell.com>',
         to: userEmail,
         subject: `New Reply: ${subject || "Your Support Request"}`,
         html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>New Reply - Contacts Management</title>
+    <title>New Reply - VOYCELL</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -367,7 +367,7 @@ const sendHelpSupportReplyNotification = async (
     <div class="container">
         <center>
             <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logoWithName.png"
-                alt="Contacts Management Logo" style="width:200px; display:block;">
+                alt="VOYCELL Logo" style="width:200px; display:block;">
         </center>
 
         <p><strong>Hello ${userName || "Valued Customer"},</strong></p>
@@ -388,27 +388,27 @@ const sendHelpSupportReplyNotification = async (
 
         <p>Click the button above to view the full conversation and continue chatting with our support team.</p>
 
-        <p>Best regards,<br>Contacts Management Support Team</p>
+        <p>Best regards,<br>VOYCELL Support Team</p>
 
         <div style="width:100%; overflow:hidden; margin-top: 30px;">
             <div style="float:left; width:110px; margin-right:10px;">
                 <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logo.png"
-                    alt="Contacts Management Logo" style="width:100px; display:block;">
+                    alt="VOYCELL Logo" style="width:100px; display:block;">
             </div>
             <div style="overflow:hidden;">
                 <span style="color:rgb(45,49,58); font-size:14px; letter-spacing:0.25px;">Be Extraordinary,</span><br>
                 <span>
-                    <b>Contacts Management Support Team</b><br>
-                    <a href="https://contacts.management" target="_blank" style="color:#007BFF; text-decoration:none;">
-                        https://contacts.management
+                    <b>VOYCELL Team</b><br>
+                    <a href="https://voycell.com" target="_blank" style="color:#007BFF; text-decoration:none;">
+                        https://voycell.com
                     </a>
                 </span>
             </div>
         </div>
 
         <div class="footer">
-            <p>Need additional help? Contact us at <a href="mailto:support@contacts.management">support@contacts.management</a></p>
-            <p>Sent with ❤️ from Contacts Management</p>
+            <p>Need additional help? Contact us at <a href="mailto:support@voycell.com">support@voycell.com</a></p>
+            <p>Sent with ❤️ from VOYCELL</p>
             <p><a href="#" target="_blank">Privacy Policy</a></p>
         </div>
     </div>
@@ -428,7 +428,7 @@ const sendEmailChangeVerification = async (
     verificationLink
 ) => {
     const mailOptions = {
-        from: '"VOYCELL Call Center" <noreply@contacts.management>',
+        from: '"VOYCELL" <noreply@voycell.com>',
         to: newEmail,
         subject: "VOYCELL: Verify Your New Email Address",
         html: `<html lang="en">
@@ -499,10 +499,10 @@ const sendEmailChangeVerification = async (
     <div class="container">
 
         <center> <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
-                    alt="VOYCELL Call Center Logo" style="width:200px; display:block;"></center>
+                    alt="VOYCELL Logo" style="width:200px; display:block;"></center>
         <p><strong>Hello ${userName || "User"},</strong></p>
         
-        <p>Your VOYCELL Call Center account email address has been updated by the system administrator.</p>
+        <p>Your VOYCELL account email address has been updated by the system administrator.</p>
 
         <div class="info-box">
             <h4 style="margin-top: 0;">Email Change Details:</h4>
@@ -521,14 +521,14 @@ const sendEmailChangeVerification = async (
 
         <p><strong>Important:</strong> If you did not request this change or believe this is an error, please contact your administrator immediately.</p>
 
-        <p>Warm regards,<br>VOYCELL Call Center Team</p>
+        <p>Warm regards,<br>VOYCELL Team</p>
 
         <div style="width:100%; overflow:hidden;">
 
             <!-- Left Column (Image) -->
             <div style="float:left; width:110px; margin-right:10px;">
                 <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
-                    alt="VOYCELL Call Center logo" style="width:100px; display:block;">
+                    alt="VOYCELL logo" style="width:100px; display:block;">
             </div>
 
             <!-- Right Column (Text) -->
@@ -538,7 +538,7 @@ const sendEmailChangeVerification = async (
                 <span style="color:rgb(45,49,58); font-size:14px; letter-spacing:0.25px;">Be Extraordinary,</span><br>
 
                 <span>
-                    <b>VOYCELL Call Center Team</b><br>
+                    <b>VOYCELL Team</b><br>
                     <a href="${FRONTEND_URL}" target="_blank" style="color:#007BFF; text-decoration:none;">
                        ${FRONTEND_URL}
                     </a>
@@ -549,7 +549,7 @@ const sendEmailChangeVerification = async (
         </div>
 
         <div class="footer">
-            <p>Follow Contacts Management social media on:</p>
+            <p>Follow VOYCELL social media on:</p>
             <div class="social-icons">
                 <a href="#"><img
                         src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/facebookIcon.png"
@@ -567,7 +567,7 @@ const sendEmailChangeVerification = async (
             </div>
             <br><br>
             <div class="app-buttons">
-                <p>Download the Contacts Managementt App:</p>
+                <p>Download the VOYCELL App:</p>
                 <a href="#"><img
                         src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/appStoreIcon.png"
                         alt="App Store"></a>
@@ -576,7 +576,7 @@ const sendEmailChangeVerification = async (
                         alt="Google Play"></a>
             </div>
 
-            <p>Need help? Visit <a href="#">support@VOYCELL</a> </p>
+            <p>Need help? Visit <a href="#">support@voycell.com</a> </p>
             <p>Sent with ❤️ from VOYCELL</p>
             <p><a href="#" target="_blank">Privacy Policy</a></p>
         </div>
@@ -591,7 +591,7 @@ const sendEmailChangeVerification = async (
 
 const sendMagicLinkEmail = async (email, link) => {
     const mailOptions = {
-        from: '"VOYCELL Call Center" <noreply@voycell.com>',
+        from: '"VOYCELL" <noreply@voycell.com>',
         to: email,
         subject: "VOYCELL Secure Magic Login Link",
         html: `
@@ -651,7 +651,7 @@ const sendMagicLinkEmail = async (email, link) => {
         <p>If you did not request this login, you can safely ignore this email.</p>
 
         <div class="footer">
-          <p>VOYCELL Call Center Team</p>
+          <p>VOYCELL Team</p>
           <p>${process.env.FRONTEND_URL}</p>
         </div>
 
