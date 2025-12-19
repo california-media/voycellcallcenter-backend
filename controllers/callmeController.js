@@ -235,8 +235,8 @@ exports.serveCallmeJS = async (req, res) => {
               </div>
               <button id="callme-send" class="callme-action">\${CALL_TO_ACTION}</button>
               <div style="margin-top: 10px; font-size: 12px; color: #555; display: flex; align-items: center; justify-content: center;">
-                <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell_favicon.png" alt="Voycell Logo" style="width: 16px; height: 16px; margin-right: 5px; margin-top: 2px;" />
-                Powered by Voycell.com
+                <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell_favicon.png" alt="VOYCELL Logo" style="width: 16px; height: 16px; margin-right: 5px; margin-top: 2px;" />
+                Powered by VOYCELL
               </div>
             </div>
 
