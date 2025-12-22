@@ -59,10 +59,11 @@
 // controllers/scriptController.js (or your existing file)
 const crypto = require("crypto");
 const ScriptToken = require("../models/ScriptToken");
+const FormCallScriptToken = require("../models/FormCallScriptToken");
 const User = require("../models/userModel");
 
 const FRONTEND_BASE =
-  process.env.FRONTEND_BASE || "https://app.vercel.com";
+  process.env.FRONTEND_BASE || "https://app.voycell.com";
 
 exports.generateScriptTag = async (req, res) => {
   try {
@@ -172,5 +173,69 @@ exports.generateScriptTag = async (req, res) => {
   } catch (err) {
     console.error("generateScriptTag Error:", err);
     return res.status(500).json({ error: "Server Error" });
+  }
+};
+
+exports.generateFormCallScriptTag = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId);
+
+    if (!user || !user.extensionNumber) {
+      return res.status(400).json({ error: "User or extension not found" });
+    }
+
+    if (!user.extensionStatus) {
+      return res.status(400).json({
+        status: "error",
+        message: "Calling facility not activated",
+      });
+    }
+
+    // normalize allowed origins
+    const allowedOrigins = Array.isArray(req.body.allowedOrigin)
+      ? req.body.allowedOrigin
+          .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
+          .filter(Boolean)
+      : [];
+
+    // 🔒 One stable token per user (recommended)
+    let tokenDoc = await FormCallScriptToken.findOne({ userId }).sort({ createdAt: -1 });
+    let token;
+
+    if (tokenDoc) {
+      token = tokenDoc.token;
+
+      const update = {
+        extensionNumber: user.extensionNumber,
+        updatedAt: new Date(),
+      };
+
+      if (allowedOrigins.length > 0) {
+        update.allowedOrigin = allowedOrigins;
+      }
+
+      await FormCallScriptToken.findByIdAndUpdate(tokenDoc._id, update);
+    } else {
+      token = crypto.randomBytes(16).toString("hex");
+
+      await FormCallScriptToken.create({
+        token,
+        userId,
+        extensionNumber: user.extensionNumber,
+        allowedOrigin: allowedOrigins,
+      });
+    }
+
+    const scriptUrl = `${FRONTEND_BASE.replace(
+      /\/+$/,
+      ""
+    )}/voycell_form_call/${token}`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(`<script src="${scriptUrl}"></script>`);
+  } catch (err) {
+    console.error("generateFormCallScriptTag error:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 };

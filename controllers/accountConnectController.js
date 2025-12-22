@@ -17,13 +17,17 @@ const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
 const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET;
 const MICROSOFT_REDIRECT_URI = process.env.MICROSOFT_REDIRECT_URI;
 
+const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
+const ZOHO_REDIRECT_URI2 = process.env.ZOHO_REDIRECT_URI;
+const ZOHO_ACCOUNTS_URL = process.env.ZOHO_ACCOUNTS_URL || "https://accounts.zoho.com";
+
 const oauth2Client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
 
 // 1. API to Generate Google OAuth URL
 exports.connectGoogle = async (req, res) => {
     const userId = req.user._id;
     console.log(userId);
-    
+
     const type = req.body.type; // Default to 'default' if not specified
     try {
         const user = await User.findById(userId);
@@ -321,5 +325,141 @@ exports.connectSMTP = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ status: 'error', message: 'SMTP OAuth failed', error: error.message });
+    }
+};
+
+exports.connectZoho = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const type = req.body.type || "web";
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ status: "error", message: "User not found" });
+        }
+
+        const scopes = [
+            "ZohoCRM.modules.ALL",
+            "ZohoMail.accounts.READ",
+            "ZohoCalendar.calendar.ALL",
+            "ZohoContacts.contacts.READ",
+        ];
+
+        const params = querystring.stringify({
+            client_id: ZOHO_CLIENT_ID,
+            response_type: "code",
+            redirect_uri: ZOHO_REDIRECT_URI,
+            scope: scopes.join(","),
+            access_type: "offline",
+            prompt: "consent",
+            state: JSON.stringify({ userId, type }),
+        });
+
+        const authUrl = `${ZOHO_ACCOUNTS_URL}/oauth/v2/auth?${params}`;
+
+        return res.json({
+            status: "success",
+            url: authUrl,
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: "error",
+            message: "Failed to generate Zoho OAuth URL",
+            error: error.message,
+        });
+    }
+};
+
+exports.zohoCallback = async (req, res) => {
+    const { code, state } = req.query;
+
+    let userId, type;
+    try {
+        const parsed = JSON.parse(state);
+        userId = parsed.userId;
+        type = parsed.type;
+    } catch {
+        return res.status(400).json({ status: "error", message: "Invalid state" });
+    }
+
+    try {
+        // 🔑 Exchange code for tokens
+        const tokenResponse = await axios.post(
+            `${process.env.ZOHO_ACCOUNTS_URL}/oauth/v2/token`,
+            null,
+            {
+                params: {
+                    grant_type: "authorization_code",
+                    client_id: process.env.ZOHO_CLIENT_ID,
+                    client_secret: process.env.ZOHO_CLIENT_SECRET,
+                    redirect_uri: process.env.ZOHO_REDIRECT_URI,
+                    code,
+                },
+            }
+        );
+
+        const { access_token, refresh_token } = tokenResponse.data;
+
+        // 🔍 Fetch Zoho user info
+        const userInfo = await axios.get(
+            "https://www.zohoapis.com/oauth/user/info",
+            {
+                headers: {
+                    Authorization: `Zoho-oauthtoken ${access_token}`,
+                },
+            }
+        );
+
+        const user = await User.findById(userId);
+        if (!user) throw new Error("User not found");
+
+        // 💾 Save Zoho details
+        user.zohoId = userInfo.data.ZUID;
+        user.zohoEmail = userInfo.data.Email;
+        user.zohoAccessToken = access_token;
+        user.zohoRefreshToken = refresh_token;
+        user.zohoConnected = true;
+
+        await user.save();
+
+        const resultData = {
+            status: "success",
+            zohoId: user.zohoId,
+            zohoEmail: user.zohoEmail,
+            zohoConnected: true,
+        };
+
+        // 📱 Mobile deep link
+        if (type === "mobile") {
+            return res.redirect(
+                `contactsManagement://zoho-auth?status=success&email=${user.zohoEmail}`
+            );
+        }
+
+        // 🌐 Web popup
+        return res.send(`
+      <html>
+        <body>
+          <script>
+            window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+            window.close();
+          </script>
+          <p>Zoho Account Connected Successfully</p>
+        </body>
+      </html>
+    `);
+    } catch (error) {
+        if (type === "mobile") {
+            return res.redirect(
+                `contactsManagement://zoho-auth?status=error&message=${encodeURIComponent(error.message)}`
+            );
+        }
+
+        return res.send(`
+      <script>
+        window.opener.postMessage({ status: 'error', message: '${error.message}' }, '*');
+        window.close();
+      </script>
+    `);
     }
 };

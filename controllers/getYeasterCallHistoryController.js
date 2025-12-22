@@ -8,6 +8,8 @@ const CallHistory = require("../models/CallHistory");
 const moment = require("moment-timezone");
 const Contact = require("../models/contactModel");
 const Lead = require("../models/leadModel");
+const { zohoAfterCallSync } = require("../services/zohoAfterCallSync.service");
+
 
 const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL;
 /**
@@ -35,126 +37,6 @@ function normalizeNumber(number) {
     .replace(/^\+/, "") // remove leading +
     .replace(/\D/g, ""); // remove all non-digits
 }
-
-// exports.fetchAndStoreCallHistory = async (req, res) => {
-//   try {
-//     const userId = req.user._id; // <-- token middleware should set this
-//     const token = await getValidToken();
-
-//     // ---- Get user details ----
-//     const user = await User.findById(userId);
-//     if (!user || !user.extensionNumber) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "User extension not found",
-//       });
-//     }
-
-//     const ext = user.extensionNumber;
-
-//     // // const ext = 1010;
-//     // const startTime = moment().subtract(24, "hour").format("MM/DD/YYYY HH:mm:ss");
-//     // const endTime = moment().format("MM/DD/YYYY HH:mm:ss");
-
-//     // // Yeastar format: 2025-11-18+10:00:00
-//     // const encodedStart = encodeURIComponent(startTime);
-//     // const encodedEnd = encodeURIComponent(endTime);
-
-//     // compute start & end in chosen timezone and format in Yeastar style: YYYY-MM-DD+HH:mm:ss
-//     // we use moment.tz(...) to ensure the same time window on every server.
-//     const endMoment = moment().tz(YEASTAR_TZ);
-//     const startMoment = endMoment.clone().subtract(24, "hours");
-
-//     // Yeastar format (example: 2025-11-22+16:38:43)
-//     const startTime = startMoment.format("YYYY-MM-DD+HH:mm:ss");
-//     const endTime = endMoment.format("YYYY-MM-DD+HH:mm:ss");
-
-//     // url-encode the strings (plus sign becomes %2B which is safe for query param)
-//     const encodedStart = encodeURIComponent(startTime);
-//     const encodedEnd = encodeURIComponent(endTime);
-
-//     // for debugging - log the timezone & timestamps (remove or reduce in prod)
-//     console.log("YEASTAR_TZ:", YEASTAR_TZ);
-//     console.log("startTime (formatted):", startTime);
-//     console.log("endTime (formatted):", endTime);
-
-//     const urlFrom = `${YEASTAR_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
-//     const respFrom = await axios.get(urlFrom, {
-//       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
-//     });
-
-//     // ----------- API CALL 2 → INBOUND ----------
-//     const urlTo = `${YEASTAR_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
-//     const respTo = await axios.get(urlTo, {
-//       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
-//     });
-
-//     console.log("resFrom" + respFrom.data.data);
-//     console.log("resTO" + respTo.data.data);
-
-//     const fromList = Array.isArray(respFrom.data?.data) ? respFrom.data.data : [];
-//     const toList = Array.isArray(respTo.data?.data) ? respTo.data.data : [];
-
-//     let finalList = [...fromList, ...toList];
-
-//     // ----- Remove duplicates by Yeastar ID -----
-//     const map = new Map();
-//     finalList.forEach((c) => map.set(c.id, c));
-//     finalList = [...map.values()];
-
-//     // ---- SAVE ONLY NEW CDRs ----
-//     let inserted = 0;
-
-//     for (const call of finalList) {
-//       const exists = await CallHistory.findOne({ yeastarId: call.id });
-//       if (exists) continue;
-//       console.log(call);
-
-//       await CallHistory.create({
-//         userId,
-//         extensionNumber: ext,
-//         yeastarId: call.id,
-
-//         call_from: call.call_from_number,
-//         call_to: call.call_to_number,
-
-//         talk_time: call.talk_duration,
-//         ring_time: call.ring_duration,
-//         duration: call.duration,
-
-//         direction: call.call_type,          // Outbound / Inbound
-//         status: call.disposition,           // ANSWERED / NO ANSWER
-
-//         start_time: new Date(call.time),
-//         end_time: new Date(call.time),
-
-//         record_file: call.record_file,
-//         disposition_code: call.reason,
-//         trunk: call.dst_trunk
-//       });
-
-//       inserted++;
-//     }
-
-//     return res.json({
-//       status: "scuccess",
-//       userId,
-//       extension: ext,
-//       time_window: { startTime, endTime },
-//       totalFetched: finalList.length,
-//       newInserted: inserted,
-//       message: `Stored ${inserted} new call records`,
-//     });
-
-//   } catch (err) {
-//     console.error("❌ Call History Error:", err.response?.data || err.message);
-//     return res.status(500).json({
-//       status: "error",
-//       message: "Failed to fetch/store call history",
-//       error: err.response?.data || err.message,
-//     });
-//   }
-// };
 
 exports.fetchAndStoreCallHistory = async (req, res) => {
   try {
@@ -742,347 +624,6 @@ exports.getAgentCallHistory = async (req, res) => {
   }
 };
 
-// exports.getPhoneNumberCallHistory = async (req, res) => {
-//   try {
-//     const loginUserId = req.user._id;
-
-//     // ✅ 1️⃣ Get logged-in admin
-//     const admin = await User.findById(loginUserId).select(
-//       "_id firstname lastname extensionNumber role"
-//     );
-
-//     if (!admin) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "Company admin not found"
-//       });
-//     }
-
-//     const adminExtension = admin.extensionNumber;
-
-//     // ✅ 2️⃣ Request body
-//     const {
-//       page = 1,
-//       page_size = 20,
-//       search = "",
-//       status = [],
-//       callType = [],
-//       startDate = "",
-//       endDate = "",
-//       phonenumbers = []
-//     } = req.body;
-
-//     if (!Array.isArray(phonenumbers) || phonenumbers.length === 0) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "Phone numbers list is required"
-//       });
-//     }
-
-//     // ✅ 3️⃣ UNIVERSAL NORMALIZER
-//     const normalizePhone = (phone) => {
-//       if (!phone) return "";
-//       return phone
-//         .toString()
-//         .replace(/\s+/g, "")     // remove spaces
-//         .replace(/[^0-9]/g, "") // remove +, -, ()
-//         .replace(/^00/, "");    // remove leading 00 if exists
-//     };
-
-//     // ✅ 4️⃣ BUILD ALL POSSIBLE NORMALIZED VARIATIONS (FROM REQUEST)
-//     const flatNumbers = new Set();
-
-//     phonenumbers.forEach(p => {
-//       const raw = normalizePhone(p.number);
-//       const cc = normalizePhone(p.countryCode);
-
-//       if (!raw) return;
-
-//       // local
-//       flatNumbers.add(raw);
-
-//       // zero prefixed local
-//       if (!raw.startsWith("0")) {
-//         flatNumbers.add("0" + raw);
-//       }
-
-//       // international
-//       if (cc) {
-//         flatNumbers.add(cc + raw);
-
-//         if (!raw.startsWith("0")) {
-//           flatNumbers.add(cc + "0" + raw);
-//         }
-//       }
-//     });
-
-//     const normalizedNumbers = [...flatNumbers];
-
-//     // ✅ ✅ ✅ 5️⃣ MAIN DATABASE QUERY (AUTO-NORMALIZES DB VALUES)
-//     let query = {
-//       $expr: {
-//         $or: [
-//           {
-//             $and: [
-//               {
-//                 $in: [
-//                   {
-//                     $replaceAll: {
-//                       input: {
-//                         $replaceAll: {
-//                           input: "$call_from",
-//                           find: " ",
-//                           replacement: ""
-//                         }
-//                       },
-//                       find: "+",
-//                       replacement: ""
-//                     }
-//                   },
-//                   normalizedNumbers
-//                 ]
-//               },
-//               { $eq: ["$call_to", adminExtension] }
-//             ]
-//           },
-//           {
-//             $and: [
-//               { $eq: ["$call_from", adminExtension] },
-//               {
-//                 $in: [
-//                   {
-//                     $replaceAll: {
-//                       input: {
-//                         $replaceAll: {
-//                           input: "$call_to",
-//                           find: " ",
-//                           replacement: ""
-//                         }
-//                       },
-//                       find: "+",
-//                       replacement: ""
-//                     }
-//                   },
-//                   normalizedNumbers
-//                 ]
-//               }
-//             ]
-//           }
-//         ]
-//       }
-//     };
-
-//     // ✅ 6️⃣ SEARCH FILTER
-//     if (search.trim()) {
-//       query.$and = [
-//         {
-//           $or: [
-//             { call_from: { $regex: search, $options: "i" } },
-//             { call_to: { $regex: search, $options: "i" } }
-//           ]
-//         }
-//       ];
-//     }
-
-//     // ✅ 7️⃣ STATUS FILTER
-//     if (Array.isArray(status) && status.length > 0) {
-//       const statusMap = {
-//         answered: "ANSWERED",
-//         missedCall: "NO ANSWER",
-//         noAnswered: "NO ANSWER",
-//         cancelled: "BUSY",
-//         invalid: "FAILED"
-//       };
-
-//       const mapped = status.map(s => statusMap[s]).filter(Boolean);
-
-//       if (mapped.length > 0) {
-//         query.status = { $in: mapped };
-//       }
-//     }
-
-//     // ✅ 8️⃣ CALL TYPE FILTER
-//     if (Array.isArray(callType) && callType.length > 0) {
-//       const typeMap = {
-//         inbound: "Inbound",
-//         outbound: "Outbound",
-//         internal: "Internal"
-//       };
-
-//       const mapped = callType.map(t => typeMap[t]).filter(Boolean);
-
-//       if (mapped.length > 0) {
-//         query.direction = { $in: mapped };
-//       }
-//     }
-
-//     // // ✅ 9️⃣ DATE FILTER
-//     // if (startDate && endDate) {
-//     //   query.start_time = {
-//     //     $gte: new Date(startDate),
-//     //     $lte: new Date(endDate)
-//     //   };
-//     // }
-
-//     // // ✅ 9️⃣ SAFE DATE FILTER (NO MORE INVALID DATE CRASH)
-//     // if (startDate && endDate) {
-//     //   const start = new Date(startDate);
-//     //   const end = new Date(endDate);
-
-//     //   // ✅ Only apply filter if BOTH dates are valid
-//     //   if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-//     //     // ✅ Set end of day for accurate filtering
-//     //     end.setHours(23, 59, 59, 999);
-
-//     //     query.start_time = {
-//     //       $gte: start,
-//     //       $lte: end
-//     //     };
-//     //   }
-//     // }
-
-//     // 8️⃣ Date Filter (SAFE for STRING + DATE + NULL values)
-//     if (startDate && endDate) {
-//       query.$expr = {
-//         $and: [
-//           {
-//             $gte: [
-//               {
-//                 $dateFromString: {
-//                   dateString: { $toString: "$start_time" },  // ✅ forces to string
-//                   format: "%m/%d/%Y %H:%M:%S",
-//                   onError: new Date("1970-01-01"),             // ✅ prevents crash
-//                   onNull: new Date("1970-01-01")               // ✅ prevents crash
-//                 }
-//               },
-//               new Date(startDate)
-//             ]
-//           },
-//           {
-//             $lte: [
-//               {
-//                 $dateFromString: {
-//                   dateString: { $toString: "$start_time" },  // ✅ forces to string
-//                   format: "%m/%d/%Y %H:%M:%S",
-//                   onError: new Date("2999-01-01"),             // ✅ prevents crash
-//                   onNull: new Date("2999-01-01")               // ✅ prevents crash
-//                 }
-//               },
-//               new Date(endDate)
-//             ]
-//           }
-//         ]
-//       };
-//     }
-
-//     // ✅ 🔟 PAGINATION
-//     const skip = (page - 1) * page_size;
-
-//     const totalRecords = await CallHistory.countDocuments(query);
-
-//     const callRecords = await CallHistory.find(query)
-//       .sort({ start_time: -1 })
-//       .skip(skip)
-//       .limit(page_size);
-
-//     const summaryQuery = {
-//       $expr: {
-//         $or: [
-//           {
-//             $and: [
-//               {
-//                 $in: [
-//                   {
-//                     $replaceAll: {
-//                       input: {
-//                         $replaceAll: {
-//                           input: "$call_from",
-//                           find: " ",
-//                           replacement: ""
-//                         }
-//                       },
-//                       find: "+",
-//                       replacement: ""
-//                     }
-//                   },
-//                   normalizedNumbers   // ✅ ARRAY HERE
-//                 ]
-//               },
-//               { $eq: ["$call_to", adminExtension] }
-//             ]
-//           },
-//           {
-//             $and: [
-//               { $eq: ["$call_from", adminExtension] },
-//               {
-//                 $in: [
-//                   {
-//                     $replaceAll: {
-//                       input: {
-//                         $replaceAll: {
-//                           input: "$call_to",
-//                           find: " ",
-//                           replacement: ""
-//                         }
-//                       },
-//                       find: "+",
-//                       replacement: ""
-//                     }
-//                   },
-//                   normalizedNumbers   // ✅ ARRAY HERE
-//                 ]
-//               }
-//             ]
-//           }
-//         ]
-//       }
-//     };
-
-//     const allSummaryCalls = await CallHistory.find(summaryQuery).select("direction status");
-
-//     let inboundCalls = 0;
-//     let outboundCalls = 0;
-//     let internal = 0;
-//     let missedCalls = 0;
-//     let totalCalls = 0;
-
-//     allSummaryCalls.forEach(call => {
-//       if (call.direction === "Inbound") inboundCalls++;
-//       if (call.direction === "Outbound") outboundCalls++;
-//       if (call.direction === "Internal") internal++;
-
-//       if (call.status === "NO ANSWER") missedCalls++;
-//     });
-
-//     totalCalls = inboundCalls + outboundCalls
-
-//     const summary = {
-//       inboundCalls,
-//       outboundCalls,
-//       missedCalls,
-//       totalCalls
-//     }
-
-//     // ✅ ✅ ✅ FINAL RESPONSE
-//     return res.json({
-//       status: "success",
-//       summary,
-//       page,
-//       page_size,
-//       totalRecords,
-//       callRecords
-//     });
-
-//   } catch (err) {
-//     console.error("❌ PhoneNumber Call History Error:", err);
-//     return res.status(500).json({
-//       status: "error",
-//       message: "Failed to retrieve phone number call history",
-//       error: err.message
-//     });
-//   }
-// };
-
 exports.getPhoneNumberCallHistory = async (req, res) => {
   try {
     const loginUserId = req.user._id;
@@ -1590,9 +1131,8 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         "Dec",
       ];
 
-      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${
-        months[dateObj.getUTCMonth()]
-      } ${dateObj.getUTCFullYear()}`;
+      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${months[dateObj.getUTCMonth()]
+        } ${dateObj.getUTCFullYear()}`;
     };
 
     // ------------------------------
@@ -1985,6 +1525,20 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
 
     // ✅ 7. SAVE FINAL DOCUMENT
     await targetDoc.save();
+
+    if (loggedInUser.zoho?.accessToken && loggedInUser.zoho?.refreshToken) {
+      zohoAfterCallSync({
+        user: loggedInUser,
+        targetDoc,
+        // phone: `${rawCountry}${rawNumber}`,
+        phone: `+${rawCountry}${rawNumber}`,
+        status,
+        note,
+        meeting,
+      }).catch((err) => {
+        console.error("Zoho After Call Sync Failed:", err.message);
+      });
+    }
 
     return res.status(200).json({
       message: "Call form data saved successfully",

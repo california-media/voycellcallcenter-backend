@@ -34,6 +34,7 @@ const whatsappEmailActivityRoutes = require("./routes/whatsappEmailActivityRoute
 const yeastarLoginRoutes = require("./routes/yeastarLoginRoutes");
 const scriptRoutes = require("./routes/scriptRoutes");
 const callmeServeRoute = require("./routes/callmeServeRoute");
+const callmeServerFormCallRoutes = require("./routes/callmeServerFormCallRoutes");
 const getExtensionCallHistory = require("./routes/getYeasterCallHistoryRoutes");
 const getYeasterValidAccessTokenRoutes = require("./routes/getValidAccessTokenRoutes");
 const editProfileRoutes = require("./routes/editProfileRoutes");
@@ -51,12 +52,14 @@ const disconnectAccountRoutes = require("./routes/disconnectAccountRoutes");
 const meetingRoutes = require("./routes/meetingRoutes");
 const hubSpotContactFetchRoutes = require("./routes/hubSpotContactFetchRoutes");
 const zohoContactFetchRoutes = require("./routes/zuhuContactFetchRoutes");
+const zohoAuthRoutes = require("./routes/zohoAuthRoutes");
 const faqRoutes = require("./routes/faqRoutes");
 const fetchGoogleContacts = require("./routes/googleContactFatchRoutes");
 const saveBulkContactsRoutes = require("./routes/saveBulkContactsRoutes");
 const helpSupportRoutes = require("./routes/helpSupportRoutes");
 const changePassword = require("./routes/changePasswordRoutes");
 const deleteUserRoutes = require("./routes/deleteUserRoutes");
+const deleteAllTheDataBySuperAdminRoutes = require("./routes/deleteAllTheDataBySuperAdminRoutes");
 const getProfileEventRoutes = require("./routes/getProfileEventRoutes");
 const apiKeyRoutes = require("./routes/apiKeyRoutes");
 const addEditTempleteRoutes = require("./routes/addEditTempleteRoutes");
@@ -89,6 +92,7 @@ app.use(
 );
 app.use("/api/script", scriptRoutes); // script generation (auth)
 app.use("/voycell_callback", callmeServeRoute); // serves callme.js (no auth)
+app.use("/voyCell_form_call", callmeServerFormCallRoutes); // serves form_call.js (no auth)
 app.use("/call", checkForAuthentication(), getExtensionCallHistory);
 app.use(
   "/integrations/token",
@@ -106,6 +110,7 @@ app.use("/sendEmail", checkForAuthentication(), sendEmail);
 app.use("/getUser", checkForAuthentication(), getUserRoutes);
 app.use("/changePassword", checkForAuthentication(), changePassword);
 app.use("/deleteUser", checkForAuthentication(), deleteUserRoutes);
+app.use("/deleteAllUserData", checkForAuthentication(), checkRole(["superadmin"]), deleteAllTheDataBySuperAdminRoutes);
 app.use("/deleteTemplate", checkForAuthentication(), deleteTemplateRoutes);
 app.use(
   "/whatsapp-email-call-activity",
@@ -157,6 +162,7 @@ app.use(
   accountConnect
 );
 app.use("/disconnect", checkForAuthentication(), disconnectAccountRoutes);
+app.use("/api/zoho", zohoAuthRoutes);
 app.use(
   "/save-bulk-contacts",
   checkForAuthentication(),

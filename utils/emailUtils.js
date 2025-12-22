@@ -92,7 +92,7 @@ const sendVerificationEmail = async (email, link) => {
                     alt="VOYCELL Logo" style="width:200px; display:block;"></center>
         <p><strong>Hello,</strong></p>
 
-        <p>Congratulations on creating your <strong>VOYCELL CRM</strong> account — a powerful step toward
+        <p>Congratulations on creating your <strong>VOYCELL</strong> account — a powerful step toward
             organizing, connecting, and growing your professional network.</p>
 
         <p>To ensure the security of your account and activate all features, please verify your email address:</p>
