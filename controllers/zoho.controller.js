@@ -86,7 +86,32 @@ exports.zohoCallback = async (req, res) => {
     "zoho.timezone": zohoUser.time_zone,
   });
 
-  await syncZoho(user);
+  // await syncZoho(user);
 
   res.send("Zoho Connected Successfully");
+};
+
+exports.disconnectZoho = async (req, res) => {
+    const userId = req.user._id;
+
+    try {
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'User not found' });
+        }
+
+        // Clear Zoho account details
+        user.zoho.accessToken = undefined;
+        user.zoho.refreshToken = undefined;
+        user.zoho.connected = false;
+        user.zoho.userId = undefined;
+        user.zoho.timezone = undefined;
+
+        await user.save();
+
+        res.json({ status: 'success', message: 'Zoho Disconnected' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: 'Failed to disconnect Zoho account', error: error.message });
+    }
 };

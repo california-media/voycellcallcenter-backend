@@ -36,8 +36,13 @@ exports.zohoAfterCallSync = async ({
     phone,
   });
 
+  console.log("Zoho After Call Sync - Found:", found);
+  
 
   const zohoData = mapToZohoFields(targetDoc, status);
+
+  console.log("Zoho Data:", zohoData);
+  
 
   let module, recordId;
 

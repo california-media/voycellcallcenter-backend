@@ -5,6 +5,9 @@ const agent = new https.Agent({ keepAlive: false });
 
 exports.getAuthURL = ({ accountsUrl, redirectUri, state }) => {
   const scope = [
+    "ZohoCRM.modules.ALL",
+    "ZohoCRM.users.READ",
+    "ZohoCRM.settings.ALL",
     "ZohoCRM.modules.contacts.ALL",
     "ZohoCRM.modules.leads.ALL",
     "ZohoCRM.modules.tasks.ALL",

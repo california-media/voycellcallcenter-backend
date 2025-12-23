@@ -86,7 +86,7 @@ const redirectToZoho = (req, res) => {
     client_id: process.env.ZOHO_CLIENT_ID,
     response_type: "code",
     access_type: "offline",
-    redirect_uri: process.env.ZOHO_REDIRECT_URI,
+    redirect_uri: process.env.ZOHO_REDIRECT_URI2,
     state: `${userId}::${domain}::${defaultCountryCode}`, // Include region and default country code in state
   });
 
@@ -118,7 +118,7 @@ const handleZohoCallback = async (req, res) => {
         grant_type: "authorization_code",
         client_id: process.env.ZOHO_CLIENT_ID,
         client_secret: process.env.ZOHO_CLIENT_SECRET,
-        redirect_uri: process.env.ZOHO_REDIRECT_URI,
+        redirect_uri: process.env.ZOHO_REDIRECT_URI2,
         code,
       }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
