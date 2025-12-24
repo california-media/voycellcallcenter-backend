@@ -3,7 +3,7 @@ const { getZohoDomainConfig } = require("../utils/zohoDomain");
 const oauth = require("../services/zohoOAuth.service");
 const { syncZoho } = require("../services/zohoSync.service");
 const { getZohoCurrentUser } = require("../services/zohoApi.service");
-
+const axios = require("axios");
 
 exports.connectZoho = async (req, res) => {
   try {
@@ -207,4 +207,23 @@ exports.disconnectZoho = async (req, res) => {
   } catch (error) {
     res.status(500).json({ status: 'error', message: 'Failed to disconnect Zoho account', error: error.message });
   }
+};
+
+exports.testZohoConnection = async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  const zohoRes = await axios.get(
+    `${user.zoho.apiBaseUrl}/crm/v2/Leads?per_page=1`,
+    {
+      headers: {
+        Authorization: `Zoho-oauthtoken ${user.zoho.accessToken}`,
+      },
+      timeout: 10000,
+    }
+  );
+
+  return res.json({
+    success: true,
+    zohoData: zohoRes.data,
+  });
 };
