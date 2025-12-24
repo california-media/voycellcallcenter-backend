@@ -366,6 +366,7 @@ const userSchema = new Schema(
     // zohoConnected: { type: Boolean, default: false },
 
     zoho: {
+      isConnected: { type: Boolean, default: false },
       dc: { type: String },              // in | com | eu | au
       accountsUrl: { type: String },
       apiBaseUrl: { type: String },

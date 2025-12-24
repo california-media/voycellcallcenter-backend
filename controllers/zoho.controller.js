@@ -59,7 +59,7 @@ exports.zohoCallback = async (req, res) => {
   if (!user) return res.status(404).send("User not found");
 
   // 🚨 PREVENT DOUBLE EXCHANGE
-  if (user.zoho?.connected) {
+  if (user.zoho?.isConnected) {
     return res.send("Zoho already connected");
   }
 
@@ -77,7 +77,7 @@ exports.zohoCallback = async (req, res) => {
 
   user.zoho.accessToken = tokens.access_token;
   user.zoho.refreshToken = tokens.refresh_token;
-  user.zoho.connected = true;
+  user.zoho.isConnected = true;
   await user.save();
   const zohoUser = await getZohoCurrentUser(user);
 
@@ -88,30 +88,82 @@ exports.zohoCallback = async (req, res) => {
 
   // await syncZoho(user);
 
-  res.send("Zoho Connected Successfully");
+  const resultData = {
+    status: 'success',
+    message: 'Zoho Connected',
+    zohoId: user.zoho.userId,
+    zohoEmail: user.zoho.email,
+    zohoAccessToken: user.zoho.accessToken,
+    zohoRefreshToken: user.zoho.refreshToken,
+    zohoConnected: user.zoho.isConnected,
+    zohoTimezone: user.zoho.timezone,
+    zohoDc: user.zoho.dc,
+    zohoAccountsUrl: user.zoho.accountsUrl,
+    zohoApiBaseUrl: user.zoho.apiBaseUrl,
+  };
+
+  log
+
+  // res.json({ status: 'success', message: 'Microsoft account connected', user });
+
+  return res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Zoho CRM Connected</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                text-align: center; 
+                padding-top: 50px; 
+            }
+            .success { color: green; font-size: 18px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="success">Zoho CRM connected Successfully! You can close this window.</div>
+        <script>
+    try {
+        if (window.opener) {
+            window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+        } else {
+            console.warn("No opener window found");
+        }
+    } catch (e) {
+        console.error("postMessage failed", e);
+    }
+    window.close();
+</script>
+
+    </body>
+    </html>
+`);
 };
 
 exports.disconnectZoho = async (req, res) => {
-    const userId = req.user._id;
+  const userId = req.user._id;
 
-    try {
-        const user = await User.findById(userId);
+  try {
+    const user = await User.findById(userId);
 
-        if (!user) {
-            return res.status(404).json({ status: 'error', message: 'User not found' });
-        }
-
-        // Clear Zoho account details
-        user.zoho.accessToken = undefined;
-        user.zoho.refreshToken = undefined;
-        user.zoho.connected = false;
-        user.zoho.userId = undefined;
-        user.zoho.timezone = undefined;
-
-        await user.save();
-
-        res.json({ status: 'success', message: 'Zoho Disconnected' });
-    } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Failed to disconnect Zoho account', error: error.message });
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
     }
+
+    // Clear Zoho account details
+    user.zoho.accessToken = undefined;
+    user.zoho.refreshToken = undefined;
+    user.zoho.isConnected = false;
+    user.zoho.userId = undefined;
+    user.zoho.timezone = undefined;
+    user.zoho.dc = undefined;
+    user.zoho.accountsUrl = undefined;
+    user.zoho.apiBaseUrl = undefined;
+
+    await user.save();
+
+    res.json({ status: 'success', message: 'Zoho CRM Disconnected' });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Failed to disconnect Zoho account', error: error.message });
+  }
 };

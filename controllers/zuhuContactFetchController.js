@@ -642,7 +642,7 @@ const isGlobalDuplicate = ({
 
 /* ================= STEP 1: REDIRECT ================= */
 exports.redirectToZoho = (req, res) => {
-  const { domain = "com", type = "contact" } = req.body;
+  const { domain = "com", type = "contact", defaultCountryCode = "971" } = req.body;
   const userId = req.user._id;
 
   const scope =
@@ -656,7 +656,7 @@ exports.redirectToZoho = (req, res) => {
     response_type: "code",
     access_type: "offline",
     redirect_uri: process.env.ZOHO_REDIRECT_URI2,
-    state: `${userId}::${domain}::${type}`,
+    state: `${userId}::${domain}::${type}::${defaultCountryCode}`,
   });
 
   return res.json({
@@ -670,9 +670,9 @@ exports.handleZohoCallback = async (req, res) => {
   const { code, state } = req.query;
   if (!code) return res.status(400).send("Missing code");
 
-  const [userId, domain, type] = state.split("::");
-  const defaultCountryCode =
-    DOMAIN_COUNTRY_CODE_MAP[domain] || "971";
+  const [userId, domain, type, defaultCountryCode] = state.split("::");
+  // const defaultCountryCode =
+  //   DOMAIN_COUNTRY_CODE_MAP[domain] || "971";
 
   try {
     /* ===== TOKEN ===== */
@@ -786,7 +786,7 @@ exports.handleZohoCallback = async (req, res) => {
           <html>
           <head><title>Zoho contact fetch successfully</title></head>
           <body style="font-family: Arial; text-align:center; padding: 50px;">
-            <div style="color:green;">${messages} You can close this window.</div>
+            <div style="color:green;">${messages} !You can close this window.</div>
             <script>
               window.opener.postMessage(${JSON.stringify(resultData)}, '*');
               window.close();
