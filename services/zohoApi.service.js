@@ -107,6 +107,7 @@ const createLead = async ({ user, data }) => {
 };
 
 // 📝 CREATE TASK
+
 // const createTask = async ({ user, module, recordId, note }) => {
 //   return request({
 //     user,
@@ -117,13 +118,16 @@ const createLead = async ({ user, data }) => {
 //         {
 //           Subject: "Call Note",
 //           Description: note,
-//           What_Id: recordId,
-//           $se_module: module,
+
+//           ...(module === "Contacts" || module === "Leads"
+//             ? { Who_Id: recordId }
+//             : { What_Id: recordId, $se_module: module }),
 //         },
 //       ],
 //     },
 //   });
 // };
+
 const createTask = async ({ user, module, recordId, note }) => {
   return request({
     user,
@@ -135,9 +139,9 @@ const createTask = async ({ user, module, recordId, note }) => {
           Subject: "Call Note",
           Description: note,
 
-          ...(module === "Contacts" || module === "Leads"
+          ...(module === "Contacts"
             ? { Who_Id: recordId }
-            : { What_Id: recordId, $se_module: module }),
+            : { What_Id: recordId, $se_module: "Leads" }),
         },
       ],
     },
@@ -146,84 +150,90 @@ const createTask = async ({ user, module, recordId, note }) => {
 
 
 
+
 // 📅 CREATE MEETING
 // const createMeeting = async ({ user, module, recordId, meeting }) => {
-//   return request({
-//     user,
-//     method: "post",
-//     url: `${user.zoho.apiBaseUrl}/crm/v2/Events`,
-//     data: {
-//       data: [
-//         {
-//           Event_Title: meeting.meetingTitle || "Call Follow-up",
-//           Start_DateTime: `${meeting.meetingStartDate}T${meeting.meetingStartTime}`,
-//           What_Id: recordId,
-//           $se_module: module,
-//         },
-//       ],
-//     },
-//   });
-// };
-
-// const createMeeting = async ({ user, module, recordId, meeting }) => {
-//   // const start = `${meeting.meetingStartDate}T${meeting.meetingStartTime}:00`;
-//   // const end = `${meeting.meetingStartDate}T${meeting.meetingStartTime}:00`;
-
 //   const startDateTime = new Date(
 //     `${meeting.meetingStartDate}T${meeting.meetingStartTime}:00`
 //   );
 
+//   // 🔥 force future (avoid closed meeting)
+//   startDateTime.setMinutes(startDateTime.getMinutes() + 10);
+
 //   const endDateTime = new Date(startDateTime.getTime() + 30 * 60000);
 
-//   const start = startDateTime.toISOString();
-//   const end = endDateTime.toISOString();
+//   const timezone =
+//     user.zoho.timezone?.includes("/") ? user.zoho.timezone : "Asia/Kolkata";
 
+//   const formatZohoDateTime = (date) => {
+//     const pad = (n) => String(n).padStart(2, "0");
+//     return (
+//       `${date.getFullYear()}-` +
+//       `${pad(date.getMonth() + 1)}-` +
+//       `${pad(date.getDate())}T` +
+//       `${pad(date.getHours())}:` +
+//       `${pad(date.getMinutes())}:00`
+//     );
+//   };
 
-//   return request({
+//   const res = await request({
 //     user,
 //     method: "post",
 //     url: `${user.zoho.apiBaseUrl}/crm/v2/Events`,
 //     data: {
 //       data: [
 //         {
-//           Subject: meeting.meetingTitle || "Call Follow-up",
-//           Start_DateTime: start,
-//           End_DateTime: end,
-//           Venue: meeting.meetingLocation || "",
+//           Event_Title: meeting.meetingTitle || "Follow-up Call",
+//           Description: meeting.meetingDescription || "",
 
-//           ...(module === "Contacts" || module === "Leads"
-//             ? { Who_Id: recordId }
-//             : { What_Id: recordId, $se_module: module }),
+//           Start_DateTime: formatZohoDateTime(startDateTime),
+//           End_DateTime: formatZohoDateTime(endDateTime),
+
+//           Owner: { id: user.zoho.userId },
+//           $timezone: timezone,
+
+//           // 🔥 REQUIRED
+//           Who_Id: recordId,
+
+//           // 🔥 REQUIRED FOR INVITE
+//           Participants: [
+//             {
+//               type: module === "Contacts" ? "contact" : "lead",
+//               participant: recordId,
+//             },
+//           ],
+
+//           Send_Invitation: true,
 //         },
 //       ],
 //     },
 //   });
+
+//   console.log("Zoho Meeting Response:", res.data);
+//   return res;
 // };
+
 const createMeeting = async ({ user, module, recordId, meeting }) => {
   const startDateTime = new Date(
     `${meeting.meetingStartDate}T${meeting.meetingStartTime}:00`
   );
-
-  // 🔥 force future (avoid closed meeting)
   startDateTime.setMinutes(startDateTime.getMinutes() + 10);
 
   const endDateTime = new Date(startDateTime.getTime() + 30 * 60000);
 
-  const timezone =
-    user.zoho.timezone?.includes("/") ? user.zoho.timezone : "Asia/Kolkata";
-
   const formatZohoDateTime = (date) => {
     const pad = (n) => String(n).padStart(2, "0");
-    return (
-      `${date.getFullYear()}-` +
-      `${pad(date.getMonth() + 1)}-` +
-      `${pad(date.getDate())}T` +
-      `${pad(date.getHours())}:` +
-      `${pad(date.getMinutes())}:00`
-    );
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate()
+    )}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
   };
 
-  const res = await request({
+  const linkFields =
+    module === "Contacts"
+      ? { Who_Id: recordId }
+      : { What_Id: recordId, $se_module: "Leads" };
+
+  return request({
     user,
     method: "post",
     url: `${user.zoho.apiBaseUrl}/crm/v2/Events`,
@@ -232,32 +242,16 @@ const createMeeting = async ({ user, module, recordId, meeting }) => {
         {
           Event_Title: meeting.meetingTitle || "Follow-up Call",
           Description: meeting.meetingDescription || "",
-
           Start_DateTime: formatZohoDateTime(startDateTime),
           End_DateTime: formatZohoDateTime(endDateTime),
-
           Owner: { id: user.zoho.userId },
-          $timezone: timezone,
-
-          // 🔥 REQUIRED
-          Who_Id: recordId,
-
-          // 🔥 REQUIRED FOR INVITE
-          Participants: [
-            {
-              type: module === "Contacts" ? "contact" : "lead",
-              participant: recordId,
-            },
-          ],
-
+          $timezone: user.zoho.timezone || "Asia/Kolkata",
+          ...linkFields,
           Send_Invitation: true,
         },
       ],
     },
   });
-
-  console.log("Zoho Meeting Response:", res.data);
-  return res;
 };
 
 

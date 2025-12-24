@@ -60,53 +60,84 @@ exports.zohoCallback = async (req, res) => {
 
   // 🚨 PREVENT DOUBLE EXCHANGE
   if (user.zoho?.isConnected) {
-    return res.send("Zoho already connected");
+    const resultData = {
+      status: 'success',
+      message: 'Zoho already connected'
+    };
+    return res.send(` <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Zoho CRM Connected</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                text-align: center; 
+                padding-top: 50px; 
+            }
+            .success { color: green; font-size: 18px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="success">Zoho CRM Already Connected! You can close this window.</div>
+        <script>
+    try {
+        if (window.opener) {
+            window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+        } else {
+            console.warn("No opener window found");
+        }
+    } catch (e) {
+        console.error("postMessage failed", e);
+    }
+    window.close();
+</script>
+    </body>
+    </html>`);
   }
 
-  let tokens;
   try {
-    tokens = await oauth.getTokens({
-      code,
-      accountsUrl: user.zoho.accountsUrl,
-      redirectUri: process.env.ZOHO_REDIRECT_URI
+    let tokens;
+    try {
+      tokens = await oauth.getTokens({
+        code,
+        accountsUrl: user.zoho.accountsUrl,
+        redirectUri: process.env.ZOHO_REDIRECT_URI
+      });
+    } catch (err) {
+      console.error("Zoho token error:", err.message);
+      return res.status(500).send("Zoho token exchange failed");
+    }
+
+    user.zoho.accessToken = tokens.access_token;
+    user.zoho.refreshToken = tokens.refresh_token;
+    user.zoho.isConnected = true;
+    await user.save();
+    const zohoUser = await getZohoCurrentUser(user);
+
+    await User.findByIdAndUpdate(user._id, {
+      "zoho.userId": zohoUser.id,
+      "zoho.timezone": zohoUser.time_zone,
     });
-  } catch (err) {
-    console.error("Zoho token error:", err.message);
-    return res.status(500).send("Zoho token exchange failed");
-  }
 
-  user.zoho.accessToken = tokens.access_token;
-  user.zoho.refreshToken = tokens.refresh_token;
-  user.zoho.isConnected = true;
-  await user.save();
-  const zohoUser = await getZohoCurrentUser(user);
+    // await syncZoho(user);
 
-  await User.findByIdAndUpdate(user._id, {
-    "zoho.userId": zohoUser.id,
-    "zoho.timezone": zohoUser.time_zone,
-  });
+    const resultData = {
+      status: 'success',
+      message: 'Zoho Connected',
+      zohoId: user.zoho.userId,
+      zohoEmail: user.zoho.email,
+      zohoAccessToken: user.zoho.accessToken,
+      zohoRefreshToken: user.zoho.refreshToken,
+      zohoConnected: user.zoho.isConnected,
+      zohoTimezone: user.zoho.timezone,
+      zohoDc: user.zoho.dc,
+      zohoAccountsUrl: user.zoho.accountsUrl,
+      zohoApiBaseUrl: user.zoho.apiBaseUrl,
+    };
 
-  // await syncZoho(user);
+    // res.json({ status: 'success', message: 'Microsoft account connected', user });
 
-  const resultData = {
-    status: 'success',
-    message: 'Zoho Connected',
-    zohoId: user.zoho.userId,
-    zohoEmail: user.zoho.email,
-    zohoAccessToken: user.zoho.accessToken,
-    zohoRefreshToken: user.zoho.refreshToken,
-    zohoConnected: user.zoho.isConnected,
-    zohoTimezone: user.zoho.timezone,
-    zohoDc: user.zoho.dc,
-    zohoAccountsUrl: user.zoho.accountsUrl,
-    zohoApiBaseUrl: user.zoho.apiBaseUrl,
-  };
-
-  log
-
-  // res.json({ status: 'success', message: 'Microsoft account connected', user });
-
-  return res.send(`
+    return res.send(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -122,22 +153,32 @@ exports.zohoCallback = async (req, res) => {
     </head>
     <body>
         <div class="success">Zoho CRM connected Successfully! You can close this window.</div>
-        <script>
+    <script>
     try {
-        if (window.opener) {
-            window.opener.postMessage(${JSON.stringify(resultData)}, '*');
-        } else {
+    if (window.opener) {
+        window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+      } else {
             console.warn("No opener window found");
-        }
+      }
     } catch (e) {
         console.error("postMessage failed", e);
     }
     window.close();
-</script>
-
+    </script>
     </body>
     </html>
 `);
+  } catch (err) {
+    console.error("Zoho callback error:", err.message);
+    return res.send(`
+            <script>
+                window.opener.postMessage({ status: 'error', message: 'Zoho OAuth failed', error: '${err.message}' }, '*');
+                window.close();
+            </script>
+        `);
+  }
+
+
 };
 
 exports.disconnectZoho = async (req, res) => {
