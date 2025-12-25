@@ -129,6 +129,7 @@ const createLead = async ({ user, data }) => {
 // };
 
 const createTask = async ({ user, module, recordId, note }) => {
+  console.log("note:", note, "module:", module, "recordId:", recordId, "user:", user);
   return request({
     user,
     method: "post",
@@ -214,6 +215,7 @@ const createTask = async ({ user, module, recordId, note }) => {
 // };
 
 const createMeeting = async ({ user, module, recordId, meeting }) => {
+  console.log("meeting:", meeting, "module:", module, "recordId:", recordId, "user:", user);
   const startDateTime = new Date(
     `${meeting.meetingStartDate}T${meeting.meetingStartTime}:00`
   );

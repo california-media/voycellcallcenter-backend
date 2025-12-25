@@ -10,27 +10,20 @@ const { buildGlobalDuplicateSets } = require("../utils/duplicateCheck");
  * =====================================================
  */
 exports.connectFacebook = async (req, res) => {
-  try {
-    const userId = req.user._id.toString();
-    const redirectUri = `${process.env.BACKEND_URL}/api/meta/callback`;
+  const userId = req.user._id.toString();
+  const redirectUri = process.env.META_REDIRECT_URI;
 
-    const url =
-      `https://www.facebook.com/v19.0/dialog/oauth?` +
-      `client_id=${process.env.META_APP_ID}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&state=${userId}` +
-      `&response_type=code` +
-      `&scope=ads_management,leads_retrieval,pages_read_engagement,pages_show_list`;
+  const authUrl =
+    "https://www.facebook.com/v19.0/dialog/oauth" +
+    `?client_id=${process.env.META_APP_ID}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&state=${userId}` +
+    `&response_type=code` +
+    `&scope=ads_management,leads_retrieval,pages_read_engagement,pages_show_list`;
 
-    return res.json({ url });
-  } catch (error) {
-    console.error("connectFacebook error:", error);
-    return res.status(500).json({
-      status: "error",
-      message: "Failed to generate Facebook OAuth URL"
-    });
-  }
+  return res.json({ authUrl });
 };
+
 
 /**
  * =====================================================
@@ -40,65 +33,50 @@ exports.connectFacebook = async (req, res) => {
  */
 exports.facebookCallback = async (req, res) => {
   try {
-    const { code, state } = req.query; // state = userId
-
-    if (!code || !state) {
-      return res.status(400).json({
-        status: "error",
-        message: "Invalid OAuth callback"
-      });
+    const { code, state: userId } = req.query;
+    if (!code || !userId) {
+      return res.status(400).json({ error: "Invalid callback" });
     }
 
-    const redirectUri = `${process.env.BACKEND_URL}/api/meta/callback`;
-
-    // Exchange code for access token
     const tokenRes = await axios.get(
       "https://graph.facebook.com/v19.0/oauth/access_token",
       {
         params: {
           client_id: process.env.META_APP_ID,
           client_secret: process.env.META_APP_SECRET,
-          redirect_uri: redirectUri,
-          code
-        }
+          redirect_uri: process.env.META_REDIRECT_URI,
+          code,
+        },
       }
     );
 
-    const { access_token, expires_in } = tokenRes.data;
+    const { access_token } = tokenRes.data;
 
-    // Get Facebook profile
-    const profileRes = await axios.get(
+    // Fetch profile
+    const profile = await axios.get(
       "https://graph.facebook.com/me",
-      {
-        params: {
-          access_token,
-          fields: "id,name"
-        }
-      }
+      { params: { access_token } }
     );
 
-    // Save token to correct user (from state)
-    await User.findByIdAndUpdate(state, {
+    await User.findByIdAndUpdate(userId, {
       meta: {
         isConnected: true,
-        facebookUserId: profileRes.data.id,
+        facebookUserId: profile.data.id,
         accessToken: access_token,
-        tokenExpiresAt: new Date(Date.now() + expires_in * 1000)
-      }
+      },
     });
 
-    // Redirect to frontend success page
-    return res.redirect(
-      `${process.env.FRONTEND_URL}/facebook-connected`
-    );
-  } catch (error) {
-    console.error("facebookCallback error:", error.response?.data || error);
-    return res.status(500).json({
-      status: "error",
-      message: "Facebook connection failed"
+    // ✅ BACKEND RESPONSE (NO REDIRECT)
+    return res.json({
+      status: "success",
+      message: "Facebook connected successfully",
     });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    return res.status(500).json({ error: "OAuth failed" });
   }
 };
+
 
 /**
  * =====================================================
@@ -106,36 +84,21 @@ exports.facebookCallback = async (req, res) => {
  * =====================================================
  */
 exports.getFacebookPages = async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-
-    if (!user?.meta?.accessToken) {
-      return res.status(400).json({
-        status: "error",
-        message: "Facebook not connected"
-      });
-    }
-
-    const pagesRes = await axios.get(
-      "https://graph.facebook.com/v19.0/me/accounts",
-      {
-        params: {
-          access_token: user.meta.accessToken
-        }
-      }
-    );
-
-    return res.json({
-      status: "success",
-      pages: pagesRes.data.data
-    });
-  } catch (error) {
-    console.error("getFacebookPages error:", error.response?.data || error);
-    return res.status(500).json({
-      status: "error",
-      message: "Failed to fetch Facebook pages"
-    });
+  const user = await User.findById(req.user._id);
+  if (!user?.meta?.accessToken) {
+    return res.status(400).json({ error: "Not connected" });
   }
+
+  const pages = await axios.get(
+    "https://graph.facebook.com/v19.0/me/accounts",
+    {
+      params: {
+        access_token: user.meta.accessToken,
+      },
+    }
+  );
+
+  return res.json(pages.data.data);
 };
 
 /**
@@ -144,38 +107,16 @@ exports.getFacebookPages = async (req, res) => {
  * =====================================================
  */
 exports.saveFacebookPage = async (req, res) => {
-  try {
-    const { pageId, pageName, pageAccessToken } = req.body;
+  const { pageId, pageAccessToken } = req.body;
 
-    if (!pageId || !pageAccessToken) {
-      return res.status(400).json({
-        status: "error",
-        message: "Page data missing"
-      });
-    }
+  await User.findByIdAndUpdate(req.user._id, {
+    "meta.pageId": pageId,
+    "meta.pageAccessToken": pageAccessToken,
+  });
 
-    await User.findByIdAndUpdate(req.user._id, {
-      $push: {
-        "meta.pages": {
-          pageId,
-          pageName,
-          pageAccessToken
-        }
-      }
-    });
-
-    return res.json({
-      status: "success",
-      message: "Facebook page connected successfully"
-    });
-  } catch (error) {
-    console.error("saveFacebookPage error:", error);
-    return res.status(500).json({
-      status: "error",
-      message: "Failed to save Facebook page"
-    });
-  }
+  res.json({ status: "page_saved" });
 };
+
 
 /**
  * =====================================================
@@ -184,69 +125,27 @@ exports.saveFacebookPage = async (req, res) => {
  * =====================================================
  */
 exports.metaLeadWebhook = async (req, res) => {
-  try {
-    const { page_id, fields } = req.body;
+  const entry = req.body.entry?.[0];
+  const change = entry?.changes?.[0];
+  const leadgenId = change?.value?.leadgen_id;
+  const pageId = change?.value?.page_id;
 
-    if (!page_id || !fields) {
-      return res.status(400).json({
-        status: "error",
-        message: "Invalid webhook payload"
-      });
+  const user = await User.findOne({ "meta.pageId": pageId });
+  if (!user) return res.sendStatus(200);
+
+  // Fetch lead details
+  const leadRes = await axios.get(
+    `https://graph.facebook.com/v19.0/${leadgenId}`,
+    {
+      params: {
+        access_token: user.meta.pageAccessToken,
+      },
     }
+  );
 
-    // Find user by pageId
-    const user = await User.findOne({
-      "meta.pages.pageId": page_id
-    });
+  const fields = leadRes.data.field_data;
 
-    if (!user) {
-      return res.status(404).json({
-        status: "error",
-        message: "User not found for this Facebook page"
-      });
-    }
+  // save lead in DB here
 
-    const phone = fields.phone_number?.replace(/\D/g, "");
-    const email = fields.email?.toLowerCase();
-
-    const { existingPhones, existingEmails } =
-      await buildGlobalDuplicateSets(user._id);
-
-    if (
-      (phone && existingPhones.has(phone)) ||
-      (email && existingEmails.has(email))
-    ) {
-      return res.json({
-        status: "duplicate",
-        message: "Lead already exists"
-      });
-    }
-
-    const [firstname, ...rest] = fields.full_name?.split(" ") || [];
-
-    const lead = await Lead.create({
-      firstname: firstname || "",
-      lastname: rest.join(" "),
-      emailAddresses: email ? [email] : [],
-      phoneNumbers: phone
-        ? [{ countryCode: "91", number: phone }]
-        : [],
-      company: fields.company_name || "",
-      isLead: true,
-      createdBy: user._id,
-      source: "Facebook Lead Ads"
-    });
-
-    return res.json({
-      status: "success",
-      isNewLead: true,
-      leadId: lead._id
-    });
-  } catch (error) {
-    console.error("metaLeadWebhook error:", error);
-    return res.status(500).json({
-      status: "error",
-      message: "Failed to process lead"
-    });
-  }
+  res.sendStatus(200);
 };
