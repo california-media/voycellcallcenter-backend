@@ -365,6 +365,37 @@ const userSchema = new Schema(
     // zohoRefreshToken: { type: String },
     // zohoConnected: { type: Boolean, default: false },
 
+    meta: {
+      isConnected: { type: Boolean, default: false },
+
+      facebookUserId: { type: String },     // Meta user id
+      accessToken: { type: String },        // short-lived
+      longLivedToken: { type: String },     // long-lived
+      tokenExpiresAt: { type: Date },
+
+      adAccounts: [
+        {
+          adAccountId: String,
+          name: String,
+          currency: String
+        }
+      ],
+
+      selectedAdAccountId: String,
+
+      leadForms: [
+        {
+          formId: String,
+          formName: String,
+          pageId: String,
+          pageName: String
+        }
+      ],
+
+      selectedFormId: String
+    },
+
+
     zoho: {
       isConnected: { type: Boolean, default: false },
       dc: { type: String },              // in | com | eu | au

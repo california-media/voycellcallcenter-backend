@@ -53,6 +53,7 @@ const meetingRoutes = require("./routes/meetingRoutes");
 const hubSpotContactFetchRoutes = require("./routes/hubSpotContactFetchRoutes");
 const zohoContactFetchRoutes = require("./routes/zuhuContactFetchRoutes");
 const zohoAuthRoutes = require("./routes/zohoAuthRoutes");
+const metaRoutes = require("./routes/metaRoutes");
 const faqRoutes = require("./routes/faqRoutes");
 const fetchGoogleContacts = require("./routes/googleContactFatchRoutes");
 const saveBulkContactsRoutes = require("./routes/saveBulkContactsRoutes");
@@ -106,7 +107,7 @@ app.use(
   editProfileRoutes
 );
 app.use("/sendEmail", checkForAuthentication(), sendEmail);
-
+app.use("/api/meta", metaRoutes);
 app.use("/getUser", checkForAuthentication(), getUserRoutes);
 app.use("/changePassword", checkForAuthentication(), changePassword);
 app.use("/deleteUser", checkForAuthentication(), deleteUserRoutes);
