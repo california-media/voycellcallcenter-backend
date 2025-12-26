@@ -23,44 +23,33 @@ router.get(
  * ❌ NO AUTH MIDDLEWARE HERE
  * Facebook servers call this API
  */
-router.get(
-  "/callback",
-  metaController.facebookCallback
-);
+router.get("/callback", metaController.facebookCallback);
 
 /**
  * ===============================
- * 3. Get Facebook Pages
+ * 3. Get Facebook Lead Forms
  * ===============================
  */
-router.get(
-  "/pages",
-  checkForAuthentication(),
-  metaController.getFacebookPages
-);
+router.get("/pages", checkForAuthentication(), metaController.getFacebookPages);
 
 /**
  * ===============================
- * 4. Save Selected Page
+ * 4. Import Leads from Selected Form
  * ===============================
  */
 router.post(
-  "/pages",
+  "/import-leads",
   checkForAuthentication(),
-  metaController.saveFacebookPage
+  metaController.importExistingLeads
 );
 
 /**
  * ===============================
- * 5. Pabbly → Lead Webhook
+ * 6. Pabbly → Lead Webhook (DISABLED)
  * ===============================
- * ❌ NO AUTH
- * ✅ Verified via secret
+ * Webhook functionality temporarily disabled
+ * Focus on manual import only for now
  */
-router.post(
-  "/webhooks/pabbly/meta-lead",
-  verifyPabbly,
-  metaController.metaLeadWebhook
-);
+// router.post("/webhook/lead", verifyPabbly, metaController.metaLeadWebhook);
 
 module.exports = router;
