@@ -5,34 +5,61 @@ const { syncZoho } = require("../services/zohoSync.service");
 const { getZohoCurrentUser } = require("../services/zohoApi.service");
 const axios = require("axios");
 
+// exports.connectZoho = async (req, res) => {
+//   try {
+//     const userId = req.user._id.toString(); // ✅ authenticated here
+//     const { dc } = req.body;
+
+//     console.log(userId);
+
+
+//     if (!dc) {
+//       return res.status(400).json({ message: "DC is required" });
+//     }
+
+//     const domain = getZohoDomainConfig(dc);
+
+//     await User.findByIdAndUpdate(userId, {
+//       "zoho.dc": dc,
+//       "zoho.accountsUrl": domain.accountsUrl,
+//       "zoho.apiBaseUrl": domain.apiBaseUrl
+//     });
+
+//     const url = oauth.getAuthURL({
+//       accountsUrl: domain.accountsUrl,
+//       redirectUri: process.env.ZOHO_REDIRECT_URI,
+//       state: userId // ✅ PASS USER ID
+//     });
+
+//     console.log(url);
+
+
+//     return res.json({
+//       status: "success",
+//       url
+//     });
+
+//   } catch (err) {
+//     console.error(err);
+//     return res.status(500).json({
+//       status: "error",
+//       message: "Failed to generate Zoho auth URL"
+//     });
+//   }
+// };
+
 exports.connectZoho = async (req, res) => {
   try {
-    const userId = req.user._id.toString(); // ✅ authenticated here
-    const { dc } = req.body;
+    const userId = req.user._id.toString();
 
-    console.log(userId);
-
-
-    if (!dc) {
-      return res.status(400).json({ message: "DC is required" });
-    }
-
-    const domain = getZohoDomainConfig(dc);
-
-    await User.findByIdAndUpdate(userId, {
-      "zoho.dc": dc,
-      "zoho.accountsUrl": domain.accountsUrl,
-      "zoho.apiBaseUrl": domain.apiBaseUrl
-    });
+    // ✅ Always start from .com
+    const accountsUrl = "https://accounts.zoho.com";
 
     const url = oauth.getAuthURL({
-      accountsUrl: domain.accountsUrl,
+      accountsUrl,
       redirectUri: process.env.ZOHO_REDIRECT_URI,
-      state: userId // ✅ PASS USER ID
+      state: userId
     });
-
-    console.log(url);
-
 
     return res.json({
       status: "success",
@@ -48,6 +75,148 @@ exports.connectZoho = async (req, res) => {
   }
 };
 
+function detectZohoDC(apiDomain) {
+  if (apiDomain.includes(".in")) return "in";
+  if (apiDomain.includes(".eu")) return "eu";
+  if (apiDomain.includes(".com.au")) return "au";
+  if (apiDomain.includes(".com")) return "com";
+  return "com"; // fallback
+}
+
+
+// exports.zohoCallback = async (req, res) => {
+//   const { code, state } = req.query;
+
+//   if (!code || !state) {
+//     return res.status(400).send("Invalid Zoho callback");
+//   }
+
+//   const user = await User.findById(state);
+//   if (!user) return res.status(404).send("User not found");
+
+//   // 🚨 PREVENT DOUBLE EXCHANGE
+//   if (user.zoho?.isConnected) {
+//     const resultData = {
+//       status: 'success',
+//       message: 'Zoho already connected'
+//     };
+//     return res.send(` <!DOCTYPE html>
+//     <html>
+//     <head>
+//         <title>Zoho CRM Connected</title>
+//         <style>
+//             body { 
+//                 font-family: Arial, sans-serif; 
+//                 text-align: center; 
+//                 padding-top: 50px; 
+//             }
+//             .success { color: green; font-size: 18px; margin-bottom: 20px; }
+//         </style>
+//     </head>
+//     <body>
+//         <div class="success">Zoho CRM Already Connected! You can close this window.</div>
+//         <script>
+//     try {
+//         if (window.opener) {
+//             window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+//         } else {
+//             console.warn("No opener window found");
+//         }
+//     } catch (e) {
+//         console.error("postMessage failed", e);
+//     }
+//     window.close();
+// </script>
+//     </body>
+//     </html>`);
+//   }
+
+//   try {
+//     let tokens;
+//     try {
+//       tokens = await oauth.getTokens({
+//         code,
+//         accountsUrl: user.zoho.accountsUrl,
+//         redirectUri: process.env.ZOHO_REDIRECT_URI
+//       });
+//     } catch (err) {
+//       console.error("Zoho token error:", err.message);
+//       return res.status(500).send("Zoho token exchange failed");
+//     }
+
+//     user.zoho.accessToken = tokens.access_token;
+//     user.zoho.refreshToken = tokens.refresh_token;
+//     user.zoho.isConnected = true;
+//     await user.save();
+//     const zohoUser = await getZohoCurrentUser(user);
+
+//     await User.findByIdAndUpdate(user._id, {
+//       "zoho.userId": zohoUser.id,
+//       "zoho.timezone": zohoUser.time_zone,
+//     });
+
+//     // await syncZoho(user);
+
+//     const resultData = {
+//       status: 'success',
+//       message: 'Zoho Connected',
+//       zohoId: user.zoho.userId,
+//       zohoEmail: user.zoho.email,
+//       zohoAccessToken: user.zoho.accessToken,
+//       zohoRefreshToken: user.zoho.refreshToken,
+//       zohoConnected: user.zoho.isConnected,
+//       zohoTimezone: user.zoho.timezone,
+//       zohoDc: user.zoho.dc,
+//       zohoAccountsUrl: user.zoho.accountsUrl,
+//       zohoApiBaseUrl: user.zoho.apiBaseUrl,
+//     };
+
+//     // res.json({ status: 'success', message: 'Microsoft account connected', user });
+
+//     return res.send(`
+//     <!DOCTYPE html>
+//     <html>
+//     <head>
+//         <title>Zoho CRM Connected</title>
+//         <style>
+//             body { 
+//                 font-family: Arial, sans-serif; 
+//                 text-align: center; 
+//                 padding-top: 50px; 
+//             }
+//             .success { color: green; font-size: 18px; margin-bottom: 20px; }
+//         </style>
+//     </head>
+//     <body>
+//         <div class="success">Zoho CRM connected Successfully! You can close this window.</div>
+//     <script>
+//     try {
+//     if (window.opener) {
+//         window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+//       } else {
+//             console.warn("No opener window found");
+//       }
+//     } catch (e) {
+//         console.error("postMessage failed", e);
+//     }
+//     window.close();
+//     </script>
+//     </body>
+//     </html>
+// `);
+//   } catch (err) {
+//     console.error("Zoho callback error:", err.message);
+//     return res.send(`
+//             <script>
+//                 window.opener.postMessage({ status: 'error', message: 'Zoho OAuth failed', error: '${err.message}' }, '*');
+//                 window.close();
+//             </script>
+//         `);
+//   }
+
+
+// };
+
 exports.zohoCallback = async (req, res) => {
   const { code, state } = req.query;
 
@@ -58,9 +227,14 @@ exports.zohoCallback = async (req, res) => {
   const user = await User.findById(state);
   if (!user) return res.status(404).send("User not found");
 
-  // 🚨 PREVENT DOUBLE EXCHANGE
+  // // Prevent reconnect
+  // if (user.zoho?.isConnected) {
+  //   return res.send("<h3>Zoho already connected</h3>");
+  // }
+
+  //   // 🚨 PREVENT DOUBLE EXCHANGE
   if (user.zoho?.isConnected) {
-    const resultData = {
+    const resultsData = {
       status: 'success',
       message: 'Zoho already connected'
     };
@@ -82,7 +256,7 @@ exports.zohoCallback = async (req, res) => {
         <script>
     try {
         if (window.opener) {
-            window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+            window.opener.postMessage(${JSON.stringify(resultsData)}, '*');
         } else {
             console.warn("No opener window found");
         }
@@ -95,50 +269,56 @@ exports.zohoCallback = async (req, res) => {
     </html>`);
   }
 
-  try {
-    let tokens;
-    try {
-      tokens = await oauth.getTokens({
-        code,
-        accountsUrl: user.zoho.accountsUrl,
-        redirectUri: process.env.ZOHO_REDIRECT_URI
-      });
-    } catch (err) {
-      console.error("Zoho token error:", err.message);
-      return res.status(500).send("Zoho token exchange failed");
-    }
+  // ✅ Always exchange via .com
+  const tokens = await oauth.getTokens({
+    code,
+    accountsUrl: "https://accounts.zoho.com",
+    redirectUri: process.env.ZOHO_REDIRECT_URI
+  });
 
-    user.zoho.accessToken = tokens.access_token;
-    user.zoho.refreshToken = tokens.refresh_token;
-    user.zoho.isConnected = true;
-    await user.save();
-    const zohoUser = await getZohoCurrentUser(user);
+  // 🔥 Detect DC automatically
+  const apiDomain = tokens.api_domain; // returned by Zoho
+  const dc = detectZohoDC(apiDomain);
 
-    await User.findByIdAndUpdate(user._id, {
-      "zoho.userId": zohoUser.id,
-      "zoho.timezone": zohoUser.time_zone,
-    });
+  // 🔥 Build URLs automatically
+  const accountsUrl = `https://accounts.zoho.${dc === "com" ? "com" : dc}`;
+  const apiBaseUrl = apiDomain;
 
-    // await syncZoho(user);
+  user.zoho = {
+    isConnected: true,
+    dc,
+    accountsUrl,
+    apiBaseUrl,
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token
+  };
 
-    const resultData = {
-      status: 'success',
-      message: 'Zoho Connected',
-      zohoId: user.zoho.userId,
-      zohoEmail: user.zoho.email,
-      zohoAccessToken: user.zoho.accessToken,
-      zohoRefreshToken: user.zoho.refreshToken,
-      zohoConnected: user.zoho.isConnected,
-      zohoTimezone: user.zoho.timezone,
-      zohoDc: user.zoho.dc,
-      zohoAccountsUrl: user.zoho.accountsUrl,
-      zohoApiBaseUrl: user.zoho.apiBaseUrl,
-    };
+  await user.save();
 
-    // res.json({ status: 'success', message: 'Microsoft account connected', user });
+  // Fetch Zoho user info
+  const zohoUser = await getZohoCurrentUser(user);
 
-    return res.send(`
-    <!DOCTYPE html>
+  await User.findByIdAndUpdate(user._id, {
+    "zoho.userId": zohoUser.id,
+    "zoho.timezone": zohoUser.time_zone
+  });
+
+  const resultData = {
+    status: 'success',
+    message: 'Zoho Connected',
+    zohoId: user.zoho.userId,
+    zohoEmail: user.zoho.email,
+    zohoAccessToken: user.zoho.accessToken,
+    zohoRefreshToken: user.zoho.refreshToken,
+    zohoConnected: user.zoho.isConnected,
+    zohoTimezone: user.zoho.timezone,
+    zohoDc: user.zoho.dc,
+    zohoAccountsUrl: user.zoho.accountsUrl,
+    zohoApiBaseUrl: user.zoho.apiBaseUrl,
+  };
+
+  return res.send(`
+        <!DOCTYPE html>
     <html>
     <head>
         <title>Zoho CRM Connected</title>
@@ -167,19 +347,9 @@ exports.zohoCallback = async (req, res) => {
     </script>
     </body>
     </html>
-`);
-  } catch (err) {
-    console.error("Zoho callback error:", err.message);
-    return res.send(`
-            <script>
-                window.opener.postMessage({ status: 'error', message: 'Zoho OAuth failed', error: '${err.message}' }, '*');
-                window.close();
-            </script>
-        `);
-  }
-
-
+  `);
 };
+
 
 exports.disconnectZoho = async (req, res) => {
   const userId = req.user._id;
