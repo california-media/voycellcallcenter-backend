@@ -2,7 +2,81 @@ const axios = require("axios");
 const mongoose = require("mongoose");
 const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
-const Contact = require("../models/leadModel");
+const Contact = require("../models/contactModel");
+
+/**
+ * =====================================================
+ * HELPER: Load Company Duplicate Data
+ * Returns sets of existing emails and phones across company
+ * =====================================================
+ */
+async function loadCompanyDuplicateData(user) {
+  // Find company admin
+  let companyAdminId = null;
+  if (user.role === "companyAdmin") {
+    companyAdminId = user._id;
+  } else if (user.createdByWhichCompanyAdmin) {
+    companyAdminId = user.createdByWhichCompanyAdmin;
+  } else {
+    companyAdminId = user._id;
+  }
+
+  // Get all company users
+  const companyUsers = await User.find(
+    {
+      $or: [
+        { _id: companyAdminId },
+        { createdByWhichCompanyAdmin: companyAdminId },
+      ],
+    },
+    "_id"
+  ).lean();
+
+  const companyUserIds = companyUsers.map((u) => u._id);
+
+  // Load existing leads and contacts
+  const [existingLeads, existingContacts] = await Promise.all([
+    Lead.find(
+      { createdBy: { $in: companyUserIds } },
+      "emailAddresses phoneNumbers"
+    ).lean(),
+    Contact.find(
+      { createdBy: { $in: companyUserIds } },
+      "emailAddresses phoneNumbers"
+    ).lean(),
+  ]);
+
+  // Build Sets for fast duplicate checking
+  const existingEmails = new Set();
+  const existingPhonesFull = new Set();
+  const existingPhonesOnly = new Set();
+
+  const addFromDoc = (doc) => {
+    // Collect emails
+    (doc.emailAddresses || []).forEach((e) => {
+      if (e) existingEmails.add(String(e).toLowerCase().trim());
+    });
+
+    // Collect phones
+    (doc.phoneNumbers || []).forEach((p) => {
+      const cc = (p.countryCode || "").replace(/^\+/, "").trim();
+      const num = (p.number || "").replace(/\D/g, "");
+      if (!num) return;
+
+      if (cc) existingPhonesFull.add(`${cc}-${num}`);
+      existingPhonesOnly.add(num);
+    });
+  };
+
+  existingLeads.forEach(addFromDoc);
+  existingContacts.forEach(addFromDoc);
+
+  return {
+    existingEmails,
+    existingPhonesFull,
+    existingPhonesOnly,
+  };
+}
 
 /**
  * =====================================================
@@ -358,83 +432,10 @@ exports.importExistingLeads = async (req, res) => {
     console.log(`Fetching leads from form: ${formId}, owner: ${leadOwnerId}`);
 
     // ============================================================
-    // FIND COMPANY ADMIN & GET ALL USERS
+    // LOAD COMPANY DUPLICATE DATA
     // ============================================================
-    let companyAdminId = null;
-    if (user.role === "companyAdmin") {
-      companyAdminId = user._id;
-    } else if (user.createdByWhichCompanyAdmin) {
-      companyAdminId = user.createdByWhichCompanyAdmin;
-    } else {
-      companyAdminId = user._id;
-    }
-
-    const companyUsers = await User.find(
-      {
-        $or: [
-          { _id: companyAdminId },
-          { createdByWhichCompanyAdmin: companyAdminId },
-        ],
-      },
-      "_id"
-    ).lean();
-
-    const companyUserIds = companyUsers.map((u) => u._id);
-
-    // ============================================================
-    // LOAD EXISTING LEADS & CONTACTS FOR DUPLICATE CHECK
-    // (Company-wide check across all users)
-    // ============================================================
-    const [existingLeads, existingContacts] = await Promise.all([
-      Lead.find(
-        { createdBy: { $in: companyUserIds } },
-        "emailAddresses phoneNumbers"
-      ).lean(),
-      Contact.find(
-        { createdBy: { $in: companyUserIds } },
-        "emailAddresses phoneNumbers"
-      ).lean(),
-    ]);
-
-    const existingEmails = new Set();
-    const existingPhonesFull = new Set();
-    const existingPhonesOnly = new Set();
-
-    // Process leads
-    existingLeads.forEach((lead) => {
-      // Collect emails
-      (lead.emailAddresses || []).forEach((email) => {
-        if (email) existingEmails.add(String(email).toLowerCase().trim());
-      });
-
-      // Collect phones
-      (lead.phoneNumbers || []).forEach((phone) => {
-        const cc = (phone.countryCode || "").replace(/^\+/, "").trim();
-        const num = (phone.number || "").replace(/\D/g, "");
-        if (!num) return;
-
-        if (cc) existingPhonesFull.add(`${cc}-${num}`);
-        existingPhonesOnly.add(num);
-      });
-    });
-
-    // Process contacts
-    existingContacts.forEach((contact) => {
-      // Collect emails
-      (contact.emailAddresses || []).forEach((email) => {
-        if (email) existingEmails.add(String(email).toLowerCase().trim());
-      });
-
-      // Collect phones
-      (contact.phoneNumbers || []).forEach((phone) => {
-        const cc = (phone.countryCode || "").replace(/^\+/, "").trim();
-        const num = (phone.number || "").replace(/\D/g, "");
-        if (!num) return;
-
-        if (cc) existingPhonesFull.add(`${cc}-${num}`);
-        existingPhonesOnly.add(num);
-      });
-    });
+    const { existingEmails, existingPhonesFull, existingPhonesOnly } =
+      await loadCompanyDuplicateData(user);
 
     // ============================================================
     // FETCH LEADS FROM SELECTED FORM
@@ -565,7 +566,12 @@ exports.importExistingLeads = async (req, res) => {
 
     return res.json({
       status: "success",
-      message: "Meta leads imported successfully",
+      message:
+        totalImported > 0
+          ? `Successfully imported ${totalImported} lead(s). ${totalDuplicates} lead(s) were skipped as duplicates already exist in the company.`
+          : totalDuplicates > 0
+          ? `${totalDuplicates} lead(s) were skipped as duplicates already exist in the company.`
+          : "No leads found to import.",
       imported: totalImported,
       duplicates: totalDuplicates,
     });
@@ -739,67 +745,10 @@ async function processLead(leadgenId, pageId, formId) {
     }
 
     // ============================================================
-    // FIND COMPANY ADMIN & GET ALL USERS
+    // LOAD COMPANY DUPLICATE DATA
     // ============================================================
-    let companyAdminId = null;
-    if (user.role === "companyAdmin") {
-      companyAdminId = user._id;
-    } else if (user.createdByWhichCompanyAdmin) {
-      companyAdminId = user.createdByWhichCompanyAdmin;
-    } else {
-      companyAdminId = user._id;
-    }
-
-    const companyUsers = await User.find(
-      {
-        $or: [
-          { _id: companyAdminId },
-          { createdByWhichCompanyAdmin: companyAdminId },
-        ],
-      },
-      "_id"
-    ).lean();
-
-    const companyUserIds = companyUsers.map((u) => u._id);
-
-    // ============================================================
-    // LOAD EXISTING LEADS & CONTACTS FOR DUPLICATE CHECK
-    // (Company-wide check across all users)
-    // ============================================================
-    const [existingLeads, existingContacts] = await Promise.all([
-      Lead.find(
-        { createdBy: { $in: companyUserIds } },
-        "emailAddresses phoneNumbers"
-      ).lean(),
-      Contact.find(
-        { createdBy: { $in: companyUserIds } },
-        "emailAddresses phoneNumbers"
-      ).lean(),
-    ]);
-
-    const existingEmails = new Set();
-    const existingPhonesFull = new Set();
-    const existingPhonesOnly = new Set();
-
-    const addFromDoc = (doc) => {
-      // Collect emails
-      (doc.emailAddresses || []).forEach((e) => {
-        if (e) existingEmails.add(String(e).toLowerCase().trim());
-      });
-
-      // Collect phones
-      (doc.phoneNumbers || []).forEach((p) => {
-        const cc = (p.countryCode || "").replace(/^\+/, "").trim();
-        const num = (p.number || "").replace(/\D/g, "");
-        if (!num) return;
-
-        if (cc) existingPhonesFull.add(`${cc}-${num}`);
-        existingPhonesOnly.add(num);
-      });
-    };
-
-    existingLeads.forEach(addFromDoc);
-    existingContacts.forEach(addFromDoc);
+    const { existingEmails, existingPhonesFull, existingPhonesOnly } =
+      await loadCompanyDuplicateData(user);
 
     // ============================================================
     // DUPLICATE CHECK
