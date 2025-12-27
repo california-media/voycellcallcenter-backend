@@ -14,7 +14,7 @@ exports.connectFacebook = async (req, res) => {
   const redirectUri = process.env.META_REDIRECT_URI;
 
   const authUrl =
-    "https://www.facebook.com/v19.0/dialog/oauth" +
+    "https://www.facebook.com/v24.0/dialog/oauth" +
     `?client_id=${process.env.META_APP_ID}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&state=${userId}` +
@@ -47,7 +47,7 @@ exports.facebookCallback = async (req, res) => {
 
     // Exchange code for access token
     const tokenRes = await axios.get(
-      "https://graph.facebook.com/v19.0/oauth/access_token",
+      "https://graph.facebook.com/v24.0/oauth/access_token",
       {
         params: {
           client_id: process.env.META_APP_ID,
@@ -135,7 +135,7 @@ exports.getFacebookPages = async (req, res) => {
 
     // Get all pages the user manages
     const pagesRes = await axios.get(
-      "https://graph.facebook.com/v19.0/me/accounts",
+      "https://graph.facebook.com/v24.0/me/accounts",
       {
         params: {
           access_token: user.meta.accessToken,
@@ -151,7 +151,7 @@ exports.getFacebookPages = async (req, res) => {
     for (const page of pages) {
       try {
         const formsRes = await axios.get(
-          `https://graph.facebook.com/v19.0/${page.id}/leadgen_forms`,
+          `https://graph.facebook.com/v24.0/${page.id}/leadgen_forms`,
           {
             params: {
               access_token: page.access_token,
@@ -219,8 +219,9 @@ exports.subscribeToPage = async (req, res) => {
     if (subscribe) {
       // Subscribe the page to receive leadgen webhooks
       try {
+        console.log(`Subscribing to page ${pageId} for webhooks...`);
         await axios.post(
-          `https://graph.facebook.com/v19.0/${pageId}/subscribed_apps`,
+          `https://graph.facebook.com/v24.0/${pageId}/subscribed_apps`,
           {
             subscribed_fields: "leadgen",
             access_token: pageAccessToken,
@@ -265,7 +266,7 @@ exports.subscribeToPage = async (req, res) => {
         const appAccessToken = `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
 
         await axios.delete(
-          `https://graph.facebook.com/v19.0/${pageId}/subscribed_apps?access_token=${appAccessToken}`
+          `https://graph.facebook.com/v24.0/${pageId}/subscribed_apps?access_token=${appAccessToken}`
         );
 
         console.log(`✅ Unsubscribed from page ${pageId}`);
@@ -379,7 +380,7 @@ exports.importExistingLeads = async (req, res) => {
 
     try {
       const leadsRes = await axios.get(
-        `https://graph.facebook.com/v19.0/${formId}/leads`,
+        `https://graph.facebook.com/v24.0/${formId}/leads`,
         {
           params: {
             access_token: pageAccessToken,
@@ -545,8 +546,6 @@ exports.verifyWebhook = (req, res) => {
 exports.handleLeadWebhook = async (req, res) => {
   try {
     console.log("📨 Received webhook POST request");
-    console.log("Headers:", JSON.stringify(req.headers, null, 2));
-    console.log("Body:", JSON.stringify(req.body, null, 2));
 
     // Respond immediately to Facebook
     res.status(200).send("EVENT_RECEIVED");
@@ -627,7 +626,7 @@ async function processLead(leadgenId, pageId, formId) {
 
     const pageAccessToken = subscribedPage.pageAccessToken;
     const leadRes = await axios.get(
-      `https://graph.facebook.com/v19.0/${leadgenId}`,
+      `https://graph.facebook.com/v24.0/${leadgenId}`,
       {
         params: {
           access_token: pageAccessToken,
