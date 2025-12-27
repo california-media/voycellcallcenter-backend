@@ -194,7 +194,113 @@ exports.getFacebookPages = async (req, res) => {
 
 /**
  * =====================================================
- * STEP 4: Import Leads from Selected Form
+ * STEP 4: Subscribe/Unsubscribe Page for Webhook Events
+ * =====================================================
+ */
+exports.subscribeToPage = async (req, res) => {
+  try {
+    const { pageId, pageName, pageAccessToken, subscribe } = req.body;
+
+    if (!pageId || !pageName || !pageAccessToken) {
+      return res.status(400).json({
+        status: "error",
+        message: "Missing pageId, pageName or pageAccessToken",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user?.meta?.isConnected) {
+      return res.status(400).json({
+        status: "error",
+        message: "Meta account not connected",
+      });
+    }
+
+    if (subscribe) {
+      // Subscribe the page to receive leadgen webhooks
+      try {
+        await axios.post(
+          `https://graph.facebook.com/v19.0/${pageId}/subscribed_apps`,
+          {
+            subscribed_fields: "leadgen",
+            access_token: pageAccessToken,
+          }
+        );
+
+        console.log(`✅ Subscribed to page ${pageId} for webhooks`);
+      } catch (apiErr) {
+        console.error("Facebook API error:", apiErr.response?.data || apiErr);
+        return res.status(500).json({
+          status: "error",
+          message: "Failed to subscribe to Facebook page",
+          error: apiErr.response?.data?.error?.message || apiErr.message,
+        });
+      }
+
+      // Add to user's subscribed pages (if not already there)
+      const existingPage = user.meta.subscribedPages?.find(
+        (p) => p.pageId === pageId
+      );
+
+      if (!existingPage) {
+        await User.findByIdAndUpdate(req.user._id, {
+          $push: {
+            "meta.subscribedPages": {
+              pageId,
+              pageName,
+              pageAccessToken,
+              subscribedAt: new Date(),
+            },
+          },
+        });
+      }
+
+      return res.json({
+        status: "success",
+        message: "Successfully subscribed to page",
+      });
+    } else {
+      // Unsubscribe from page
+      try {
+        // Unsubscribe requires app access token (APP_ID|APP_SECRET)
+        const appAccessToken = `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
+
+        await axios.delete(
+          `https://graph.facebook.com/v19.0/${pageId}/subscribed_apps?access_token=${appAccessToken}`
+        );
+
+        console.log(`✅ Unsubscribed from page ${pageId}`);
+      } catch (apiErr) {
+        console.error("Facebook API error:", apiErr.response?.data || apiErr);
+        // Continue to remove from DB even if API call fails
+      }
+
+      // Remove from user's subscribed pages
+      await User.findByIdAndUpdate(req.user._id, {
+        $pull: {
+          "meta.subscribedPages": { pageId },
+        },
+      });
+
+      return res.json({
+        status: "success",
+        message: "Successfully unsubscribed from page",
+      });
+    }
+  } catch (err) {
+    console.error("Error managing page subscription:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to manage page subscription",
+      error: err.message,
+    });
+  }
+};
+
+/**
+ * =====================================================
+ * STEP 5: Import Leads from Selected Form
  * (Directly import without saving - receives form details in request)
  * =====================================================
  */
@@ -285,6 +391,7 @@ exports.importExistingLeads = async (req, res) => {
       );
 
       const leads = leadsRes.data.data || [];
+      console.log(`Fetched ${leads.length} leads from form ${formId}`, leads);
 
       console.log(`Processing ${leads.length} leads from selected form`);
 
@@ -410,8 +517,257 @@ exports.importExistingLeads = async (req, res) => {
 
 /**
  * =====================================================
- * STEP 6: Meta Lead Webhook (via Pabbly)
- * (NO AUTH — verified by secret)
+ * STEP 5: Verify Webhook Endpoint (GET Request)
+ * Facebook sends this to verify your endpoint
+ * =====================================================
+ */
+exports.verifyWebhook = (req, res) => {
+  const VERIFY_TOKEN =
+    process.env.META_WEBHOOK_VERIFY_TOKEN || "your_verify_token_123";
+
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("✅ Webhook verified successfully!");
+    return res.status(200).send(challenge);
+  } else {
+    console.error("❌ Webhook verification failed");
+    return res.sendStatus(403);
+  }
+};
+
+/**
+ * =====================================================
+ * STEP 6: Handle Lead Webhook (POST Request)
+ * Facebook sends lead data when new lead is created
+ * =====================================================
+ */
+exports.handleLeadWebhook = async (req, res) => {
+  try {
+    console.log("📨 Received webhook POST request");
+    console.log("Headers:", JSON.stringify(req.headers, null, 2));
+    console.log("Body:", JSON.stringify(req.body, null, 2));
+
+    // Respond immediately to Facebook
+    res.status(200).send("EVENT_RECEIVED");
+
+    const body = req.body;
+
+    // Check if this is a page webhook
+    if (body.object !== "page") {
+      console.log("⚠️ Not a page event, object type:", body.object);
+      return;
+    }
+
+    console.log(
+      `✅ Processing page event with ${body.entry?.length || 0} entries`
+    );
+
+    // Process each entry
+    for (const entry of body.entry || []) {
+      // Process each change in the entry
+      for (const change of entry.changes || []) {
+        // Check if this is a leadgen event
+        if (change.field === "leadgen") {
+          const leadgenId = change.value.leadgen_id;
+          const pageId = change.value.page_id;
+          const formId = change.value.form_id;
+          const adId = change.value.ad_id;
+          const createdTime = change.value.created_time;
+
+          console.log(`📋 New lead received:`);
+          console.log(`  Lead ID: ${leadgenId}`);
+          console.log(`  Page ID: ${pageId}`);
+          console.log(`  Form ID: ${formId}`);
+          console.log(`  Ad ID: ${adId}`);
+
+          // Process the lead asynchronously
+          processLead(leadgenId, pageId, formId).catch((err) => {
+            console.error("Error processing lead:", err);
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("❌ Webhook error:", err);
+    // Still return 200 to Facebook to avoid retries
+    return res.status(200).send("ERROR");
+  }
+};
+
+/**
+ * =====================================================
+ * Helper: Process Individual Lead
+ * =====================================================
+ */
+async function processLead(leadgenId, pageId, formId) {
+  try {
+    // Find user who has this page in their subscribed pages
+    const users = await User.find({
+      "meta.subscribedPages.pageId": pageId,
+    });
+
+    if (!users || users.length === 0) {
+      console.error(`No user found with subscribed pageId: ${pageId}`);
+      return;
+    }
+
+    // Use the first user found
+    const user = users[0];
+
+    // Get the page access token from subscribed pages
+    const subscribedPage = user.meta.subscribedPages.find(
+      (p) => p.pageId === pageId
+    );
+
+    if (!subscribedPage?.pageAccessToken) {
+      console.error(`No page access token for pageId: ${pageId}`);
+      return;
+    }
+
+    const pageAccessToken = subscribedPage.pageAccessToken;
+    const leadRes = await axios.get(
+      `https://graph.facebook.com/v19.0/${leadgenId}`,
+      {
+        params: {
+          access_token: pageAccessToken,
+          fields: "id,created_time,field_data",
+        },
+      }
+    );
+
+    const leadData = leadRes.data;
+    console.log(`Fetched lead data for Lead ID: ${leadgenId}`, leadData);
+    const fieldData = leadData.field_data || [];
+
+    // Parse fields
+    let firstname = "";
+    let lastname = "";
+    let email = "";
+    let phone = "";
+    let company = "";
+
+    fieldData.forEach((field) => {
+      const name = field.name.toLowerCase();
+      const value = field.values?.[0] || "";
+
+      if (name.includes("first") || name === "name") {
+        firstname = value;
+      } else if (name.includes("last")) {
+        lastname = value;
+      } else if (name.includes("full_name")) {
+        const parts = value.split(" ");
+        firstname = parts[0] || "";
+        lastname = parts.slice(1).join(" ") || "";
+      } else if (name.includes("email")) {
+        email = value.toLowerCase().trim();
+      } else if (name.includes("phone")) {
+        phone = value.replace(/\D/g, "");
+      } else if (name.includes("company")) {
+        company = value;
+      }
+    });
+
+    // Skip empty leads
+    if (!firstname && !lastname && !email && !phone) {
+      console.log("Skipping empty lead");
+      return;
+    }
+
+    // ============================================================
+    // FIND COMPANY ADMIN & CHECK FOR DUPLICATES
+    // ============================================================
+    let companyAdminId = null;
+    if (user.role === "companyAdmin") {
+      companyAdminId = user._id;
+    } else if (user.createdByWhichCompanyAdmin) {
+      companyAdminId = user.createdByWhichCompanyAdmin;
+    } else {
+      companyAdminId = user._id;
+    }
+
+    const companyUsers = await User.find(
+      {
+        $or: [
+          { _id: companyAdminId },
+          { createdByWhichCompanyAdmin: companyAdminId },
+        ],
+      },
+      "_id"
+    ).lean();
+
+    const companyUserIds = companyUsers.map((u) => u._id);
+
+    // Check for duplicate by email
+    let existingLead = null;
+    if (email) {
+      existingLead = await Lead.findOne({
+        createdBy: { $in: companyUserIds },
+        emailAddresses: email,
+      });
+    }
+
+    // Check for duplicate by phone
+    if (!existingLead && phone) {
+      existingLead = await Lead.findOne({
+        createdBy: { $in: companyUserIds },
+        phoneNumbers: {
+          $elemMatch: {
+            number: phone,
+          },
+        },
+      });
+    }
+
+    if (existingLead) {
+      console.log(`⚠️ Duplicate lead found: ${existingLead._id}`);
+      // Add activity to existing lead
+      existingLead.activities.push({
+        action: "meta_lead_duplicate",
+        type: "lead",
+        title: "Duplicate Meta Lead",
+        description: `Same lead submitted again from Facebook (Lead ID: ${leadgenId})`,
+      });
+      await existingLead.save();
+      return;
+    }
+
+    // Create new lead
+    const phoneList = phone ? [{ countryCode: "971", number: phone }] : [];
+    const emailList = email ? [email] : [];
+
+    const newLead = await Lead.create({
+      contact_id: new mongoose.Types.ObjectId(),
+      firstname: firstname || "",
+      lastname: lastname || "",
+      company: company || "",
+      emailAddresses: emailList,
+      phoneNumbers: phoneList,
+      isLead: true,
+      status: "contacted",
+      createdBy: user._id,
+      activities: [
+        {
+          action: "meta_lead_created",
+          type: "lead",
+          title: "Meta Lead Created",
+          description: `Lead received from Facebook webhook (Form ID: ${formId}, Lead ID: ${leadgenId})`,
+        },
+      ],
+    });
+
+    console.log(`✅ New lead created: ${newLead._id}`);
+  } catch (err) {
+    console.error(`❌ Error processing lead ${leadgenId}:`);
+    throw err;
+  }
+}
+
+/**
+ * =====================================================
+ * OLD WEBHOOK (Pabbly - DEPRECATED)
  * =====================================================
  */
 exports.metaLeadWebhook = async (req, res) => {

@@ -397,7 +397,17 @@ const userSchema = new Schema(
         }
       ],
 
-      selectedFormId: String
+      selectedFormId: String,
+
+      // Pages subscribed to receive webhook events
+      subscribedPages: [
+        {
+          pageId: String,
+          pageName: String,
+          pageAccessToken: String,
+          subscribedAt: { type: Date, default: Date.now }
+        }
+      ]
     },
 
 

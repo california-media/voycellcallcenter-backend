@@ -34,7 +34,18 @@ router.get("/pages", checkForAuthentication(), metaController.getFacebookPages);
 
 /**
  * ===============================
- * 4. Import Leads from Selected Form
+ * 4. Subscribe/Unsubscribe Page for Webhooks
+ * ===============================
+ */
+router.post(
+  "/pages/subscribe",
+  checkForAuthentication(),
+  metaController.subscribeToPage
+);
+
+/**
+ * ===============================
+ * 5. Import Leads from Selected Form
  * ===============================
  */
 router.post(
@@ -45,11 +56,18 @@ router.post(
 
 /**
  * ===============================
- * 6. Pabbly → Lead Webhook (DISABLED)
+ * 5. Webhook Verification (GET)
+ * Facebook calls this to verify your endpoint
  * ===============================
- * Webhook functionality temporarily disabled
- * Focus on manual import only for now
  */
-// router.post("/webhook/lead", verifyPabbly, metaController.metaLeadWebhook);
+router.get("/webhook", metaController.verifyWebhook);
+
+/**
+ * ===============================
+ * 6. Lead Webhook (POST)
+ * Facebook sends lead data here when new lead is created
+ * ===============================
+ */
+router.post("/webhook", metaController.handleLeadWebhook);
 
 module.exports = router;
