@@ -305,7 +305,7 @@ exports.subscribeToPage = async (req, res) => {
  */
 exports.importExistingLeads = async (req, res) => {
   try {
-    const { formId, pageId, pageAccessToken } = req.body;
+    const { formId, pageId, pageAccessToken, agentId } = req.body;
 
     if (!formId || !pageId || !pageAccessToken) {
       return res.status(400).json({
@@ -316,37 +316,57 @@ exports.importExistingLeads = async (req, res) => {
 
     const user = await User.findById(req.user._id);
 
-    console.log(`Fetching leads from form: ${formId}`);
+    // Determine who will own the imported leads
+    let leadOwnerId;
+    if (agentId) {
+      // Verify agent exists and belongs to this company
+      const agent = await User.findById(agentId);
+      if (!agent) {
+        return res.status(404).json({
+          status: "error",
+          message: "Agent not found",
+        });
+      }
 
-    // ============================================================
-    // FIND COMPANY ADMIN & GET ALL USERS
-    // ============================================================
-    let companyAdminId = null;
-    if (user.role === "companyAdmin") {
-      companyAdminId = user._id;
-    } else if (user.createdByWhichCompanyAdmin) {
-      companyAdminId = user.createdByWhichCompanyAdmin;
+      // Verify agent belongs to same company
+      const agentCompanyId =
+        agent.role === "companyAdmin"
+          ? agent._id
+          : agent.createdByWhichCompanyAdmin;
+      const userCompanyId =
+        user.role === "companyAdmin"
+          ? user._id
+          : user.createdByWhichCompanyAdmin;
+
+      if (
+        !agentCompanyId ||
+        agentCompanyId.toString() !== userCompanyId.toString()
+      ) {
+        return res.status(403).json({
+          status: "error",
+          message: "Agent does not belong to your company",
+        });
+      }
+
+      leadOwnerId = agentId;
     } else {
-      companyAdminId = user._id;
+      // Import to current user (company admin)
+      leadOwnerId = user._id;
     }
 
-    const companyUsers = await User.find(
-      {
-        $or: [
-          { _id: companyAdminId },
-          { createdByWhichCompanyAdmin: companyAdminId },
-        ],
-      },
-      "_id"
-    ).lean();
-
-    const companyUserIds = companyUsers.map((u) => u._id);
+    console.log(`Fetching leads from form: ${formId}, owner: ${leadOwnerId}`);
 
     // ============================================================
-    // LOAD ALL EXISTING LEADS FOR DUPLICATE CHECK
+    // LOAD EXISTING LEADS & CONTACTS FOR DUPLICATE CHECK
+    // (Only for the specific lead owner, not company-wide)
     // ============================================================
     const existingLeads = await Lead.find(
-      { createdBy: { $in: companyUserIds } },
+      { createdBy: leadOwnerId },
+      "emailAddresses phoneNumbers"
+    ).lean();
+
+    const existingContacts = await Contact.find(
+      { createdBy: leadOwnerId },
       "emailAddresses phoneNumbers"
     ).lean();
 
@@ -354,6 +374,7 @@ exports.importExistingLeads = async (req, res) => {
     const existingPhonesFull = new Set();
     const existingPhonesOnly = new Set();
 
+    // Process leads
     existingLeads.forEach((lead) => {
       // Collect emails
       (lead.emailAddresses || []).forEach((email) => {
@@ -362,6 +383,24 @@ exports.importExistingLeads = async (req, res) => {
 
       // Collect phones
       (lead.phoneNumbers || []).forEach((phone) => {
+        const cc = (phone.countryCode || "").replace(/^\+/, "").trim();
+        const num = (phone.number || "").replace(/\D/g, "");
+        if (!num) return;
+
+        if (cc) existingPhonesFull.add(`${cc}-${num}`);
+        existingPhonesOnly.add(num);
+      });
+    });
+
+    // Process contacts
+    existingContacts.forEach((contact) => {
+      // Collect emails
+      (contact.emailAddresses || []).forEach((email) => {
+        if (email) existingEmails.add(String(email).toLowerCase().trim());
+      });
+
+      // Collect phones
+      (contact.phoneNumbers || []).forEach((phone) => {
         const cc = (phone.countryCode || "").replace(/^\+/, "").trim();
         const num = (phone.number || "").replace(/\D/g, "");
         if (!num) return;
@@ -476,7 +515,7 @@ exports.importExistingLeads = async (req, res) => {
           phoneNumbers: phoneList,
           isLead: true,
           status: "contacted",
-          createdBy: user._id,
+          createdBy: leadOwnerId,
           activities: [
             {
               action: "meta_lead_imported",
