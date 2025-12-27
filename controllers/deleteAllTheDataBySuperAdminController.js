@@ -2,11 +2,11 @@ const mongoose = require("mongoose");
 
 const User = require("../models/userModel");
 const Contact = require("../models/contactModel");
+const Lead = require("../models/leadModel");
 const CallHistory = require("../models/CallHistory");
 const ScriptToken = require("../models/ScriptToken");
 const FormCallScriptToken = require("../models/FormCallScriptToken");
 const HelpSupport = require("../models/helpSupportModel");
-// const Lead = require("../models/Lead"); // if separate, else Contact handles it
 
 exports.deleteUserPermanently = async (req, res) => {
   const session = await mongoose.startSession();
@@ -54,8 +54,13 @@ exports.deleteUserPermanently = async (req, res) => {
 
       const allUserIds = [user._id, ...agentIds];
 
-      // 2️⃣ Delete Contacts & Leads
+      // 2️⃣ Delete Contacts
       await Contact.deleteMany({
+        createdBy: { $in: allUserIds },
+      }).session(session);
+
+      // 2️⃣ Delete Leads
+      await Lead.deleteMany({
         createdBy: { $in: allUserIds },
       }).session(session);
 
