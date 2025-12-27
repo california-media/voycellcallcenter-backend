@@ -2,6 +2,7 @@ const axios = require("axios");
 const mongoose = require("mongoose");
 const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
+const Contact = require("../models/leadModel");
 
 /**
  * =====================================================
@@ -357,18 +358,43 @@ exports.importExistingLeads = async (req, res) => {
     console.log(`Fetching leads from form: ${formId}, owner: ${leadOwnerId}`);
 
     // ============================================================
-    // LOAD EXISTING LEADS & CONTACTS FOR DUPLICATE CHECK
-    // (Only for the specific lead owner, not company-wide)
+    // FIND COMPANY ADMIN & GET ALL USERS
     // ============================================================
-    const existingLeads = await Lead.find(
-      { createdBy: leadOwnerId },
-      "emailAddresses phoneNumbers"
+    let companyAdminId = null;
+    if (user.role === "companyAdmin") {
+      companyAdminId = user._id;
+    } else if (user.createdByWhichCompanyAdmin) {
+      companyAdminId = user.createdByWhichCompanyAdmin;
+    } else {
+      companyAdminId = user._id;
+    }
+
+    const companyUsers = await User.find(
+      {
+        $or: [
+          { _id: companyAdminId },
+          { createdByWhichCompanyAdmin: companyAdminId },
+        ],
+      },
+      "_id"
     ).lean();
 
-    const existingContacts = await Contact.find(
-      { createdBy: leadOwnerId },
-      "emailAddresses phoneNumbers"
-    ).lean();
+    const companyUserIds = companyUsers.map((u) => u._id);
+
+    // ============================================================
+    // LOAD EXISTING LEADS & CONTACTS FOR DUPLICATE CHECK
+    // (Company-wide check across all users)
+    // ============================================================
+    const [existingLeads, existingContacts] = await Promise.all([
+      Lead.find(
+        { createdBy: { $in: companyUserIds } },
+        "emailAddresses phoneNumbers"
+      ).lean(),
+      Contact.find(
+        { createdBy: { $in: companyUserIds } },
+        "emailAddresses phoneNumbers"
+      ).lean(),
+    ]);
 
     const existingEmails = new Set();
     const existingPhonesFull = new Set();
@@ -713,7 +739,7 @@ async function processLead(leadgenId, pageId, formId) {
     }
 
     // ============================================================
-    // FIND COMPANY ADMIN & CHECK FOR DUPLICATES
+    // FIND COMPANY ADMIN & GET ALL USERS
     // ============================================================
     let companyAdminId = null;
     if (user.role === "companyAdmin") {
@@ -736,37 +762,66 @@ async function processLead(leadgenId, pageId, formId) {
 
     const companyUserIds = companyUsers.map((u) => u._id);
 
-    // Check for duplicate by email
-    let existingLead = null;
-    if (email) {
-      existingLead = await Lead.findOne({
-        createdBy: { $in: companyUserIds },
-        emailAddresses: email,
+    // ============================================================
+    // LOAD EXISTING LEADS & CONTACTS FOR DUPLICATE CHECK
+    // (Company-wide check across all users)
+    // ============================================================
+    const [existingLeads, existingContacts] = await Promise.all([
+      Lead.find(
+        { createdBy: { $in: companyUserIds } },
+        "emailAddresses phoneNumbers"
+      ).lean(),
+      Contact.find(
+        { createdBy: { $in: companyUserIds } },
+        "emailAddresses phoneNumbers"
+      ).lean(),
+    ]);
+
+    const existingEmails = new Set();
+    const existingPhonesFull = new Set();
+    const existingPhonesOnly = new Set();
+
+    const addFromDoc = (doc) => {
+      // Collect emails
+      (doc.emailAddresses || []).forEach((e) => {
+        if (e) existingEmails.add(String(e).toLowerCase().trim());
       });
+
+      // Collect phones
+      (doc.phoneNumbers || []).forEach((p) => {
+        const cc = (p.countryCode || "").replace(/^\+/, "").trim();
+        const num = (p.number || "").replace(/\D/g, "");
+        if (!num) return;
+
+        if (cc) existingPhonesFull.add(`${cc}-${num}`);
+        existingPhonesOnly.add(num);
+      });
+    };
+
+    existingLeads.forEach(addFromDoc);
+    existingContacts.forEach(addFromDoc);
+
+    // ============================================================
+    // DUPLICATE CHECK
+    // ============================================================
+    let isDuplicate = false;
+
+    // Check email
+    if (email && existingEmails.has(email)) {
+      isDuplicate = true;
+      console.log(`⚠️ Duplicate lead found by email: ${email}`);
     }
 
-    // Check for duplicate by phone
-    if (!existingLead && phone) {
-      existingLead = await Lead.findOne({
-        createdBy: { $in: companyUserIds },
-        phoneNumbers: {
-          $elemMatch: {
-            number: phone,
-          },
-        },
-      });
+    // Check phone
+    if (phone && !isDuplicate) {
+      if (existingPhonesOnly.has(phone)) {
+        isDuplicate = true;
+        console.log(`⚠️ Duplicate lead found by phone: ${phone}`);
+      }
     }
 
-    if (existingLead) {
-      console.log(`⚠️ Duplicate lead found: ${existingLead._id}`);
-      // Add activity to existing lead
-      existingLead.activities.push({
-        action: "meta_lead_duplicate",
-        type: "lead",
-        title: "Duplicate Meta Lead",
-        description: `Same lead submitted again from Facebook (Lead ID: ${leadgenId})`,
-      });
-      await existingLead.save();
+    if (isDuplicate) {
+      console.log(`⚠️ Skipping duplicate lead (Lead ID: ${leadgenId})`);
       return;
     }
 
