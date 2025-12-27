@@ -1,5 +1,6 @@
 const axios = require("axios");
 const mongoose = require("mongoose");
+const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
 const Contact = require("../models/contactModel");
@@ -485,7 +486,7 @@ exports.importExistingLeads = async (req, res) => {
           } else if (name.includes("email")) {
             email = value.toLowerCase().trim();
           } else if (name.includes("phone")) {
-            phone = value.replace(/\D/g, "");
+            phone = value; // Keep raw phone value for parsing
           } else if (name.includes("company")) {
             company = value;
           }
@@ -521,7 +522,40 @@ exports.importExistingLeads = async (req, res) => {
         // ============================================================
         // CREATE LEAD
         // ============================================================
-        const phoneList = phone ? [{ countryCode: "971", number: phone }] : [];
+        // Parse phone number properly
+        let phoneList = [];
+        if (phone) {
+          const parsed = parsePhoneNumberFromString(phone);
+          let countryCode = "971"; // default
+          let number = phone.replace(/\D/g, "");
+
+          if (parsed) {
+            countryCode = parsed.countryCallingCode || "971";
+            number = parsed.nationalNumber;
+          } else {
+            // If parsing fails, try to extract manually
+            const cleaned = phone.replace(/\D/g, "");
+            if (cleaned.length > 10) {
+              // Likely has country code
+              // Try common patterns
+              if (cleaned.startsWith("92") && cleaned.length === 12) {
+                countryCode = "92";
+                number = cleaned.substring(2);
+              } else if (cleaned.startsWith("971")) {
+                countryCode = "971";
+                number = cleaned.substring(3);
+              } else {
+                number = cleaned;
+              }
+            } else {
+              number = cleaned;
+            }
+          }
+
+          // Remove leading zeros from number
+          number = number.replace(/^0+/, "");
+          phoneList = [{ countryCode, number }];
+        }
         const emailList = email ? [email] : [];
 
         // Track in batch
@@ -734,7 +768,7 @@ async function processLead(leadgenId, pageId, formId) {
       } else if (name.includes("email")) {
         email = value.toLowerCase().trim();
       } else if (name.includes("phone")) {
-        phone = value.replace(/\D/g, "");
+        phone = value; // Keep raw phone value for parsing
       } else if (name.includes("company")) {
         company = value;
       }
@@ -757,6 +791,17 @@ async function processLead(leadgenId, pageId, formId) {
     // ============================================================
     let isDuplicate = false;
 
+    // Parse phone number for duplicate checking
+    let phoneForCheck = "";
+    if (phone) {
+      const parsed = parsePhoneNumberFromString(phone);
+      if (parsed) {
+        phoneForCheck = parsed.nationalNumber;
+      } else {
+        phoneForCheck = phone.replace(/\D/g, "");
+      }
+    }
+
     // Check email
     if (email && existingEmails.has(email)) {
       isDuplicate = true;
@@ -764,10 +809,10 @@ async function processLead(leadgenId, pageId, formId) {
     }
 
     // Check phone
-    if (phone && !isDuplicate) {
-      if (existingPhonesOnly.has(phone)) {
+    if (phoneForCheck && !isDuplicate) {
+      if (existingPhonesOnly.has(phoneForCheck)) {
         isDuplicate = true;
-        console.log(`⚠️ Duplicate lead found by phone: ${phone}`);
+        console.log(`⚠️ Duplicate lead found by phone: ${phoneForCheck}`);
       }
     }
 
@@ -776,8 +821,42 @@ async function processLead(leadgenId, pageId, formId) {
       return;
     }
 
-    // Create new lead
-    const phoneList = phone ? [{ countryCode: "971", number: phone }] : [];
+    // ============================================================
+    // CREATE NEW LEAD
+    // ============================================================
+    // Parse phone number properly for storage
+    let phoneList = [];
+    if (phone) {
+      const parsed = parsePhoneNumberFromString(phone);
+      let countryCode = "971"; // default
+      let number = phone.replace(/\D/g, "");
+
+      if (parsed) {
+        countryCode = parsed.countryCallingCode || "971";
+        number = parsed.nationalNumber;
+      } else {
+        // If parsing fails, try to extract manually
+        const cleaned = phone.replace(/\D/g, "");
+        if (cleaned.length > 10) {
+          // Likely has country code
+          if (cleaned.startsWith("92") && cleaned.length === 12) {
+            countryCode = "92";
+            number = cleaned.substring(2);
+          } else if (cleaned.startsWith("971")) {
+            countryCode = "971";
+            number = cleaned.substring(3);
+          } else {
+            number = cleaned;
+          }
+        } else {
+          number = cleaned;
+        }
+      }
+
+      // Remove leading zeros from number
+      number = number.replace(/^0+/, "");
+      phoneList = [{ countryCode, number }];
+    }
     const emailList = email ? [email] : [];
 
     const newLead = await Lead.create({
