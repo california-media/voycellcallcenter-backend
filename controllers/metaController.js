@@ -141,11 +141,34 @@ exports.facebookCallback = async (req, res) => {
       params: { access_token, fields: "id,name" },
     });
 
+    const facebookUserId = profile.data.id;
+
+    // Check if this Facebook account is already connected to another user
+    const existingConnection = await User.findOne({
+      "meta.facebookUserId": facebookUserId,
+      _id: { $ne: userId }, // Exclude current user
+    });
+
+    if (existingConnection) {
+      return res.send(`
+        <script>
+          window.opener.postMessage(
+            { 
+              status: 'error', 
+              message: 'This Facebook account is already connected to another user account.' 
+            },
+            '*'
+          );
+          window.close();
+        </script>
+      `);
+    }
+
     // Update user with Meta connection
     await User.findByIdAndUpdate(userId, {
       $set: {
         "meta.isConnected": true,
-        "meta.facebookUserId": profile.data.id,
+        "meta.facebookUserId": facebookUserId,
         "meta.accessToken": access_token,
       },
     });
