@@ -567,7 +567,9 @@ exports.importExistingLeads = async (req, res) => {
     return res.json({
       status: "success",
       message:
-        totalImported > 0
+        totalImported > 0 && totalDuplicates === 0
+          ? `Successfully imported ${totalImported} lead(s).`
+          : totalImported > 0
           ? `Successfully imported ${totalImported} lead(s). ${totalDuplicates} lead(s) were skipped as duplicates already exist in the company.`
           : totalDuplicates > 0
           ? `${totalDuplicates} lead(s) were skipped as duplicates already exist in the company.`
