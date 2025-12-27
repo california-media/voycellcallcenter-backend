@@ -19,8 +19,7 @@ exports.connectFacebook = async (req, res) => {
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&state=${userId}` +
     `&response_type=code` +
-    `&scope=ads_management,leads_retrieval,pages_show_list,pages_read_engagement,pages_manage_ads`;
-  `&scope=email,public_profile`;
+    `&scope=pages_manage_metadata,pages_read_engagement,pages_manage_ads,leads_retrieval,pages_show_list`;
 
   return res.json({ authUrl });
 };
@@ -227,7 +226,6 @@ exports.subscribeToPage = async (req, res) => {
             access_token: pageAccessToken,
           }
         );
-
         console.log(`✅ Subscribed to page ${pageId} for webhooks`);
       } catch (apiErr) {
         console.error("Facebook API error:", apiErr.response?.data || apiErr);
