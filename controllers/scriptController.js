@@ -59,7 +59,7 @@
 // controllers/scriptController.js (or your existing file)
 const crypto = require("crypto");
 const ScriptToken = require("../models/ScriptToken");
-const FormCallScriptToken = require("../models/FormCallScriptToken");
+// const FormCallScriptToken = require("../models/FormCallScriptToken");
 const User = require("../models/userModel");
 
 const FRONTEND_BASE =
@@ -150,16 +150,27 @@ exports.generateScriptTag = async (req, res) => {
       };
 
       // ✅ If allowedOrigins provided, overwrite array
-      if (allowedOrigins.length > 0) {
-        updatePayload.allowedOrigin = allowedOrigins;
+      // if (allowedOrigins.length > 0) {
+      //   updatePayload.allowedOrigin = allowedOrigins;
+      // }
+
+
+
+      // if (restrictedUrls.length > 0) {
+      //   updatePayload.restrictedUrls = restrictedUrls;
+      // }
+
+      if (Array.isArray(allowedOrigins)) {
+        updatePayload.allowedOrigin = allowedOrigins; // can be []
       }
+
+      if (Array.isArray(restrictedUrls)) {
+        updatePayload.restrictedUrls = restrictedUrls; // can be []
+      }
+
 
       if (fieldName) {
         updatePayload.fieldName = fieldName
-      }
-
-      if (restrictedUrls.length > 0) {
-        updatePayload.restrictedUrls = restrictedUrls;
       }
 
       await ScriptToken.findByIdAndUpdate(tokenDoc._id, updatePayload);
