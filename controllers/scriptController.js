@@ -142,6 +142,11 @@ exports.generateScriptTag = async (req, res) => {
     if (allowedOriginContactForm.length > 0) {
       user.popupSettings.allowedOriginContactForm = allowedOriginContactForm;
     }
+    console.log();
+
+    if (restrictedUrls.length > 0) {
+      user.popupSettings.restrictedUrls = restrictedUrls;
+    }
 
     if (fieldName) {
       user.popupSettings.fieldName = fieldName;

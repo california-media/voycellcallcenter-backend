@@ -309,6 +309,10 @@ const userSchema = new Schema(
         type: [String], // ✅ multiple origins
         default: [],
       },
+      restrictedUrls: {
+        type: [String], // ✅ multiple URLs
+        default: [],
+      },
       fieldName: { type: String, default: "phone" },
     },
 

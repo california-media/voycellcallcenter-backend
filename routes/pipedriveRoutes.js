@@ -10,9 +10,8 @@ router.get('/callback', pipedriveController.handleCallback);
 
 router.get('/embed', pipedriveController.embed);
 
-// // This is the page that will actually show INSIDE the Pipedrive window
-// router.get('/panel', (req, res) => {
-//     res.sendFile(__dirname + '/../views/pipedrive-panel.html');
-// });
+// routes file
+router.get('/pipedrive-bridge', pipedriveController.pipedriveBridge);
+
 
 module.exports = router;
