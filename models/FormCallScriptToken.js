@@ -10,6 +10,10 @@ const FormCallScriptTokenSchema = new mongoose.Schema({
   allowedOrigin: {
     type: [String],
     default: [],
+  },
+  restrictedUrls: {
+    type: [String],
+    default: [],
   }
 });
 

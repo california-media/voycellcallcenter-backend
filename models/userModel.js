@@ -364,6 +364,18 @@ const userSchema = new Schema(
     smtpSecure: { type: Boolean, default: true },
     smtpConnected: { type: Boolean, default: false },
 
+    pipedrive: {
+      isConnected: { type: Boolean, default: false },
+      userId: String,
+      companyId: Number,
+      accessToken: String,
+      refreshToken: String,
+      tokenExpiresAt: Date
+    },
+
+
+
+
     // zohoId: { type: String },
     // zohoEmail: { type: String },
     // zohoAccessToken: { type: String },

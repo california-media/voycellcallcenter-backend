@@ -195,8 +195,15 @@ exports.generateFormCallScriptTag = async (req, res) => {
     // normalize allowed origins
     const allowedOrigins = Array.isArray(req.body.allowedOrigin)
       ? req.body.allowedOrigin
-          .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
-          .filter(Boolean)
+        .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
+        .filter(Boolean)
+      : [];
+
+    // 🆕 ADD THIS: normalize restricted URLs
+    const restrictedUrls = Array.isArray(req.body.restrictedUrls)
+      ? req.body.restrictedUrls
+        .map(u => u.trim().toLowerCase())
+        .filter(Boolean)
       : [];
 
     // 🔒 One stable token per user (recommended)
@@ -215,6 +222,10 @@ exports.generateFormCallScriptTag = async (req, res) => {
         update.allowedOrigin = allowedOrigins;
       }
 
+      if (restrictedUrls.length > 0) {
+        update.restrictedUrls = restrictedUrls;
+      }
+
       await FormCallScriptToken.findByIdAndUpdate(tokenDoc._id, update);
     } else {
       token = crypto.randomBytes(16).toString("hex");
@@ -224,13 +235,17 @@ exports.generateFormCallScriptTag = async (req, res) => {
         userId,
         extensionNumber: user.extensionNumber,
         allowedOrigin: allowedOrigins,
+        restrictedUrls: restrictedUrls
       });
     }
+
+    const dummyFieldName = "phone"; // 👈 default dummy name
 
     const scriptUrl = `${FRONTEND_BASE.replace(
       /\/+$/,
       ""
-    )}/voycell_form_call/${token}`;
+    )}/voycell_form_call/${token}/${dummyFieldName}`;
+
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(`<script src="${scriptUrl}"></script>`);

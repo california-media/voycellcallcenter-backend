@@ -1,5 +1,4 @@
 const User = require("../models/userModel");
-const { getZohoDomainConfig } = require("../utils/zohoDomain");
 const oauth = require("../services/zohoOAuth.service");
 const { syncZoho } = require("../services/zohoSync.service");
 const { getZohoCurrentUser } = require("../services/zohoApi.service");
