@@ -11,7 +11,11 @@ const FormCallScriptTokenSchema = new mongoose.Schema({
   likely represents the name of a field in a form or a specific identifier related to the token. */
   fieldName: { type: String, default: "phone" },
   // allowedOrigin: { type: String, default: "" }, // e.g. "https://example.com"
-  allowedOrigin: {
+  allowedOriginPopup: {
+    type: [String],
+    default: [],
+  },
+  allowedOriginContactForm: {
     type: [String],
     default: [],
   },

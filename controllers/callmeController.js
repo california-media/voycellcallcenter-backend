@@ -21,13 +21,17 @@ exports.serveCallmeJS = async (req, res) => {
 
   // 3. 🔀 DECISION
   if (fieldName) {
-    return serveFormScript(req, res, tokenDoc, fieldName, user);
+    // 👉 load BOTH popup + form
+    return servePopupAndFormScript(req, res, tokenDoc, fieldName, user);
   } else {
+    // 👉 popup only
     return servePopupScript(req, res, tokenDoc, user);
   }
+
 };
 
-async function servePopupScript(req, res, tokenDoc, user) {
+
+async function getPopupJS(req, tokenDoc, user) {
   // Query params the widget accepts (all optional)
   // const { token } = req.params;
 
@@ -43,16 +47,14 @@ async function servePopupScript(req, res, tokenDoc, user) {
 
   // const tokenDoc = await ScriptToken.findOne({ token }).lean();
 
-  if (!tokenDoc) {
-    return res.status(404).send("// Invalid or expired widget token");
+  if (!tokenDoc || !user) {
+    return `// Invalid popup token or user`;
   }
+
 
   const decodedExt = tokenDoc.extensionNumber;
 
   // const user = await User.findById(tokenDoc.userId).lean();
-  if (!user) {
-    return res.status(404).send("// User not found for this token");
-  }
 
   function normalizeOrigin(origin = "") {
     return origin.toLowerCase().replace(/\/+$/, "");
@@ -78,35 +80,36 @@ async function servePopupScript(req, res, tokenDoc, user) {
     return "";
   }
 
-  function requestOriginMatches(req, allowedOrigins = []) {
-    if (!Array.isArray(allowedOrigins) || allowedOrigins.length === 0) {
+  function requestOriginMatches(req, allowedOriginPopup = []) {
+    if (!Array.isArray(allowedOriginPopup) || allowedOriginPopup.length === 0) {
       return true;
     }
 
     const requestOrigin = getRequestOrigin(req);
     if (!requestOrigin) return false;
 
-    return allowedOrigins
+    return allowedOriginPopup
       .map(o => normalizeOrigin(o))
       .includes(requestOrigin);
   }
 
   console.log("REQUEST ORIGIN:", getRequestOrigin(req));
-  console.log("ALLOWED ORIGINS:", tokenDoc.allowedOrigin);
+  console.log("ALLOWED ORIGINS:", tokenDoc.allowedOriginPopup);
 
 
 
   if (
-    Array.isArray(tokenDoc.allowedOrigin) &&
-    tokenDoc.allowedOrigin.length > 0 &&
-    !requestOriginMatches(req, tokenDoc.allowedOrigin)
+    Array.isArray(tokenDoc.allowedOriginPopup) &&
+    tokenDoc.allowedOriginPopup.length > 0 &&
+    !requestOriginMatches(req, tokenDoc.allowedOriginPopup)
   ) {
-    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-    return res
-      .status(403)
-      .send(
-        `// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOrigin}`
-      );
+    // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    // return res
+    //   .status(403)
+    //   .send(
+    //     `// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOriginPopup}`
+    //   );
+    return `// ❌ Forbidden: popup not allowed for this origin`;
   }
 
   // ③ MERGE settings: prefer DB values, fall back to query params
@@ -465,12 +468,43 @@ async function servePopupScript(req, res, tokenDoc, user) {
 })();
 `;
 
-  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache");
-  res.status(200).send(js);
+  // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  // res.setHeader("Cache-Control", "no-cache");
+  return js;
 };
 
-async function serveFormScript(req, res, tokenDoc, fieldName, user) {
+async function servePopupAndFormScript(req, res, tokenDoc, fieldName, user) {
+  // Generate popup JS
+  const popupJs = await getPopupJS(req, tokenDoc, user);
+
+  // Generate form JS
+  const formJs = await getFormJS(req, tokenDoc, fieldName, user);
+
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+
+  // 🔥 BOTH scripts sent together
+  res.status(200).send(`
+    ${popupJs}
+    ${formJs}
+  `);
+}
+
+async function servePopupScript(req, res, tokenDoc, user) {
+  // Generate popup JS
+  const popupJs = await getPopupJS(req, tokenDoc, user);
+
+  // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  // res.setHeader("Cache-Control", "no-cache");
+
+  // 🔥 BOTH scripts sent together
+  res.status(200).send(`
+    ${popupJs}
+  `);
+}
+
+
+async function getFormJS(req, tokenDoc, fieldName, user) {
   // const { token } = req.params;
   // const { token, fieldName } = req.params;
   // if (!fieldName || fieldName.length > 50) {
@@ -481,7 +515,11 @@ async function serveFormScript(req, res, tokenDoc, fieldName, user) {
 
   // 1. Fetch Token Data
   // const tokenDoc = await ScriptToken.findOne({ token }).lean();
-  if (!tokenDoc) return res.status(404).send("// Invalid token");
+  // if (!tokenDoc) return res.status(404).send("// Invalid token");
+
+  if (!tokenDoc) {
+    return `// Invalid form token`;
+  }
 
   // 2. GET THE ACTUAL URL (REFERER)
   // This is what the browser reports the current page is
@@ -489,6 +527,63 @@ async function serveFormScript(req, res, tokenDoc, fieldName, user) {
 
   if (!rawReferer) {
     console.log("⚠️ No Referer found. Browser might be blocking the header.");
+  }
+
+  function normalizeOrigin(origin = "") {
+    return origin.toLowerCase().replace(/\/+$/, "");
+  }
+
+  function getRequestOrigin(req) {
+    // 1️⃣ Script tags → use referer
+    const referer = req.get("referer") || req.get("referrer");
+    if (referer) {
+      try {
+        return normalizeOrigin(new URL(referer).origin);
+      } catch (e) { }
+    }
+
+    // 2️⃣ Fetch/XHR → use origin
+    const origin = req.get("origin");
+    if (origin) {
+      try {
+        return normalizeOrigin(new URL(origin).origin);
+      } catch (e) { }
+    }
+
+    return "";
+  }
+
+  function requestOriginMatches(req, allowedOriginContactForm = []) {
+    if (!Array.isArray(allowedOriginContactForm) || allowedOriginContactForm.length === 0) {
+      return true;
+    }
+
+    const requestOrigin = getRequestOrigin(req);
+    if (!requestOrigin) return false;
+
+    return allowedOriginContactForm
+      .map(o => normalizeOrigin(o))
+      .includes(requestOrigin);
+  }
+
+  console.log("REQUEST ORIGIN:", getRequestOrigin(req));
+  console.log("ALLOWED ORIGINS:", tokenDoc.allowedOriginContactForm);
+
+
+
+  if (
+    Array.isArray(tokenDoc.allowedOriginContactForm) &&
+    tokenDoc.allowedOriginContactForm.length > 0 &&
+    !requestOriginMatches(req, tokenDoc.allowedOriginContactForm)
+  ) {
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    // return res
+    //   .status(403)
+    //   .send(
+    //     `// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOriginContactForm}`
+    //   );
+    return `// ❌ Form script forbidden for this origin`;
+
   }
 
   // Normalize: lowercase, remove spaces, and remove trailing slashes
@@ -518,15 +613,20 @@ async function serveFormScript(req, res, tokenDoc, fieldName, user) {
 
     if (isRestricted) {
       console.log("🚫 MATCH FOUND: Blocking script for", normalizedReferer);
-      res.setHeader("Content-Type", "application/javascript");
-      return res.status(200).send("// Voycell Script: This URL is restricted.");
+      // res.setHeader("Content-Type", "application/javascript");
+      // return res.status(200).send("// Voycell Script: This URL is restricted.");
+      return `// Voycell Script: This URL is restricted.`;
     }
   }
 
 
   // const user = await User.findById(tokenDoc.userId).lean();
+  // if (!user) {
+  //   return res.status(404).send("// User not found");
+  // }
+
   if (!user) {
-    return res.status(404).send("// User not found");
+    return `// User not found for form script`;
   }
 
   const API_BASE =
@@ -606,7 +706,7 @@ form.addEventListener("submit", function (e) {
 })();
 `;
 
-  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache");
-  res.status(200).send(js);
+  // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  // res.setHeader("Cache-Control", "no-cache");
+  return js;
 };

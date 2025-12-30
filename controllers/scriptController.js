@@ -86,8 +86,14 @@ exports.generateScriptTag = async (req, res) => {
     //   .trim()
     //   .replace(/\/+$/, "")
     //   .toLowerCase();
-    const allowedOrigins = Array.isArray(req.body.allowedOrigin)
-      ? req.body.allowedOrigin
+    const allowedOriginPopup = Array.isArray(req.body.allowedOriginPopup)
+      ? req.body.allowedOriginPopup
+        .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
+        .filter(Boolean)
+      : [];
+
+    const allowedOriginContactForm = Array.isArray(req.body.allowedOriginContactForm)
+      ? req.body.allowedOriginContactForm
         .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
         .filter(Boolean)
       : [];
@@ -129,8 +135,12 @@ exports.generateScriptTag = async (req, res) => {
     };
 
 
-    if (allowedOrigins.length > 0) {
-      user.popupSettings.allowedOrigin = allowedOrigins;
+    if (allowedOriginPopup.length > 0) {
+      user.popupSettings.allowedOriginPopup = allowedOriginPopup;
+    }
+
+    if (allowedOriginContactForm.length > 0) {
+      user.popupSettings.allowedOriginContactForm = allowedOriginContactForm;
     }
     // === 4️⃣ Save user settings ===
 
@@ -160,8 +170,12 @@ exports.generateScriptTag = async (req, res) => {
       //   updatePayload.restrictedUrls = restrictedUrls;
       // }
 
-      if (Array.isArray(allowedOrigins)) {
-        updatePayload.allowedOrigin = allowedOrigins; // can be []
+      if (Array.isArray(allowedOriginContactForm)) {
+        updatePayload.allowedOriginContactForm = allowedOriginContactForm; // can be []
+      }
+
+      if (Array.isArray(allowedOriginPopup)) {
+        updatePayload.allowedOriginPopup = allowedOriginPopup; // can be []
       }
 
       if (Array.isArray(restrictedUrls)) {
@@ -182,7 +196,8 @@ exports.generateScriptTag = async (req, res) => {
         token,
         userId,
         extensionNumber: user.extensionNumber,
-        allowedOrigin: allowedOrigins, // ✅ array
+        allowedOriginPopup: allowedOriginPopup, // ✅ array
+        allowedOriginContactForm: allowedOriginContactForm, // ✅ array
         restrictedUrls: restrictedUrls,  // 🆕 array
         fieldName: fieldName || "phone"
       });
