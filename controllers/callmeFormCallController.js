@@ -13,36 +13,6 @@ exports.serveFormCallJS = async (req, res) => {
 
   console.log("token", token);
   
-  // const tokenDoc = await ScriptToken.findOne({ token }).lean();
-  // if (!tokenDoc) {
-  //   return res.status(404).send("// Invalid token");
-  // }
-
-  // // 🔒 Origin validation
-  // const normalize = o => o.toLowerCase().replace(/\/+$/, "");
-
-  // const getOrigin = req => {
-  //   const ref = req.get("referer");
-  //   if (!ref) return "";
-  //   try {
-  //     return normalize(new URL(ref).origin);
-  //   } catch {
-  //     return "";
-  //   }
-  // };
-
-  // console.log("Allowed origins:", tokenDoc.allowedOrigin);
-  // console.log("Request origin:", getOrigin(req));
-  // console.log("Referer:", req.get("referer"));
-
-
-  // if (
-  //   tokenDoc.allowedOrigin?.length &&
-  //   !tokenDoc.allowedOrigin.includes(getOrigin(req))
-  // ) {
-  //   return res.status(403).send("// Forbidden origin");
-  // }
-
   // 1. Fetch Token Data
   const tokenDoc = await ScriptToken.findOne({ token }).lean();
   if (!tokenDoc) return res.status(404).send("// Invalid token");

@@ -10,6 +10,11 @@ const scriptTokenSchema = new mongoose.Schema({
   allowedOrigin: {
     type: [String],
     default: [],
+  },
+  fieldName: { type: String, default: "phone" },
+  restrictedUrls: {
+    type: [String],
+    default: [],
   }
 });
 

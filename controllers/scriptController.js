@@ -92,6 +92,13 @@ exports.generateScriptTag = async (req, res) => {
         .filter(Boolean)
       : [];
 
+    const restrictedUrls = Array.isArray(req.body.restrictedUrls)
+      ? req.body.restrictedUrls
+        .map(u => u.trim().toLowerCase())
+        .filter(Boolean)
+      : [];
+
+    const fieldName = req.body.fieldName;
 
     // === 2️⃣ Update popup settings (always save) ===
     user.popupSettings = {
@@ -147,6 +154,14 @@ exports.generateScriptTag = async (req, res) => {
         updatePayload.allowedOrigin = allowedOrigins;
       }
 
+      if (fieldName) {
+        updatePayload.fieldName = fieldName
+      }
+
+      if (restrictedUrls.length > 0) {
+        updatePayload.restrictedUrls = restrictedUrls;
+      }
+
       await ScriptToken.findByIdAndUpdate(tokenDoc._id, updatePayload);
     } else {
       // 🆕 Create new token
@@ -157,15 +172,25 @@ exports.generateScriptTag = async (req, res) => {
         userId,
         extensionNumber: user.extensionNumber,
         allowedOrigin: allowedOrigins, // ✅ array
+        restrictedUrls: restrictedUrls,  // 🆕 array
+        fieldName: fieldName || "phone"
       });
     }
 
+    let scriptUrl;
 
     // === 6️⃣ Build script URL (no .js) ===
-    const scriptUrl = `${FRONTEND_BASE.replace(
+    scriptUrl = `${FRONTEND_BASE.replace(
       /\/+$/,
       ""
     )}/voycell_callback/${token}`;
+
+    if (fieldName) {
+      scriptUrl = `${FRONTEND_BASE.replace(
+        /\/+$/,
+        ""
+      )}/voycell_callback/${token}/${fieldName}`;
+    }
 
     // === 7️⃣ Return <script> tag ===
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -224,6 +249,10 @@ exports.generateFormCallScriptTag = async (req, res) => {
 
       if (restrictedUrls.length > 0) {
         update.restrictedUrls = restrictedUrls;
+      }
+
+      if (fieldName) {
+        update.fieldName = fieldName;
       }
 
       await FormCallScriptToken.findByIdAndUpdate(tokenDoc._id, update);
