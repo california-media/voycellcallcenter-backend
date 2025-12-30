@@ -301,10 +301,15 @@ const userSchema = new Schema(
       calltoaction: { type: String, default: "📞 Call Me" },
       phoneIconColor: { type: String, default: "black" }, // 'black' or 'white'
       // Add this near popupSettings in userSchema
-      allowedOrigin: {
+      allowedOriginPopup: {
         type: [String], // ✅ multiple origins
         default: [],
       },
+      allowedOriginContactForm: {
+        type: [String], // ✅ multiple origins
+        default: [],
+      },
+      fieldName: { type: String, default: "phone" },
     },
 
     extensionNumber: { type: String, default: null },

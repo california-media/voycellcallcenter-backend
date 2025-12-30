@@ -142,6 +142,10 @@ exports.generateScriptTag = async (req, res) => {
     if (allowedOriginContactForm.length > 0) {
       user.popupSettings.allowedOriginContactForm = allowedOriginContactForm;
     }
+
+    if (fieldName) {
+      user.popupSettings.fieldName = fieldName;
+    }
     // === 4️⃣ Save user settings ===
 
     await user.save();
