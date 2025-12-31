@@ -72,6 +72,8 @@ const adminUserRoutes = require("./routes/admin/adminUserRoutes");
 const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
 const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
 const superadmin = require("./routes/admin/superAdminRoutes");
+const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
+
 
 console.log("Setting up Express app...");
 
@@ -206,8 +208,13 @@ app.use(
   zohoContactFetchRoutes
 );
 app.use("/api-key", checkForAuthentication(), apiKeyRoutes);
+
+
 // Admin routes
 app.use("/admin/user/verify", adminUserVerifyRoutes);
+app.use("/send-bulk-email", checkForAuthentication(),
+  checkRole(["superadmin"]),
+  sendBulkEmailRoutes);
 app.use(
   "/admin/user",
   checkForAuthentication(),

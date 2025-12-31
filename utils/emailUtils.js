@@ -670,4 +670,5 @@ module.exports = {
     sendHelpSupportReplyNotification,
     sendEmailChangeVerification,
     sendMagicLinkEmail,
+    transporter,
 };
