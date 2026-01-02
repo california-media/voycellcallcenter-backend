@@ -9,8 +9,6 @@ const {
 // GET all help support tickets
 const getAllHelpSupportTickets = async (req, res) => {
   try {
-    console.log("Fetching all help support tickets");
-
     const {
       page = 1,
       limit = 10,

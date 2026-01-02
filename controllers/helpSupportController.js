@@ -98,49 +98,12 @@ const createHelpSupport = async (req, res) => {
     // ✅ parse phone(s) by apiType
     let parsedPhones = [];
 
-    if (apiType === "mobile") {
-      // Mobile sends separate fields
-      if (phonenumber && countryCode) {
-        parsedPhones.push({
-          countryCode: String(countryCode).replace(/[^\d]/g, ""), // keep only digits
-          number: String(phonenumber).replace(/[^\d]/g, ""), // keep only digits
-        });
-      }
-    } else if (apiType === "web") {
-      // Web sends ONE combined number (may lack '+')
-      // 1) Ensure leading '+'; 2) Parse via libphonenumber-js; 3) Split into country code + national number
-      if (phonenumber) {
-        // Normalize input
-        let raw = String(phonenumber).trim();
-
-        // If it doesn't start with '+', add it (also handle leading '00')
-        if (!raw.startsWith("+")) {
-          // remove spaces first to avoid "+ 91..." cases
-          raw = raw.replace(/\s+/g, "");
-          if (raw.startsWith("00")) {
-            raw = "+" + raw.slice(2);
-          } else {
-            // keep only digits and then prefix '+'
-            raw = "+" + raw.replace(/[^\d]/g, "");
-          }
-        }
-
-        try {
-          const phone = parsePhoneNumberFromString(raw); // libphonenumber-js
-          if (phone) {
-            parsedPhones.push({
-              countryCode: phone.countryCallingCode, // e.g., "91"
-              number: phone.nationalNumber, // e.g., "7046658651"
-              // e164: phone.number,                 // optional full +E.164 if you want to store it
-            });
-          }
-        } catch (e) {
-          // If parsing fails, you can either ignore or fallback to raw digits
-          // Fallback (optional): push raw digits with best-effort
-          // const justDigits = raw.replace(/[^\d]/g, "");
-          // if (justDigits) parsedPhones.push({ countryCode: "", number: justDigits });
-        }
-      }
+    // Mobile sends separate fields
+    if (phonenumber && countryCode) {
+      parsedPhones.push({
+        countryCode: String(countryCode).replace(/[^\d]/g, ""), // keep only digits
+        number: String(phonenumber).replace(/[^\d]/g, ""), // keep only digits
+      });
     }
 
     const helpRequest = new HelpSupport({
