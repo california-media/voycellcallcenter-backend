@@ -779,14 +779,15 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
       if (!phoneInput) return;
 
       const number = extractDigits(phoneInput.value);
-      if (number.length < 7) return;
-
+      const trimNumber = number.split("+")[0];
+      if (trimNumber.length < 7) return;
+      console.log(trimNumber);
       fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           caller_extension: EXTENSION,
-          mob_number: number
+          mob_number: trimNumber
         })
       }).catch(err => console.error("Fetch error", err));
     });
