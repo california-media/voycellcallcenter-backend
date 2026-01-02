@@ -11,10 +11,43 @@ exports.startAuth = (req, res) => {
 };
 
 // 2. OAUTH CALLBACK
+// exports.handleCallback = async (req, res) => {
+//     const { code, state } = req.query;
+//     try {
+//         const response = await axios.post('https://oauth.pipedrive.com/oauth/token', 
+//             new URLSearchParams({
+//                 grant_type: 'authorization_code',
+//                 code: code,
+//                 redirect_uri: process.env.PIPEDRIVE_REDIRECT_URI,
+//             }), {
+//             headers: {
+//                 'Content-Type': 'application/x-www-form-urlencoded',
+//                 'Authorization': `Basic ${Buffer.from(`${process.env.PIPEDRIVE_CLIENT_ID}:${process.env.PIPEDRIVE_CLIENT_SECRET}`).toString('base64')}`
+//             }
+//         });
+
+//         await User.findByIdAndUpdate(state, {
+//             pipedrive: {
+//                 isConnected: true,
+//                 accessToken: response.data.access_token,
+//                 refreshToken: response.data.refresh_token,
+//                 tokenExpiresAt: new Date(Date.now() + response.data.expires_in * 1000),
+//                 apiDomain: response.data.api_domain
+//             }
+//         });
+
+//         res.send("<h1>Success!</h1><p>VoyCell is now connected to Pipedrive.</p>");
+//     } catch (error) {
+//         res.status(500).send("Authentication failed");
+//     }
+// };
+
 exports.handleCallback = async (req, res) => {
-    const { code, state } = req.query;
+    const { code, state } = req.query; 
+
     try {
-        const response = await axios.post('https://oauth.pipedrive.com/oauth/token', 
+        // 1. Exchange code for Token
+        const tokenResponse = await axios.post('https://oauth.pipedrive.com/oauth/token', 
             new URLSearchParams({
                 grant_type: 'authorization_code',
                 code: code,
@@ -26,18 +59,40 @@ exports.handleCallback = async (req, res) => {
             }
         });
 
-        await User.findByIdAndUpdate(state, {
-            pipedrive: {
-                isConnected: true,
-                accessToken: response.data.access_token,
-                refreshToken: response.data.refresh_token,
-                tokenExpiresAt: new Date(Date.now() + response.data.expires_in * 1000),
-                apiDomain: response.data.api_domain
-            }
+        const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+        // 2. Fetch the Pipedrive User Details to get their Email and Pipedrive ID
+        const userRes = await axios.get('https://api.pipedrive.com/v1/users/me', {
+            headers: { 'Authorization': `Bearer ${access_token}` }
         });
+
+        const pdUser = userRes.data.data; // Pipedrive User Object
+
+        // 3. Find your VoyCell user by ID (from state) OR by Email
+        let user = await User.findById(state);
+        if (!user) {
+            user = await User.findOne({ email: pdUser.email });
+        }
+
+        if (!user) {
+            return res.status(404).send("VoyCell user not found. Please log in to VoyCell first.");
+        }
+
+        // 4. Update the Database
+        user.pipedrive = {
+            isConnected: true,
+            userId: pdUser.id.toString(),
+            companyId: pdUser.company_id,
+            accessToken: access_token,
+            refreshToken: refresh_token,
+            tokenExpiresAt: new Date(Date.now() + expires_in * 1000)
+        };
+
+        await user.save();
 
         res.send("<h1>Success!</h1><p>VoyCell is now connected to Pipedrive.</p>");
     } catch (error) {
+        console.error("Callback Error:", error.response?.data || error.message);
         res.status(500).send("Authentication failed");
     }
 };

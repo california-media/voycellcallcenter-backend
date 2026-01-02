@@ -576,7 +576,7 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     tokenDoc.allowedOriginContactForm.length > 0 &&
     !requestOriginMatches(req, tokenDoc.allowedOriginContactForm)
   ) {
-    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     // return res
     //   .status(403)
     //   .send(
