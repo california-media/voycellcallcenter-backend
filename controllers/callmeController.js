@@ -577,14 +577,14 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
   console.log("REQUEST ORIGIN:", getRequestOrigin(req));
   console.log("ALLOWED ORIGINS:", tokenDoc.allowedOriginContactForm);
 
-  if (
-    Array.isArray(tokenDoc.allowedOriginContactForm) &&
-    tokenDoc.allowedOriginContactForm.length > 0 &&
-    !requestOriginMatches(req, tokenDoc.allowedOriginContactForm)
-  ) {
-    return `// ❌ Form script forbidden for this origin`;
+  // if (
+  //   Array.isArray(tokenDoc.allowedOriginContactForm) &&
+  //   tokenDoc.allowedOriginContactForm.length > 0 &&
+  //   !requestOriginMatches(req, tokenDoc.allowedOriginContactForm)
+  // ) {
+  //   return `// ❌ Form script forbidden for this origin`;
 
-  }
+  // }
 
   // Normalize: lowercase, remove spaces, and remove trailing slashes
   const normalizedReferer = rawReferer.toLowerCase().trim().replace(/\/+$/, "");
@@ -604,11 +604,24 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
       // 2. LOGIC: Block if the Current URL is exactly the restricted path
       // OR if the Current URL is part of the restricted path (for local testing)
       // OR if the restricted path is a sub-folder of the current URL
-      const match = cleanCurrentUrl === cleanDBPath ||
-        cleanDBPath.includes(cleanCurrentUrl) ||
-        cleanCurrentUrl.includes(cleanDBPath);
+      // const match = cleanCurrentUrl === cleanDBPath ||
+      //   cleanDBPath.includes(cleanCurrentUrl) ||
+      //   cleanCurrentUrl.includes(cleanDBPath);
 
-      return match;
+      // return match;
+
+      if (Array.isArray(tokenDoc.restrictedUrls) && tokenDoc.restrictedUrls.length > 0) {
+        const pageUrl = getPageUrl(req);
+
+        const isBlocked = tokenDoc.restrictedUrls
+          .map(u => normalizeUrl(u))
+          .includes(pageUrl);
+
+        if (isBlocked) {
+          return `// 🚫 Voycell blocked on this URL: ${pageUrl}`;
+        }
+      }
+
     });
 
     if (isRestricted) {
