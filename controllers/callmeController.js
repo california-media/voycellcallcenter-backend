@@ -734,19 +734,6 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
   const js = `
 (function () {
 
-  const EXTENSION = ${JSON.stringify(tokenDoc.extensionNumber)};
-  const API_URL = ${JSON.stringify(API_BASE + "/api/yeastar/make-call")};
-
-  function extractDigits(v) {
-    return (v || "").replace(/\\\\D/g, "");
-  }
-
-  function findPhoneInput(form) {
-    return (
-      form.querySelector('[name="${fieldName}"]') ||
-      form.querySelector('#${fieldName}')
-    );
-  }
 
   console.log(window.location.href);
 
@@ -765,6 +752,21 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     console.warn("Voycell blocked on this page:", CURRENT_URL);
     return;
   }
+
+  const EXTENSION = ${JSON.stringify(tokenDoc.extensionNumber)};
+  const API_URL = ${JSON.stringify(API_BASE + "/api/yeastar/make-call")};
+
+  function extractDigits(v) {
+    return (v || "").replace(/\\\\D/g, "");
+  }
+
+  function findPhoneInput(form) {
+    return (
+      form.querySelector('[name="${fieldName}"]') ||
+      form.querySelector('#${fieldName}')
+    );
+  }
+
 
   function hookForm(form) {
     if (form.__voycell_bound) return;
