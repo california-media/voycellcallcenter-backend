@@ -73,7 +73,7 @@ const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
 const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
 const superadmin = require("./routes/admin/superAdminRoutes");
 const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
-const chatAgentRoutes = require("./routes/chatAgentRoutes");
+// const chatAgentRoutes = require("./routes/chatAgentRoutes");
 
 
 console.log("Setting up Express app...");
@@ -149,7 +149,7 @@ app.use("/meeting", checkForAuthentication(), meetingRoutes);
 app.use("/getProfileEvent", checkForAuthentication(), getProfileEventRoutes);
 app.use("/addEditTemplete", checkForAuthentication(), addEditTempleteRoutes);
 app.use("/faq", checkForAuthentication(), faqRoutes);
-app.use("/chatAgent", checkForAuthentication(), chatAgentRoutes);
+// app.use("/chatAgent", checkForAuthentication(), chatAgentRoutes);
 
 
 
