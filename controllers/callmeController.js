@@ -2,6 +2,26 @@ const { Buffer } = require("buffer");
 // ① ADD: import your User model
 const User = require("../models/userModel");
 const ScriptToken = require("../models/ScriptToken");
+function normalizeUrl(url = "") {
+  // Remove trailing slashes and convert to lowercase for consistent comparison
+  return url.trim().toLowerCase().replace(/\/+$/, "");
+}
+
+function getPageUrl(req) {
+  // Capture the full referer (e.g., http://localhost:3000/contact-us)
+  const referer = req.get("referer") || req.get("referrer") || "";
+
+  return normalizeUrl(referer);
+}
+
+function getOriginFromUrl(url) {
+  try {
+    return normalizeUrl(new URL(url).origin);
+  } catch {
+    return "";
+  }
+}
+
 
 exports.serveCallmeJS = async (req, res) => {
   const { token, fieldName } = req.params;
@@ -32,8 +52,6 @@ exports.serveCallmeJS = async (req, res) => {
 
 
 async function getPopupJS(req, tokenDoc, user) {
-  // Query params the widget accepts (all optional)
-  // const { token } = req.params;
 
   const {
     themeColor: themeColorQuery = "#4CAF50",
@@ -45,16 +63,12 @@ async function getPopupJS(req, tokenDoc, user) {
     floatingButtonColor: floatingButtonColorQuery = "#4CAF50",
   } = req.query;
 
-  // const tokenDoc = await ScriptToken.findOne({ token }).lean();
-
   if (!tokenDoc || !user) {
     return `// Invalid popup token or user`;
   }
 
 
   const decodedExt = tokenDoc.extensionNumber;
-
-  // const user = await User.findById(tokenDoc.userId).lean();
 
   function normalizeOrigin(origin = "") {
     return origin.toLowerCase().replace(/\/+$/, "");
@@ -103,12 +117,6 @@ async function getPopupJS(req, tokenDoc, user) {
     tokenDoc.allowedOriginPopup.length > 0 &&
     !requestOriginMatches(req, tokenDoc.allowedOriginPopup)
   ) {
-    // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-    // return res
-    //   .status(403)
-    //   .send(
-    //     `// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOriginPopup}`
-    //   );
     return `// ❌ Forbidden: popup not allowed for this origin`;
   }
 
@@ -468,8 +476,6 @@ async function getPopupJS(req, tokenDoc, user) {
 })();
 `;
 
-  // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-  // res.setHeader("Cache-Control", "no-cache");
   return js;
 };
 
@@ -494,8 +500,8 @@ async function servePopupScript(req, res, tokenDoc, user) {
   // Generate popup JS
   const popupJs = await getPopupJS(req, tokenDoc, user);
 
-  // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-  // res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
 
   // 🔥 BOTH scripts sent together
   res.status(200).send(`
@@ -505,18 +511,6 @@ async function servePopupScript(req, res, tokenDoc, user) {
 
 
 async function getFormJS(req, tokenDoc, fieldName, user) {
-  // const { token } = req.params;
-  // const { token, fieldName } = req.params;
-  // if (!fieldName || fieldName.length > 50) {
-  //   return res.status(400).send("// Invalid field name");
-  // }
-
-  // console.log("token", token);
-
-  // 1. Fetch Token Data
-  // const tokenDoc = await ScriptToken.findOne({ token }).lean();
-  // if (!tokenDoc) return res.status(404).send("// Invalid token");
-
   if (!tokenDoc) {
     return `// Invalid form token`;
   }
@@ -553,38 +547,47 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     return "";
   }
 
-  function requestOriginMatches(req, allowedOriginContactForm = []) {
-    if (!Array.isArray(allowedOriginContactForm) || allowedOriginContactForm.length === 0) {
-      return true;
+  // function requestOriginMatches(req, allowedOriginContactForm = []) {
+  //   if (!Array.isArray(allowedOriginContactForm) || allowedOriginContactForm.length === 0) {
+  //     return true;
+  //   }
+
+  //   const requestOrigin = getRequestOrigin(req);
+  //   if (!requestOrigin) return false;
+
+  //   return allowedOriginContactForm
+  //     .map(o => normalizeOrigin(o))
+  //     .includes(requestOrigin);
+  // }
+
+  const pageUrl = getPageUrl(req);
+  const pageOrigin = getOriginFromUrl(pageUrl);
+
+  if (
+    Array.isArray(tokenDoc.allowedOriginContactForm) &&
+    tokenDoc.allowedOriginContactForm.length > 0
+  ) {
+    const allowed = tokenDoc.allowedOriginContactForm
+      .map(o => normalizeUrl(o))
+      .includes(pageOrigin);
+
+    if (!allowed) {
+      return `// ❌ Blocked: origin not allowed (${pageOrigin})`;
     }
-
-    const requestOrigin = getRequestOrigin(req);
-    if (!requestOrigin) return false;
-
-    return allowedOriginContactForm
-      .map(o => normalizeOrigin(o))
-      .includes(requestOrigin);
   }
+
 
   console.log("REQUEST ORIGIN:", getRequestOrigin(req));
   console.log("ALLOWED ORIGINS:", tokenDoc.allowedOriginContactForm);
 
+  // if (
+  //   Array.isArray(tokenDoc.allowedOriginContactForm) &&
+  //   tokenDoc.allowedOriginContactForm.length > 0 &&
+  //   !requestOriginMatches(req, tokenDoc.allowedOriginContactForm)
+  // ) {
+  //   return `// ❌ Form script forbidden for this origin`;
 
-
-  if (
-    Array.isArray(tokenDoc.allowedOriginContactForm) &&
-    tokenDoc.allowedOriginContactForm.length > 0 &&
-    !requestOriginMatches(req, tokenDoc.allowedOriginContactForm)
-  ) {
-    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-    // return res
-    //   .status(403)
-    //   .send(
-    //     `// ❌ Forbidden: this widget token is only valid for ${tokenDoc.allowedOriginContactForm}`
-    //   );
-    return `// ❌ Form script forbidden for this origin`;
-
-  }
+  // }
 
   // Normalize: lowercase, remove spaces, and remove trailing slashes
   const normalizedReferer = rawReferer.toLowerCase().trim().replace(/\/+$/, "");
@@ -592,102 +595,202 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
   console.log("DEBUG: Current Page URL ->", normalizedReferer);
   console.log("DEBUG: Restricted URLs ->", tokenDoc.restrictedUrls);
 
-  // 3. IMPROVED RESTRICTION CHECK
-  if (tokenDoc.restrictedUrls && tokenDoc.restrictedUrls.length > 0) {
-    const isRestricted = tokenDoc.restrictedUrls.some(restrictedPath => {
-      if (!restrictedPath) return false;
+  // // 3. IMPROVED RESTRICTION CHECK
+  // if (tokenDoc.restrictedUrls && tokenDoc.restrictedUrls.length > 0) {
+  //   // const isRestricted = tokenDoc.restrictedUrls.some(restrictedPath => {
+  //   //   if (!restrictedPath) return false;
 
-      // 1. Clean both paths (remove trailing slashes and spaces)
-      const cleanDBPath = restrictedPath.toLowerCase().trim().replace(/\/+$/, "");
-      const cleanCurrentUrl = normalizedReferer.toLowerCase().trim().replace(/\/+$/, "");
-
-      // 2. LOGIC: Block if the Current URL is exactly the restricted path
-      // OR if the Current URL is part of the restricted path (for local testing)
-      // OR if the restricted path is a sub-folder of the current URL
-      const match = cleanCurrentUrl === cleanDBPath ||
-        cleanDBPath.includes(cleanCurrentUrl) ||
-        cleanCurrentUrl.includes(cleanDBPath);
-
-      return match;
-    });
-
-    if (isRestricted) {
-      console.log("🚫 MATCH FOUND: Blocking script for", normalizedReferer);
-      // res.setHeader("Content-Type", "application/javascript");
-      // return res.status(200).send("// Voycell Script: This URL is restricted.");
-      return `// Voycell Script: This URL is restricted.`;
-    }
-  }
+  //   //   // return match;
+  //   //   // 3. IMPROVED RESTRICTION CHECK
 
 
-  // const user = await User.findById(tokenDoc.userId).lean();
-  // if (!user) {
-  //   return res.status(404).send("// User not found");
+  //   // });
+
+  //   // if (isRestricted) {
+  //   //   console.log("🚫 MATCH FOUND: Blocking script for", normalizedReferer);
+  //   //   return `// Voycell Script: This URL is restricted.`;
+  //   // }
+
+  //   const currentPageFullUrl = getPageUrl(req);
+
+  //   console.log("currentPageFullUrl", currentPageFullUrl);
+
+
+  //   if (Array.isArray(tokenDoc.restrictedUrls) && tokenDoc.restrictedUrls.length > 0) {
+  //     // Check if the current full URL matches ANY of the restricted paths exactly
+  //     const isRestricted = tokenDoc.restrictedUrls.some(restrictedPath => {
+  //       return normalizeUrl(restrictedPath) === currentPageFullUrl;
+  //     });
+
+  //     if (isRestricted) {
+  //       console.log("🚫 RESTRICTION TRIGGERED: Blocking script for", currentPageFullUrl);
+  //       return `// 🚫 Voycell blocked on this specific URL: ${currentPageFullUrl}`;
+  //     }
+  //   }
+
   // }
 
   if (!user) {
     return `// User not found for form script`;
   }
 
+  const restrictedUrls = tokenDoc.restrictedUrls;
+
   const API_BASE =
     process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
 
+  //   const js = `
+  //   (function () {
+
+  //     const EXTENSION = ${JSON.stringify(tokenDoc.extensionNumber)};
+  //     const API_URL = ${JSON.stringify(API_BASE + "/api/yeastar/make-call")};
+
+  //     function extractDigits(v) {
+  //       return (v || "").replace(/\\D/g, "");
+  //     }
+
+  //     function findPhoneInput(form) {
+  //     return (
+  //       form.querySelector('[name="${fieldName}"]') ||
+  //       form.querySelector('#${fieldName}')
+  //     );
+  //   }
+
+  //    console.log(window.location.href);
+
+  // const RESTRICTED_URLS = ${JSON.stringify(restrictedUrls || [])};
+
+  // const CURRENT_URL = window.location.href
+  //   .toLowerCase()
+  //   .replace(/\/+$/, "");
+
+  // if (RESTRICTED_URLS.includes(CURRENT_URL)) {
+  //   console.warn("Voycell blocked on this page:", CURRENT_URL);
+  //   return;
+  // }
+
+
+  //     function hookForm(form) {
+  //       if (form.__voycell_bound) return;
+  //       form.__voycell_bound = true;
+
+  //   form.addEventListener("submit", function (e) {
+  //     e.preventDefault(); // ⛔ stop reload
+
+  //     console.log("Form submit detected");
+
+  //     const phoneInput = findPhoneInput(form);
+  //     console.log("Phone input element:", phoneInput);
+
+  //     if (!phoneInput) {
+  //       console.log("Phone input NOT FOUND");
+  //       return;
+  //     }
+
+  //     const number = extractDigits(phoneInput.value);
+  //     console.log("Raw value:", phoneInput.value);
+  //     console.log("Extracted number:", number);
+
+  //     if (number.length < 7) {
+  //       console.log("Number too short");
+  //       return;
+  //     }
+
+  //     console.log("📞 Calling number:", number);
+
+  //     fetch(API_URL, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({
+  //         caller_extension: EXTENSION,
+  //         mob_number: number
+  //       })
+  //     }).catch(err => console.error("Fetch error", err));
+  //   });
+
+
+  //     }
+
+  //     function init() {
+  //       document.querySelectorAll("form").forEach(hookForm);
+
+  //       new MutationObserver(() => {
+  //         document.querySelectorAll("form").forEach(hookForm);
+  //       }).observe(document.body, { childList: true, subtree: true });
+  //     }
+
+  //     if (document.readyState === "loading") {
+  //       document.addEventListener("DOMContentLoaded", init);
+  //     } else {
+  //       init();
+  //     }
+  //   })();
+  //   `;
+
+  // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  // res.setHeader("Cache-Control", "no-cache");
+
+
   const js = `
 (function () {
+
+
+  console.log(window.location.href);
+
+  const RESTRICTED_URLS = ${JSON.stringify(restrictedUrls || [])};
+
+  let CURRENT_URL = window.location.href
+    .toLowerCase()
+    .split("#")[0]
+    .split("?")[0];
+
+  if (CURRENT_URL.endsWith("/")) {
+    CURRENT_URL = CURRENT_URL.slice(0, -1);
+  }
+
+  if (RESTRICTED_URLS.includes(CURRENT_URL)) {
+    console.warn("Voycell blocked on this page:", CURRENT_URL);
+    return;
+  }
+
   const EXTENSION = ${JSON.stringify(tokenDoc.extensionNumber)};
   const API_URL = ${JSON.stringify(API_BASE + "/api/yeastar/make-call")};
 
   function extractDigits(v) {
-    return (v || "").replace(/\\D/g, "");
+    return (v || "").replace(/\\\\D/g, "");
   }
 
   function findPhoneInput(form) {
-  return (
-    form.querySelector('[name="${fieldName}"]') ||
-    form.querySelector('#${fieldName}')
-  );
-}
+    return (
+      form.querySelector('[name="${fieldName}"]') ||
+      form.querySelector('#${fieldName}')
+    );
+  }
 
 
   function hookForm(form) {
     if (form.__voycell_bound) return;
     form.__voycell_bound = true;
 
-form.addEventListener("submit", function (e) {
-  e.preventDefault(); // ⛔ stop reload
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
 
-  console.log("Form submit detected");
+      const phoneInput = findPhoneInput(form);
+      if (!phoneInput) return;
 
-  const phoneInput = findPhoneInput(form);
-  console.log("Phone input element:", phoneInput);
-
-  if (!phoneInput) {
-    console.log("Phone input NOT FOUND");
-    return;
-  }
-
-  const number = extractDigits(phoneInput.value);
-  console.log("Raw value:", phoneInput.value);
-  console.log("Extracted number:", number);
-
-  if (number.length < 7) {
-    console.log("Number too short");
-    return;
-  }
-
-  console.log("📞 Calling number:", number);
-
-  fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      caller_extension: EXTENSION,
-      mob_number: number
-    })
-  }).catch(err => console.error("Fetch error", err));
-});
-
-
+      const number = extractDigits(phoneInput.value);
+      const trimNumber = number.split("+")[0];
+      if (trimNumber.length < 7) return;
+      console.log(trimNumber);
+      fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caller_extension: EXTENSION,
+          mob_number: trimNumber
+        })
+      }).catch(err => console.error("Fetch error", err));
+    });
   }
 
   function init() {
@@ -703,10 +806,99 @@ form.addEventListener("submit", function (e) {
   } else {
     init();
   }
+
 })();
 `;
 
-  // res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-  // res.setHeader("Cache-Control", "no-cache");
+
+  //   const js = `
+  // (function () {
+  //   const EXTENSION = ${JSON.stringify(tokenDoc.extensionNumber)};
+  //   const API_URL = ${JSON.stringify(API_BASE + "/api/yeastar/make-call")};
+
+  //   let isCalling = false;
+  //   let callTimeout = null;
+
+  //   function extractDigits(v) {
+  //     return (v || "").replace(/\\D/g, "");
+  //   }
+
+  //   function findPhoneInput(context = document) {
+  //     return (
+  //       context.querySelector('[name="${fieldName}"]') ||
+  //       context.querySelector('#${fieldName}')
+  //     );
+  //   }
+
+  //   function makeCall(number) {
+  //     if (!number || number.length < 7) return;
+  //     if (isCalling) return; // 🔒 HARD LOCK
+
+  //     isCalling = true;
+  //     clearTimeout(callTimeout);
+
+  //     console.log("📞 Voycell Calling:", number);
+
+  //     fetch(API_URL, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({
+  //         caller_extension: EXTENSION,
+  //         mob_number: number
+  //       })
+  //     })
+  //     .catch(err => console.error("Voycell Fetch Error", err))
+  //     .finally(() => {
+  //       // 🔓 unlock after 3 seconds
+  //       callTimeout = setTimeout(() => {
+  //         isCalling = false;
+  //       }, 3000);
+  //     });
+  //   }
+
+  //   // ✅ FORM SUBMIT (ONLY ONCE)
+  //   function hookForm(form) {
+  //     if (form.__voycell_bound) return;
+  //     form.__voycell_bound = true;
+
+  //     form.addEventListener("submit", function (e) {
+  //       e.preventDefault();
+  //       const phoneInput = findPhoneInput(form);
+  //       if (!phoneInput) return;
+
+  //       makeCall(extractDigits(phoneInput.value));
+  //     });
+  //   }
+
+  //   // ✅ EXPLICIT CLICK TRIGGER
+  //   document.addEventListener("click", function (e) {
+  //     const trigger = e.target.closest("[data-voycell-call]");
+  //     if (!trigger) return;
+
+  //     const form = trigger.closest("form") || document;
+  //     const phoneInput = findPhoneInput(form);
+  //     if (!phoneInput) return;
+
+  //     makeCall(extractDigits(phoneInput.value));
+  //   });
+
+  //   // ✅ MANUAL CALL (React / JS)
+  //   window.voycellCall = function (number) {
+  //     makeCall(extractDigits(number));
+  //   };
+
+  //   function init() {
+  //     document.querySelectorAll("form").forEach(hookForm);
+  //   }
+
+  //   if (document.readyState === "loading") {
+  //     document.addEventListener("DOMContentLoaded", init);
+  //   } else {
+  //     init();
+  //   }
+  // })();
+  // `;
+
+
   return js;
 };
