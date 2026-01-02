@@ -190,6 +190,22 @@ const userSchema = new Schema(
       default: "email", // or leave unset until signup
     },
 
+    // 🔐 Login protection
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+    },
+
+    firstFailedLoginAt: {
+      type: Date,
+      default: null,
+    },
+
+    lockUntil: {
+      type: Date,
+      default: null,
+    },
+
     agentStatus: {
       type: String,
       enum: ["offline", "online", "busy"],
@@ -285,14 +301,19 @@ const userSchema = new Schema(
       calltoaction: { type: String, default: "📞 Call Me" },
       phoneIconColor: { type: String, default: "black" }, // 'black' or 'white'
       // Add this near popupSettings in userSchema
-      // allowedOrigin: {
-      //   type: String,
-      //   default: "", // store the website URL (origin) where the script is allowed, e.g. "https://example.com"
-      // },
-      allowedOrigin: {
+      allowedOriginPopup: {
         type: [String], // ✅ multiple origins
         default: [],
       },
+      allowedOriginContactForm: {
+        type: [String], // ✅ multiple origins
+        default: [],
+      },
+      restrictedUrls: {
+        type: [String], // ✅ multiple URLs
+        default: [],
+      },
+      fieldName: { type: String, default: "phone" },
     },
 
     extensionNumber: { type: String, default: null },
@@ -326,13 +347,6 @@ const userSchema = new Schema(
       type: String,
       // required: true,
     },
-    // password: {
-    //   type: String,
-    //   required: function () {
-    //     // Only require password for local users
-    //     return !this.provider || this.provider === "local";
-    //   },
-    // },
 
     googleId: { type: String }, // ✅ Store Google user ID as String
     googleEmail: String,
@@ -358,6 +372,18 @@ const userSchema = new Schema(
     smtpPass: { type: String },
     smtpSecure: { type: Boolean, default: true },
     smtpConnected: { type: Boolean, default: false },
+
+    pipedrive: {
+      isConnected: { type: Boolean, default: false },
+      userId: String,
+      companyId: Number,
+      accessToken: String,
+      refreshToken: String,
+      tokenExpiresAt: Date
+    },
+
+
+
 
     // zohoId: { type: String },
     // zohoEmail: { type: String },
@@ -392,7 +418,17 @@ const userSchema = new Schema(
         }
       ],
 
-      selectedFormId: String
+      selectedFormId: String,
+
+      // Pages subscribed to receive webhook events
+      subscribedPages: [
+        {
+          pageId: String,
+          pageName: String,
+          pageAccessToken: String,
+          subscribedAt: { type: Date, default: Date.now }
+        }
+      ]
     },
 
 
@@ -581,58 +617,6 @@ userSchema.pre("save", function (next) {
   next();
 });
 
-// userSchema.post("save", async function (doc, next) {
-//   try {
-//     const existingDefault = await Contact.findOne({
-//       createdBy: doc._id,
-//       firstname: { $regex: /^california$/i },
-//       lastname: { $regex: /^media$/i },
-//     });
-
-//     const _id = new mongoose.Types.ObjectId();
-
-//     if (!existingDefault) {
-//       await Contact.create({
-//         _id,
-//         contact_id: _id,
-//         firstname: "California",
-//         lastname: "Media",
-//         emailaddresses: ["web@californiamediauae.com"],
-//         // phonenumbers: ["971 50 875 8109"],
-//         linkedin: "https://linkedin.com/company/californiamedia",
-//         instagram: "https://instagram.com/californiamedia",
-//         telegram: "https://t.me/californiamedia",
-//         twitter: "https://twitter.com/californiamedia",
-//         facebook: "https://facebook.com/californiamedia",
-//         // contactImageURL: "https://example.com/default-contact.jpg",
-//         isFavourite: true,
-//         // tags: [
-//         //   {
-//         //     tag_id: new mongoose.Types.ObjectId(),
-//         //     tag: "Default",
-//         //     emoji: "⭐"
-//         //   }
-//         // ],
-//         activities: [
-//           {
-//             action: "contact_created",
-//             type: "contact",
-//             title: "Default Contact",
-//             description: "Default contact created automatically",
-//             timestamp: new Date(),
-//           },
-//         ],
-//         createdBy: doc._id,
-//       });
-//     }
-
-//     next();
-//   } catch (err) {
-//     console.error("Failed to insert default contact:", err);
-//     next(err);
-//   }
-// });
-
 userSchema.static(
   "matchPasswordAndGenerateToken",
   async function ({ email, phonenumber, countryCode, password }) {
@@ -654,25 +638,6 @@ userSchema.static(
     return createTokenforUser(user);
   }
 );
-
-// userSchema.statics.getNextSerialNumber = async function () {
-//   const result = await Counter.findByIdAndUpdate(
-//     { _id: "serial_counter_user" },
-//     { $inc: { serialCounter: 1 } },
-//     {
-//       new: true,
-//       upsert: true,
-//     }
-//   );
-
-//   console.log("🔍 Counter update result:", result);
-
-//   if (!result || typeof result.serialCounter !== "number") {
-//     throw new Error("Failed to generate a new serial number");
-//   }
-
-//   return result.serialCounter.toString().padStart(1, "0");
-// };
 
 const User = model("User", userSchema);
 module.exports = User;

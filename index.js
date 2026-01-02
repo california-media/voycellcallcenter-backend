@@ -53,6 +53,7 @@ const meetingRoutes = require("./routes/meetingRoutes");
 const hubSpotContactFetchRoutes = require("./routes/hubSpotContactFetchRoutes");
 const zohoContactFetchRoutes = require("./routes/zuhuContactFetchRoutes");
 const zohoAuthRoutes = require("./routes/zohoAuthRoutes");
+const pipedriveRoutes = require("./routes/pipedriveRoutes");
 const metaRoutes = require("./routes/metaRoutes");
 const faqRoutes = require("./routes/faqRoutes");
 const fetchGoogleContacts = require("./routes/googleContactFatchRoutes");
@@ -71,6 +72,8 @@ const adminUserRoutes = require("./routes/admin/adminUserRoutes");
 const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
 const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
 const superadmin = require("./routes/admin/superAdminRoutes");
+const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
+
 
 console.log("Setting up Express app...");
 
@@ -164,6 +167,7 @@ app.use(
 );
 app.use("/disconnect", checkForAuthentication(), disconnectAccountRoutes);
 app.use("/api/zoho", zohoAuthRoutes);
+app.use("/api/pipedrive", pipedriveRoutes);
 app.use(
   "/save-bulk-contacts",
   checkForAuthentication(),
@@ -204,8 +208,13 @@ app.use(
   zohoContactFetchRoutes
 );
 app.use("/api-key", checkForAuthentication(), apiKeyRoutes);
+
+
 // Admin routes
 app.use("/admin/user/verify", adminUserVerifyRoutes);
+app.use("/send-bulk-email", checkForAuthentication(),
+  checkRole(["superadmin"]),
+  sendBulkEmailRoutes);
 app.use(
   "/admin/user",
   checkForAuthentication(),

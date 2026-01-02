@@ -4,7 +4,7 @@ const router = express.Router();
 const { serveCallmeJS } = require('../controllers/callmeController');
 
 // GET /callback_system/callme.js?ext=...&themeColor=...&popupHeading=...&popupText=...&calltoaction=...
-router.get('/:token', serveCallmeJS);
+router.get('/:token/:fieldName?', serveCallmeJS);
 
 
 module.exports = router;

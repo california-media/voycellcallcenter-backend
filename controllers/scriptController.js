@@ -59,7 +59,7 @@
 // controllers/scriptController.js (or your existing file)
 const crypto = require("crypto");
 const ScriptToken = require("../models/ScriptToken");
-const FormCallScriptToken = require("../models/FormCallScriptToken");
+// const FormCallScriptToken = require("../models/FormCallScriptToken");
 const User = require("../models/userModel");
 
 const FRONTEND_BASE =
@@ -86,12 +86,25 @@ exports.generateScriptTag = async (req, res) => {
     //   .trim()
     //   .replace(/\/+$/, "")
     //   .toLowerCase();
-    const allowedOrigins = Array.isArray(req.body.allowedOrigin)
-      ? req.body.allowedOrigin
+    const allowedOriginPopup = Array.isArray(req.body.allowedOriginPopup)
+      ? req.body.allowedOriginPopup
         .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
         .filter(Boolean)
       : [];
 
+    const allowedOriginContactForm = Array.isArray(req.body.allowedOriginContactForm)
+      ? req.body.allowedOriginContactForm
+        .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
+        .filter(Boolean)
+      : [];
+
+    const restrictedUrls = Array.isArray(req.body.restrictedUrls)
+      ? req.body.restrictedUrls
+        .map(u => u.trim().toLowerCase())
+        .filter(Boolean)
+      : [];
+
+    const fieldName = req.body.fieldName;
 
     // === 2️⃣ Update popup settings (always save) ===
     user.popupSettings = {
@@ -122,8 +135,21 @@ exports.generateScriptTag = async (req, res) => {
     };
 
 
-    if (allowedOrigins.length > 0) {
-      user.popupSettings.allowedOrigin = allowedOrigins;
+    if (allowedOriginPopup.length > 0) {
+      user.popupSettings.allowedOriginPopup = allowedOriginPopup;
+    }
+
+    if (allowedOriginContactForm.length > 0) {
+      user.popupSettings.allowedOriginContactForm = allowedOriginContactForm;
+    }
+    console.log();
+
+    if (restrictedUrls.length > 0) {
+      user.popupSettings.restrictedUrls = restrictedUrls;
+    }
+
+    if (fieldName) {
+      user.popupSettings.fieldName = fieldName;
     }
     // === 4️⃣ Save user settings ===
 
@@ -143,8 +169,31 @@ exports.generateScriptTag = async (req, res) => {
       };
 
       // ✅ If allowedOrigins provided, overwrite array
-      if (allowedOrigins.length > 0) {
-        updatePayload.allowedOrigin = allowedOrigins;
+      // if (allowedOrigins.length > 0) {
+      //   updatePayload.allowedOrigin = allowedOrigins;
+      // }
+
+
+
+      // if (restrictedUrls.length > 0) {
+      //   updatePayload.restrictedUrls = restrictedUrls;
+      // }
+
+      if (Array.isArray(allowedOriginContactForm)) {
+        updatePayload.allowedOriginContactForm = allowedOriginContactForm; // can be []
+      }
+
+      if (Array.isArray(allowedOriginPopup)) {
+        updatePayload.allowedOriginPopup = allowedOriginPopup; // can be []
+      }
+
+      if (Array.isArray(restrictedUrls)) {
+        updatePayload.restrictedUrls = restrictedUrls; // can be []
+      }
+
+
+      if (fieldName) {
+        updatePayload.fieldName = fieldName
       }
 
       await ScriptToken.findByIdAndUpdate(tokenDoc._id, updatePayload);
@@ -156,16 +205,27 @@ exports.generateScriptTag = async (req, res) => {
         token,
         userId,
         extensionNumber: user.extensionNumber,
-        allowedOrigin: allowedOrigins, // ✅ array
+        allowedOriginPopup: allowedOriginPopup, // ✅ array
+        allowedOriginContactForm: allowedOriginContactForm, // ✅ array
+        restrictedUrls: restrictedUrls,  // 🆕 array
+        fieldName: fieldName || "phone"
       });
     }
 
+    let scriptUrl;
 
     // === 6️⃣ Build script URL (no .js) ===
-    const scriptUrl = `${FRONTEND_BASE.replace(
+    scriptUrl = `${FRONTEND_BASE.replace(
       /\/+$/,
       ""
     )}/voycell_callback/${token}`;
+
+    if (fieldName) {
+      scriptUrl = `${FRONTEND_BASE.replace(
+        /\/+$/,
+        ""
+      )}/voycell_callback/${token}/${fieldName}`;
+    }
 
     // === 7️⃣ Return <script> tag ===
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -195,8 +255,15 @@ exports.generateFormCallScriptTag = async (req, res) => {
     // normalize allowed origins
     const allowedOrigins = Array.isArray(req.body.allowedOrigin)
       ? req.body.allowedOrigin
-          .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
-          .filter(Boolean)
+        .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
+        .filter(Boolean)
+      : [];
+
+    // 🆕 ADD THIS: normalize restricted URLs
+    const restrictedUrls = Array.isArray(req.body.restrictedUrls)
+      ? req.body.restrictedUrls
+        .map(u => u.trim().toLowerCase())
+        .filter(Boolean)
       : [];
 
     // 🔒 One stable token per user (recommended)
@@ -215,6 +282,14 @@ exports.generateFormCallScriptTag = async (req, res) => {
         update.allowedOrigin = allowedOrigins;
       }
 
+      if (restrictedUrls.length > 0) {
+        update.restrictedUrls = restrictedUrls;
+      }
+
+      if (fieldName) {
+        update.fieldName = fieldName;
+      }
+
       await FormCallScriptToken.findByIdAndUpdate(tokenDoc._id, update);
     } else {
       token = crypto.randomBytes(16).toString("hex");
@@ -224,13 +299,17 @@ exports.generateFormCallScriptTag = async (req, res) => {
         userId,
         extensionNumber: user.extensionNumber,
         allowedOrigin: allowedOrigins,
+        restrictedUrls: restrictedUrls
       });
     }
+
+    const dummyFieldName = "phone"; // 👈 default dummy name
 
     const scriptUrl = `${FRONTEND_BASE.replace(
       /\/+$/,
       ""
-    )}/voycell_form_call/${token}`;
+    )}/voycell_form_call/${token}/${dummyFieldName}`;
+
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(`<script src="${scriptUrl}"></script>`);

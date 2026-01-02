@@ -312,252 +312,6 @@ const Lead = require("../models/leadModel");
 const User = require("../models/userModel");
 require("dotenv").config();
 
-/* ================= DOMAIN → DEFAULT COUNTRY CODE ================= */
-const DOMAIN_COUNTRY_CODE_MAP = {
-  // 🌍 GLOBAL / GENERIC
-  com: "1",
-  net: "1",
-  org: "1",
-
-  // 🇮🇳 INDIA
-  in: "91",
-
-  // 🇺🇸 USA / CANADA
-  us: "1",
-  ca: "1",
-
-  // 🇬🇧 UNITED KINGDOM
-  uk: "44",
-
-  // 🇦🇺 AUSTRALIA
-  au: "61",
-
-  // 🇳🇿 NEW ZEALAND
-  nz: "64",
-
-  // 🇦🇪 UAE
-  ae: "971",
-
-  // 🇸🇦 SAUDI ARABIA
-  sa: "966",
-
-  // 🇶🇦 QATAR
-  qa: "974",
-
-  // 🇰🇼 KUWAIT
-  kw: "965",
-
-  // 🇴🇲 OMAN
-  om: "968",
-
-  // 🇧🇭 BAHRAIN
-  bh: "973",
-
-  // 🇸🇬 SINGAPORE
-  sg: "65",
-
-  // 🇲🇾 MALAYSIA
-  my: "60",
-
-  // 🇮🇩 INDONESIA
-  id: "62",
-
-  // 🇵🇭 PHILIPPINES
-  ph: "63",
-
-  // 🇹🇭 THAILAND
-  th: "66",
-
-  // 🇻🇳 VIETNAM
-  vn: "84",
-
-  // 🇯🇵 JAPAN
-  jp: "81",
-
-  // 🇰🇷 SOUTH KOREA
-  kr: "82",
-
-  // 🇨🇳 CHINA
-  cn: "86",
-
-  // 🇭🇰 HONG KONG
-  hk: "852",
-
-  // 🇹🇼 TAIWAN
-  tw: "886",
-
-  // 🇪🇺 EUROPE (DEFAULT → GERMANY)
-  eu: "49",
-
-  // 🇩🇪 GERMANY
-  de: "49",
-
-  // 🇫🇷 FRANCE
-  fr: "33",
-
-  // 🇮🇹 ITALY
-  it: "39",
-
-  // 🇪🇸 SPAIN
-  es: "34",
-
-  // 🇵🇹 PORTUGAL
-  pt: "351",
-
-  // 🇳🇱 NETHERLANDS
-  nl: "31",
-
-  // 🇧🇪 BELGIUM
-  be: "32",
-
-  // 🇦🇹 AUSTRIA
-  at: "43",
-
-  // 🇨🇭 SWITZERLAND
-  ch: "41",
-
-  // 🇸🇪 SWEDEN
-  se: "46",
-
-  // 🇳🇴 NORWAY
-  no: "47",
-
-  // 🇩🇰 DENMARK
-  dk: "45",
-
-  // 🇫🇮 FINLAND
-  fi: "358",
-
-  // 🇮🇪 IRELAND
-  ie: "353",
-
-  // 🇵🇱 POLAND
-  pl: "48",
-
-  // 🇨🇿 CZECH REPUBLIC
-  cz: "420",
-
-  // 🇭🇺 HUNGARY
-  hu: "36",
-
-  // 🇬🇷 GREECE
-  gr: "30",
-
-  // 🇷🇴 ROMANIA
-  ro: "40",
-
-  // 🇷🇺 RUSSIA
-  ru: "7",
-
-  // 🇺🇦 UKRAINE
-  ua: "380",
-
-  // 🇹🇷 TURKEY
-  tr: "90",
-
-  // 🇮🇱 ISRAEL
-  il: "972",
-
-  // 🇿🇦 SOUTH AFRICA
-  za: "27",
-
-  // 🇳🇬 NIGERIA
-  ng: "234",
-
-  // 🇰🇪 KENYA
-  ke: "254",
-
-  // 🇪🇬 EGYPT
-  eg: "20",
-
-  // 🇲🇦 MOROCCO
-  ma: "212",
-
-  // 🇧🇷 BRAZIL
-  br: "55",
-
-  // 🇦🇷 ARGENTINA
-  ar: "54",
-
-  // 🇨🇱 CHILE
-  cl: "56",
-
-  // 🇨🇴 COLOMBIA
-  co: "57",
-
-  // 🇲🇽 MEXICO
-  mx: "52",
-
-  // 🇵🇪 PERU
-  pe: "51",
-
-  // 🇻🇪 VENEZUELA
-  ve: "58",
-
-  // 🇨🇷 COSTA RICA
-  cr: "506",
-
-  // 🇵🇦 PANAMA
-  pa: "507",
-
-  // 🇩🇴 DOMINICAN REPUBLIC
-  do: "1",
-
-  // 🇨🇺 CUBA
-  cu: "53",
-
-  // 🇮🇸 ICELAND
-  is: "354",
-
-  // 🇱🇹 LITHUANIA
-  lt: "370",
-
-  // 🇱🇻 LATVIA
-  lv: "371",
-
-  // 🇪🇪 ESTONIA
-  ee: "372",
-
-  // 🇸🇰 SLOVAKIA
-  sk: "421",
-
-  // 🇸🇮 SLOVENIA
-  si: "386",
-
-  // 🇭🇷 CROATIA
-  hr: "385",
-
-  // 🇧🇬 BULGARIA
-  bg: "359",
-
-  // 🇷🇸 SERBIA
-  rs: "381",
-
-  // 🇧🇩 BANGLADESH
-  bd: "880",
-
-  // 🇱🇰 SRI LANKA
-  lk: "94",
-
-  // 🇳🇵 NEPAL
-  np: "977",
-
-  // 🇵🇰 PAKISTAN
-  pk: "92",
-
-  // 🇦🇫 AFGHANISTAN
-  af: "93",
-
-  // 🇲🇲 MYANMAR
-  mm: "95",
-
-  // 🇰🇭 CAMBODIA
-  kh: "855",
-
-  // 🇱🇦 LAOS
-  la: "856",
-};
-
 
 /* ================= GLOBAL DUPLICATE SET BUILDER ================= */
 const buildGlobalDuplicateSets = async (userId) => {
@@ -641,14 +395,37 @@ const isGlobalDuplicate = ({
 };
 
 /* ================= STEP 1: REDIRECT ================= */
+// exports.redirectToZoho = (req, res) => {
+//   const { domain = "com", type = "contact", defaultCountryCode = "971" } = req.body;
+//   const userId = req.user._id;
+
+//   const scope =
+//     type === "lead"
+//       ? "ZohoCRM.modules.leads.READ"
+//       : "ZohoCRM.modules.contacts.READ";
+
+//   const params = querystring.stringify({
+//     scope,
+//     client_id: process.env.ZOHO_CLIENT_ID,
+//     response_type: "code",
+//     access_type: "offline",
+//     redirect_uri: process.env.ZOHO_REDIRECT_URI2,
+//     state: `${userId}::${domain}::${type}::${defaultCountryCode}`,
+//   });
+
+//   return res.json({
+//     status: "success",
+//     url: `https://accounts.zoho.${domain}/oauth/v2/auth?${params}`,
+//   });
+// };
+
 exports.redirectToZoho = (req, res) => {
-  const { domain = "com", type = "contact", defaultCountryCode = "971" } = req.body;
+  const { type = "contact", defaultCountryCode = "971" } = req.body; // Removed domain
   const userId = req.user._id;
 
-  const scope =
-    type === "lead"
-      ? "ZohoCRM.modules.leads.READ"
-      : "ZohoCRM.modules.contacts.READ";
+  const scope = type === "lead"
+    ? "ZohoCRM.modules.leads.READ"
+    : "ZohoCRM.modules.contacts.READ";
 
   const params = querystring.stringify({
     scope,
@@ -656,28 +433,51 @@ exports.redirectToZoho = (req, res) => {
     response_type: "code",
     access_type: "offline",
     redirect_uri: process.env.ZOHO_REDIRECT_URI2,
-    state: `${userId}::${domain}::${type}::${defaultCountryCode}`,
+    // Note: We removed domain from the state string
+    state: `${userId}::${type}::${defaultCountryCode}`,
   });
 
   return res.json({
     status: "success",
-    url: `https://accounts.zoho.${domain}/oauth/v2/auth?${params}`,
+    // Always start at .com
+    url: `https://accounts.zoho.com/oauth/v2/auth?${params}`,
   });
 };
 
 /* ================= STEP 2: CALLBACK ================= */
 exports.handleZohoCallback = async (req, res) => {
-  const { code, state } = req.query;
+  const { code, state, "accounts-server": accountsServer } = req.query;
   if (!code) return res.status(400).send("Missing code");
 
-  const [userId, domain, type, defaultCountryCode] = state.split("::");
-  // const defaultCountryCode =
-  //   DOMAIN_COUNTRY_CODE_MAP[domain] || "971";
+  const [userId, type, defaultCountryCode] = state.split("::");
 
   try {
     /* ===== TOKEN ===== */
+    // const tokenRes = await axios.post(
+    //   `https://accounts.zoho.${domain}/oauth/v2/token`,
+    //   querystring.stringify({
+    //     grant_type: "authorization_code",
+    //     client_id: process.env.ZOHO_CLIENT_ID,
+    //     client_secret: process.env.ZOHO_CLIENT_SECRET,
+    //     redirect_uri: process.env.ZOHO_REDIRECT_URI2,
+    //     code,
+    //   }),
+    //   { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    // );
+
+    // const accessToken = tokenRes.data.access_token;
+
+    // /* ===== FETCH ZOHO DATA ===== */
+    // const zohoUrl =
+    //   type === "lead"
+    //     ? `https://www.zohoapis.${domain}/crm/v2/Leads`
+    //     : `https://www.zohoapis.${domain}/crm/v2/Contacts`;
+
+    // 3. USE the dynamic accountsServer for token exchange
+    const tokenUrl = `${accountsServer}/oauth/v2/token`;
+
     const tokenRes = await axios.post(
-      `https://accounts.zoho.${domain}/oauth/v2/token`,
+      tokenUrl,
       querystring.stringify({
         grant_type: "authorization_code",
         client_id: process.env.ZOHO_CLIENT_ID,
@@ -688,13 +488,14 @@ exports.handleZohoCallback = async (req, res) => {
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
 
+    // 4. USE api_domain from the response for the API calls
+    // tokenRes.data.api_domain will be something like "https://www.zohoapis.eu"
+    const apiBase = tokenRes.data.api_domain;
     const accessToken = tokenRes.data.access_token;
 
-    /* ===== FETCH ZOHO DATA ===== */
-    const zohoUrl =
-      type === "lead"
-        ? `https://www.zohoapis.${domain}/crm/v2/Leads`
-        : `https://www.zohoapis.${domain}/crm/v2/Contacts`;
+    const zohoUrl = type === "lead"
+      ? `${apiBase}/crm/v2/Leads`
+      : `${apiBase}/crm/v2/Contacts`;
 
     const zohoRes = await axios.get(zohoUrl, {
       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },

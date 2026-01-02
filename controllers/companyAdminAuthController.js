@@ -869,6 +869,19 @@ const unifiedLogin = async (req, res) => {
             .json({ status: "error", message: "User not found" });
         }
 
+        // 🚫 Check if account is locked
+        if (user.lockUntil && user.lockUntil > new Date()) {
+          const remainingMinutes = Math.ceil(
+            (user.lockUntil - new Date()) / (1000 * 60)
+          );
+
+          return res.status(403).json({
+            status: "error",
+            message: `Account locked due to multiple failed attempts. Try again in ${remainingMinutes} minutes.`,
+          });
+        }
+
+
         // If logging in by email, require email verification
         if (trimmedEmail && !user.isVerified) {
           return res.status(403).json({
@@ -905,12 +918,48 @@ const unifiedLogin = async (req, res) => {
           .update(password)
           .digest("hex");
 
+        // if (hash !== user.password) {
+        //   return res.status(401).json({
+        //     status: "error",
+        //     message: "Invalid credentials",
+        //   });
+        // }
+
+        // ❌ Wrong password handling
         if (hash !== user.password) {
+          const now = new Date();
+
+          // If first failed attempt OR last failed attempt was more than 2 min ago
+          if (
+            !user.firstFailedLoginAt ||
+            now - user.firstFailedLoginAt > 2 * 60 * 1000
+          ) {
+            user.failedLoginAttempts = 1;
+            user.firstFailedLoginAt = now;
+          } else {
+            user.failedLoginAttempts += 1;
+          }
+
+          // 🔒 Lock account after 5 failed attempts
+          if (user.failedLoginAttempts >= 5) {
+            user.lockUntil = new Date(now.getTime() + 15 * 60 * 1000); // 15 min lock
+            await user.save();
+
+            return res.status(403).json({
+              status: "error",
+              message:
+                "Too many failed login attempts. Your account is locked for 15 minutes.",
+            });
+          }
+
+          await user.save();
+
           return res.status(401).json({
             status: "error",
             message: "Invalid credentials",
           });
         }
+
 
         // ✅ CREATE NEW SESSION (DESTROYS OLD LOGIN)
         const newSessionId = randomBytes(32).toString("hex");
@@ -918,6 +967,10 @@ const unifiedLogin = async (req, res) => {
         user.activeSessionId = newSessionId;
         user.isActive = true;
         user.lastSeen = new Date();
+        // ✅ Reset failed login attempts
+        user.failedLoginAttempts = 0;
+        user.firstFailedLoginAt = null;
+        user.lockUntil = null;
         await user.save();
         console.log(newSessionId);
 

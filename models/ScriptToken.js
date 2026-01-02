@@ -7,7 +7,16 @@ const scriptTokenSchema = new mongoose.Schema({
   extensionNumber: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
   // allowedOrigin: { type: String, default: "" }, // e.g. "https://example.com"
-  allowedOrigin: {
+  allowedOriginPopup: {
+    type: [String],
+    default: [],
+  },
+  allowedOriginContactForm: {
+    type: [String],
+    default: [],
+  },
+  fieldName: { type: String, default: "phone" },
+  restrictedUrls: {
     type: [String],
     default: [],
   }

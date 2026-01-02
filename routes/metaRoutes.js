@@ -23,44 +23,51 @@ router.get(
  * ❌ NO AUTH MIDDLEWARE HERE
  * Facebook servers call this API
  */
-router.get(
-  "/callback",
-  metaController.facebookCallback
-);
+router.get("/callback", metaController.facebookCallback);
 
 /**
  * ===============================
- * 3. Get Facebook Pages
+ * 3. Get Facebook Lead Forms
  * ===============================
  */
-router.get(
-  "/pages",
-  checkForAuthentication(),
-  metaController.getFacebookPages
-);
+router.get("/pages", checkForAuthentication(), metaController.getFacebookPages);
 
 /**
  * ===============================
- * 4. Save Selected Page
+ * 4. Subscribe/Unsubscribe Page for Webhooks
  * ===============================
  */
 router.post(
-  "/pages",
+  "/pages/subscribe",
   checkForAuthentication(),
-  metaController.saveFacebookPage
+  metaController.subscribeToPage
 );
 
 /**
  * ===============================
- * 5. Pabbly → Lead Webhook
+ * 5. Import Leads from Selected Form
  * ===============================
- * ❌ NO AUTH
- * ✅ Verified via secret
  */
 router.post(
-  "/webhooks/pabbly/meta-lead",
-  verifyPabbly,
-  metaController.metaLeadWebhook
+  "/import-leads",
+  checkForAuthentication(),
+  metaController.importExistingLeads
 );
+
+/**
+ * ===============================
+ * 5. Webhook Verification (GET)
+ * Facebook calls this to verify your endpoint
+ * ===============================
+ */
+router.get("/webhook", metaController.verifyWebhook);
+
+/**
+ * ===============================
+ * 6. Lead Webhook (POST)
+ * Facebook sends lead data here when new lead is created
+ * ===============================
+ */
+router.post("/webhook", metaController.handleLeadWebhook);
 
 module.exports = router;
