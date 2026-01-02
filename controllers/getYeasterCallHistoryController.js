@@ -1329,6 +1329,8 @@ exports.getMonthlyCallGraph = async (req, res) => {
 
 exports.addFormDataAfterCallEnd = async (req, res) => {
   try {
+    console.log("data saving...");
+    
     const { phoneNumbers, firstname, lastname, status, note, meeting } =
       req.body;
     console.log("status sent", status);
