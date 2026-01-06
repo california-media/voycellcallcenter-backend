@@ -7,7 +7,6 @@ const { logActivityToContact } = require("../utils/activityLogger");
 const { createZoomMeeting } = require("../utils/zoomCalendar");
 const axios = require("axios");
 
-
 /**
  * @route   GET /meeting/getAll
  * @desc    Get all meetings for a contact with optional sorting
@@ -129,7 +128,7 @@ exports.addOrUpdateMeeting = async (req, res) => {
       meetingLocation,
       timezone = "UTC",
     } = req.body;
-
+    
     const user_id = req.user._id;
     const user = await User.findById(user_id);
 
@@ -207,7 +206,6 @@ exports.addOrUpdateMeeting = async (req, res) => {
       }
     }
 
-
     let meetingObj = {};
     const isUpdate = !!meeting_id;
 
@@ -251,27 +249,38 @@ exports.addOrUpdateMeeting = async (req, res) => {
       // }
 
       if (oldType === "offline" && meetingType === "online") {
-        if (!existingMeeting.meetingStartDate || !existingMeeting.meetingStartTime) {
+        if (
+          !existingMeeting.meetingStartDate ||
+          !existingMeeting.meetingStartTime
+        ) {
           return res.status(400).json({
             status: "error",
-            message: "Meeting date and time are required to create an online meeting",
+            message:
+              "Meeting date and time are required to create an online meeting",
           });
         }
         if (meetingProvider === "google") {
-          const link = await createGoogleMeetEvent(user, existingMeeting, timezone);
+          const link = await createGoogleMeetEvent(
+            user,
+            existingMeeting,
+            timezone
+          );
           existingMeeting.meetingLink = link;
           existingMeeting.meetingProvider = "google";
         }
 
         if (meetingProvider === "zoom") {
-          const zoomData = await createZoomMeeting(user, existingMeeting, timezone);
+          const zoomData = await createZoomMeeting(
+            user,
+            existingMeeting,
+            timezone
+          );
           existingMeeting.meetingLink = zoomData.joinUrl;
           existingMeeting.meetingProvider = "zoom";
         }
 
         existingMeeting.meetingLocation = undefined;
       }
-
 
       if (oldType === "online" && meetingType === "offline") {
         existingMeeting.meetingLink = undefined;
@@ -290,11 +299,19 @@ exports.addOrUpdateMeeting = async (req, res) => {
           existingMeeting.meetingLink = undefined;
 
           if (meetingProvider === "google") {
-            const link = await createGoogleMeetEvent(user, existingMeeting, timezone);
+            const link = await createGoogleMeetEvent(
+              user,
+              existingMeeting,
+              timezone
+            );
             existingMeeting.meetingLink = link;
             existingMeeting.meetingProvider = "google";
           } else if (meetingProvider === "zoom") {
-            const zoomData = await createZoomMeeting(user, existingMeeting, timezone);
+            const zoomData = await createZoomMeeting(
+              user,
+              existingMeeting,
+              timezone
+            );
             existingMeeting.meetingLink = zoomData.joinUrl;
             existingMeeting.meetingProvider = "zoom";
           }
@@ -357,7 +374,6 @@ exports.addOrUpdateMeeting = async (req, res) => {
         }
       }
 
-
       record.meetings.push(meetingObj);
     }
 
@@ -365,7 +381,7 @@ exports.addOrUpdateMeeting = async (req, res) => {
 
     const activityTitle = isUpdate
       ? record.meetings.find((m) => m.meeting_id.toString() === meeting_id)
-        ?.meetingTitle
+          ?.meetingTitle
       : meetingObj.meetingTitle;
 
     // =============================================================
@@ -628,8 +644,6 @@ exports.deleteMeeting = async (req, res) => {
       createdBy: req.user._id,
       "meetings.meeting_id": meeting_id,
     });
-
-    console.log(contact);
 
     if (!contact) {
       return res.status(404).json({
