@@ -128,19 +128,7 @@ exports.addOrUpdateMeeting = async (req, res) => {
       meetingLocation,
       timezone = "UTC",
     } = req.body;
-    console.log({
-      category, // "contact" or "lead"
-      contact_id,
-      meeting_id,
-      meetingTitle,
-      meetingDescription,
-      meetingStartDate,
-      meetingStartTime,
-      meetingType,
-      meetingProvider,
-      meetingLocation,
-      timezone,
-    });
+   
     const user_id = req.user._id;
     const user = await User.findById(user_id);
 
