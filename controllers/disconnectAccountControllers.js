@@ -23,13 +23,11 @@ exports.disconnectGoogle = async (req, res) => {
 
     res.json({ status: "success", message: "Google Disconnected" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        status: "error",
-        message: "Failed to disconnect Google account",
-        error: error.message,
-      });
+    res.status(500).json({
+      status: "error",
+      message: "Failed to disconnect Google account",
+      error: error.message,
+    });
   }
 };
 
@@ -55,13 +53,11 @@ exports.disconnectMicrosoft = async (req, res) => {
 
     res.json({ status: "success", message: "Microsoft Disconnected" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        status: "error",
-        message: "Failed to disconnect Microsoft account",
-        error: error.message,
-      });
+    res.status(500).json({
+      status: "error",
+      message: "Failed to disconnect Microsoft account",
+      error: error.message,
+    });
   }
 };
 
@@ -134,6 +130,44 @@ exports.disconnectMeta = async (req, res) => {
     res.status(500).json({
       status: "error",
       message: "Failed to disconnect Facebook",
+      error: error.message,
+    });
+  }
+};
+
+exports.disconnectZoom = async (req, res) => {
+  const userId = req.user._id;
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ status: "error", message: "User not found" });
+    }
+
+    // Clear Zoom fields
+    user.zoom = {
+      isConnected: false,
+      accountId: undefined,
+      userId: undefined,
+      email: undefined,
+      accessToken: undefined,
+      refreshToken: undefined,
+      tokenExpiresAt: undefined,
+    };
+
+    await user.save();
+
+    res.json({
+      status: "success",
+      message: "Zoom Disconnected",
+    });
+  } catch (error) {
+    console.error("Zoom Disconnect Error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to disconnect Zoom",
       error: error.message,
     });
   }

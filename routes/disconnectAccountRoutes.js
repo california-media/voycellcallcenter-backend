@@ -28,4 +28,10 @@ router.post(
   disconnectAccountControllers.disconnectMeta
 );
 
+router.post(
+  "/zoom",
+  checkAccountStatus,
+  disconnectAccountControllers.disconnectZoom
+);
+
 module.exports = router;
