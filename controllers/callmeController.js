@@ -592,6 +592,7 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     "  var API_URL = '" + apiUrl + "';",
     "  var FIELD_NAME = '" + fieldName + "';",
     "",
+    "  console.log('${restrictedUrlsJson}');",
     "  var isProcessing = false;",
     "",
     "  function getNormalizedUrl() {",

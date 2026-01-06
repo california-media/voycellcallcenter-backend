@@ -4,6 +4,9 @@ const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
 const { createGoogleMeetEvent } = require("../utils/googleCalendar.js");
 const { logActivityToContact } = require("../utils/activityLogger");
+const { createZoomMeeting } = require("../utils/zoomCalendar");
+const axios = require("axios");
+
 
 /**
  * @route   GET /meeting/getAll
@@ -122,6 +125,7 @@ exports.addOrUpdateMeeting = async (req, res) => {
       meetingStartDate,
       meetingStartTime,
       meetingType,
+      meetingProvider,
       meetingLocation,
       timezone = "UTC",
     } = req.body;
@@ -174,14 +178,35 @@ exports.addOrUpdateMeeting = async (req, res) => {
     }
 
     // Google validation
+    // if (meetingType === "online") {
+    //   if (!user?.googleAccessToken || !user?.googleRefreshToken) {
+    //     return res.status(400).json({
+    //       status: "error",
+    //       message: "Connect Google Account for online meeting scheduling.",
+    //     });
+    //   }
+    // }
+
     if (meetingType === "online") {
-      if (!user?.googleAccessToken || !user?.googleRefreshToken) {
-        return res.status(400).json({
-          status: "error",
-          message: "Connect Google Account for online meeting scheduling.",
-        });
+      if (meetingProvider === "google") {
+        if (!user?.googleAccessToken || !user?.googleRefreshToken) {
+          return res.status(400).json({
+            status: "error",
+            message: "Connect Google account to create Google Meet.",
+          });
+        }
+      }
+
+      if (meetingProvider === "zoom") {
+        if (!user?.zoom?.isConnected || !user?.zoom?.accessToken) {
+          return res.status(400).json({
+            status: "error",
+            message: "Connect Zoom account to create Zoom meeting.",
+          });
+        }
       }
     }
+
 
     let meetingObj = {};
     const isUpdate = !!meeting_id;
@@ -211,32 +236,77 @@ exports.addOrUpdateMeeting = async (req, res) => {
       if (meetingType) existingMeeting.meetingType = meetingType;
 
       // 🔄 online/offline switching logic
+      // if (oldType === "offline" && meetingType === "online") {
+      //   try {
+      //     const generatedLink = await createGoogleMeetEvent(
+      //       user,
+      //       existingMeeting,
+      //       timezone
+      //     );
+      //     if (generatedLink) existingMeeting.meetingLink = generatedLink;
+      //   } catch (err) {
+      //     console.error("Google Meet creation failed:", err);
+      //   }
+      //   existingMeeting.meetingLocation = undefined;
+      // }
+
       if (oldType === "offline" && meetingType === "online") {
-        try {
-          const generatedLink = await createGoogleMeetEvent(
-            user,
-            existingMeeting,
-            timezone
-          );
-          if (generatedLink) existingMeeting.meetingLink = generatedLink;
-        } catch (err) {
-          console.error("Google Meet creation failed:", err);
+        if (!existingMeeting.meetingStartDate || !existingMeeting.meetingStartTime) {
+          return res.status(400).json({
+            status: "error",
+            message: "Meeting date and time are required to create an online meeting",
+          });
         }
+        if (meetingProvider === "google") {
+          const link = await createGoogleMeetEvent(user, existingMeeting, timezone);
+          existingMeeting.meetingLink = link;
+          existingMeeting.meetingProvider = "google";
+        }
+
+        if (meetingProvider === "zoom") {
+          const zoomData = await createZoomMeeting(user, existingMeeting, timezone);
+          existingMeeting.meetingLink = zoomData.joinUrl;
+          existingMeeting.meetingProvider = "zoom";
+        }
+
         existingMeeting.meetingLocation = undefined;
       }
 
+
       if (oldType === "online" && meetingType === "offline") {
         existingMeeting.meetingLink = undefined;
+        existingMeeting.meetingProvider = undefined;
         existingMeeting.meetingLocation = meetingLocation || "";
       }
 
+      // if (oldType === "online" && meetingType === "online") {
+      //   delete existingMeeting.meetingLocation;
+      // }
+
       if (oldType === "online" && meetingType === "online") {
+        // If provider is changing
+        if (existingMeeting.meetingProvider !== meetingProvider) {
+          // Remove old meeting link and provider
+          existingMeeting.meetingLink = undefined;
+
+          if (meetingProvider === "google") {
+            const link = await createGoogleMeetEvent(user, existingMeeting, timezone);
+            existingMeeting.meetingLink = link;
+            existingMeeting.meetingProvider = "google";
+          } else if (meetingProvider === "zoom") {
+            const zoomData = await createZoomMeeting(user, existingMeeting, timezone);
+            existingMeeting.meetingLink = zoomData.joinUrl;
+            existingMeeting.meetingProvider = "zoom";
+          }
+        }
+        // Always remove meetingLocation for online
         delete existingMeeting.meetingLocation;
       }
 
       if (oldType === "offline" && meetingType === "offline") {
         existingMeeting.meetingLocation = meetingLocation || "";
         delete existingMeeting.meetingLink;
+        delete existingMeeting.meetingProvider;
       }
 
       existingMeeting.updatedAt = new Date();
@@ -260,18 +330,33 @@ exports.addOrUpdateMeeting = async (req, res) => {
         meetingObj.meetingLocation = meetingLocation || "";
       }
 
+      // if (meetingType === "online") {
+      //   try {
+      //     const generatedLink = await createGoogleMeetEvent(
+      //       user,
+      //       meetingObj,
+      //       timezone
+      //     );
+      //     if (generatedLink) meetingObj.meetingLink = generatedLink;
+      //   } catch (err) {
+      //     console.error("Google Meet creation failed:", err);
+      //   }
+      // }
+
       if (meetingType === "online") {
-        try {
-          const generatedLink = await createGoogleMeetEvent(
-            user,
-            meetingObj,
-            timezone
-          );
-          if (generatedLink) meetingObj.meetingLink = generatedLink;
-        } catch (err) {
-          console.error("Google Meet creation failed:", err);
+        if (meetingProvider === "google") {
+          const link = await createGoogleMeetEvent(user, meetingObj, timezone);
+          meetingObj.meetingLink = link;
+          meetingObj.meetingProvider = "google";
+        }
+
+        if (meetingProvider === "zoom") {
+          const zoomData = await createZoomMeeting(user, meetingObj, timezone);
+          meetingObj.meetingLink = zoomData.joinUrl;
+          meetingObj.meetingProvider = "zoom";
         }
       }
+
 
       record.meetings.push(meetingObj);
     }
@@ -280,7 +365,7 @@ exports.addOrUpdateMeeting = async (req, res) => {
 
     const activityTitle = isUpdate
       ? record.meetings.find((m) => m.meeting_id.toString() === meeting_id)
-          ?.meetingTitle
+        ?.meetingTitle
       : meetingObj.meetingTitle;
 
     // =============================================================

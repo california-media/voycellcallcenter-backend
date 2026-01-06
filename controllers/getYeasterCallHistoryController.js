@@ -9,6 +9,9 @@ const moment = require("moment-timezone");
 const Contact = require("../models/contactModel");
 const Lead = require("../models/leadModel");
 const { zohoAfterCallSync } = require("../services/zohoAfterCallSync.service");
+const { createZoomMeeting } = require("../utils/zoomCalendar");
+const { createGoogleMeetEvent } = require("../utils/googleCalendar");
+
 
 
 const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL;
@@ -1330,7 +1333,7 @@ exports.getMonthlyCallGraph = async (req, res) => {
 exports.addFormDataAfterCallEnd = async (req, res) => {
   try {
     console.log("data saving...");
-    
+
     const { phoneNumbers, firstname, lastname, status, note, meeting } =
       req.body;
     console.log("status sent", status);
@@ -1507,6 +1510,16 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
 
     // ✅ 6. ADD MEETING
     if (meeting) {
+      // targetDoc.meetings.push({
+      //   meetingTitle: meeting.meetingTitle || "Call Follow-up",
+      //   meetingDescription: meeting.meetingDescription || "",
+      //   meetingStartDate: meeting.meetingStartDate,
+      //   meetingStartTime: meeting.meetingStartTime,
+      //   meetingType: meeting.meetingType || "offline",
+      //   meetingLink: meeting.meetingLink || "",
+      //   meetingLocation: meeting.meetingLocation || "",
+      // });
+
       targetDoc.meetings.push({
         meetingTitle: meeting.meetingTitle || "Call Follow-up",
         meetingDescription: meeting.meetingDescription || "",
@@ -1524,6 +1537,51 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
         description: "Meeting created after call",
       });
     }
+
+    // if (meeting) {
+    //   let meetingObj = {
+    //     meetingTitle: meeting.meetingTitle || "Call Follow-up",
+    //     meetingDescription: meeting.meetingDescription || "",
+    //     meetingStartDate: meeting.meetingStartDate,
+    //     meetingStartTime: meeting.meetingStartTime,
+    //     meetingType: meeting.meetingType || "offline",
+    //     meetingLocation: meeting.meetingLocation || "",
+    //     meetingProvider: meeting.meetingProvider || null,
+    //     meetingLink: "",
+    //   };
+
+    //   if (meetingObj.meetingType === "online") {
+    //     if (!meetingObj.meetingProvider) {
+    //       return res.status(400).json({
+    //         message: "Meeting provider is required for online meetings (zoom/google)",
+    //       });
+    //     }
+
+    //     if (meetingObj.meetingProvider === "zoom") {
+    //       const zoomData = await createZoomMeeting(loggedInUser, meetingObj, "UTC");
+    //       meetingObj.meetingLink = zoomData.joinUrl;
+    //       meetingObj.meetingProvider = "zoom";
+    //     }
+
+    //     if (meetingObj.meetingProvider === "google") {
+    //       const link = await createGoogleMeetEvent(loggedInUser, meetingObj, "UTC");
+    //       meetingObj.meetingLink = link;
+    //       meetingObj.meetingProvider = "google";
+    //     }
+
+    //     meetingObj.meetingLocation = undefined; // clear location
+    //   }
+
+    //   targetDoc.meetings.push(meetingObj);
+
+    //   targetDoc.activities.push({
+    //     action: "meeting_added",
+    //     type: "meeting",
+    //     title: meetingObj.meetingTitle || "Meeting Scheduled",
+    //     description: "Meeting created after call",
+    //   });
+    // }
+
 
     // ✅ 7. SAVE FINAL DOCUMENT
     await targetDoc.save();

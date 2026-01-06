@@ -169,7 +169,7 @@ app.use(
 app.use(
   "/connect",
   (req, res, next) => {
-    const skipAuthPaths = ["/google-callback", "/microsoft-callback"];
+    const skipAuthPaths = ["/google-callback", "/microsoft-callback", "/zoom-callback"];
     if (skipAuthPaths.includes(req.path)) {
       return next(); // No token required for callback
     }

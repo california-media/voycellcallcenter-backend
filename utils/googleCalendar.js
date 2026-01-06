@@ -9,6 +9,10 @@ async function createGoogleMeetEvent(user, meetingObj, timezone = 'UTC') {
     process.env.GOOGLE_REDIRECT_URI
   );
 
+  if (!user.googleAccessToken) {
+    throw new Error("Google account not connected");
+  }
+
   oauth2Client.setCredentials({
     access_token: user.googleAccessToken,
     refresh_token: user.googleRefreshToken,

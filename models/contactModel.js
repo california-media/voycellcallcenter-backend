@@ -33,6 +33,10 @@ const meetingSchema = new Schema(
       enum: ["online", "offline"],
       default: "offline",
     },
+    meetingProvider: {
+      type: String,
+      enum: ["google", "zoom"],
+    },
     meetingLink: String,
     meetingLocation: String,
   },
@@ -130,7 +134,7 @@ const contactSchema = new Schema(
       // ],
       default: "contacted",
     },
-    
+
     isLead: {
       type: Boolean,
       default: false,

@@ -357,6 +357,17 @@ const userSchema = new Schema(
       default: false,
     },
 
+    zoom: {
+      isConnected: { type: Boolean, default: false },
+      accountId: String,
+      userId: String,
+      email: String,
+
+      accessToken: String,
+      refreshToken: String,
+      tokenExpiresAt: Date,
+    },
+
     microsoftId: { type: String }, // ✅ Store Microsoft ID as String (not ObjectId)
     microsoftEmail: String,
     microsoftAccessToken: String,

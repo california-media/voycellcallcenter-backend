@@ -328,6 +328,111 @@ exports.connectSMTP = async (req, res) => {
     }
 };
 
+exports.connectZoom = async (req, res) => {
+    const userId = req.user._id;
+
+    const params = new URLSearchParams({
+        response_type: "code",
+        client_id: process.env.ZOOM_CLIENT_ID,
+        redirect_uri: process.env.ZOOM_REDIRECT_URI,
+        state: JSON.stringify({ userId }),
+    });
+
+    res.json({
+        status: "success",
+        url: `https://zoom.us/oauth/authorize?${params.toString()}`,
+    });
+};
+
+exports.zoomCallback = async (req, res) => {
+    const { code, state } = req.query;
+    const { userId } = JSON.parse(state);
+
+    try {
+        const tokenRes = await axios.post(
+            "https://zoom.us/oauth/token",
+            null,
+            {
+                params: {
+                    grant_type: "authorization_code",
+                    code,
+                    redirect_uri: process.env.ZOOM_REDIRECT_URI,
+                },
+                auth: {
+                    username: process.env.ZOOM_CLIENT_ID,
+                    password: process.env.ZOOM_CLIENT_SECRET,
+                },
+            }
+        );
+
+        const { access_token, refresh_token, expires_in } = tokenRes.data;
+
+        const zoomUser = await axios.get("https://api.zoom.us/v2/users/me", {
+            headers: { Authorization: `Bearer ${access_token}` },
+        });
+
+
+
+        await User.findByIdAndUpdate(userId, {
+            zoom: {
+                isConnected: true,
+                userId: zoomUser.data.id,
+                email: zoomUser.data.email,
+                accessToken: access_token,
+                refreshToken: refresh_token,
+                tokenExpiresAt: new Date(Date.now() + expires_in * 1000),
+            },
+        });
+
+        const user = await User.findById(userId);
+
+        const resultData = {
+            status: 'success',
+            message: 'Zoom Connected',
+            zoomId: user.zoom.userId,
+            zoomEmail: user.zoom.email,
+            zoomAccessToken: user.zoom.accessToken,
+            zoomRefreshToken: user.zoom.refreshToken,
+            zoomConnected: user.zoom.isConnected,
+        };
+
+        console.log(resultData);
+
+
+        return res.send(`
+          <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Zoom Connected</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                text-align: center; 
+                padding-top: 50px; 
+            }
+            .success { color: green; font-size: 18px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="success">Zoom Account Connected Successfully! You can close this window.</div>
+        <script>
+            window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+            window.close();
+        </script>
+    </body>
+    </html>
+    `);
+    } catch (err) {
+        return res.send(`
+      <script>
+        window.opener.postMessage({ status: "error", message: "Zoom auth failed" }, "*");
+        window.close();
+      </script>
+    `);
+    }
+};
+
+
 // exports.connectZoho = async (req, res) => {
 //     try {
 //         const userId = req.user._id;
