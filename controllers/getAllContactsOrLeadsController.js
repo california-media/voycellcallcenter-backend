@@ -138,6 +138,11 @@ const mongoose = require("mongoose");
 const escapeRegex = (str = "") =>
   String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+function normalizePhone(value = "") {
+  return value.replace(/\D/g, ""); // remove +, spaces, -, etc
+}
+
+
 exports.getAllContactsOrLeads = async (req, res) => {
   try {
     const {
@@ -480,15 +485,93 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
     const baseQuery = { createdBy };
 
     // Add search functionality if search term is provided
+    // if (search && search.trim() !== "") {
+    //   const searchTerm = search.trim();
+    //   const escaped = escapeRegex(searchTerm);
+    //   const regexInsensitive = new RegExp(escaped, "i");
+
+    //   baseQuery.$or = [
+    //     { firstname: { $regex: regexInsensitive } },
+    //     { lastname: { $regex: regexInsensitive } },
+    //     { emailAddresses: { $elemMatch: { $regex: regexInsensitive } } },
+    //     {
+    //       $expr: {
+    //         $regexMatch: {
+    //           input: {
+    //             $toLower: { $concat: ["$firstname", " ", "$lastname"] },
+    //           },
+    //           regex: searchTerm.toLowerCase(),
+    //         },
+    //       },
+    //     },
+    //   ];
+    // }
+
     if (search && search.trim() !== "") {
       const searchTerm = search.trim();
       const escaped = escapeRegex(searchTerm);
       const regexInsensitive = new RegExp(escaped, "i");
 
+      const normalizedPhone = normalizePhone(searchTerm);
+      const phoneRegex =
+        normalizedPhone.length > 0 ? new RegExp(normalizedPhone) : null;
+
+      // 🔹 Phone search conditions
+      const phoneConditions = [];
+
+      if (phoneRegex) {
+        // 1️⃣ Match phone number only (e.g. 5555)
+        phoneConditions.push({
+          phoneNumbers: {
+            $elemMatch: {
+              number: { $regex: phoneRegex },
+            },
+          },
+        });
+
+        // 2️⃣ Match country code only (e.g. 91)
+        phoneConditions.push({
+          phoneNumbers: {
+            $elemMatch: {
+              countryCode: { $regex: phoneRegex },
+            },
+          },
+        });
+
+        // 3️⃣ Match combined countryCode + number (e.g. 9155)
+        if (normalizedPhone.length > 2) {
+          phoneConditions.push({
+            $and: [
+              {
+                phoneNumbers: {
+                  $elemMatch: {
+                    countryCode: normalizedPhone.slice(0, 2),
+                  },
+                },
+              },
+              {
+                phoneNumbers: {
+                  $elemMatch: {
+                    number: { $regex: normalizedPhone.slice(2) },
+                  },
+                },
+              },
+            ],
+          });
+        }
+      }
+
       baseQuery.$or = [
+        // ✅ First name
         { firstname: { $regex: regexInsensitive } },
+
+        // ✅ Last name
         { lastname: { $regex: regexInsensitive } },
+
+        // ✅ Emails
         { emailAddresses: { $elemMatch: { $regex: regexInsensitive } } },
+
+        // ✅ Full name search (top-level $expr is OK)
         {
           $expr: {
             $regexMatch: {
@@ -499,12 +582,37 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
             },
           },
         },
+
+        // ✅ Phone search (all variants)
+        ...phoneConditions,
+
+        // // ✅ Phone number (PARTIAL or FULL)
+        // ...(phoneRegex
+        //   ? [
+        //     {
+        //       phoneNumbers: {
+        //         $elemMatch: {
+        //           number: { $regex: phoneRegex },
+        //         },
+        //       },
+        //     },
+        //     {
+        //       phoneNumbers: {
+        //         $elemMatch: {
+        //           countryCode: { $regex: phoneRegex },
+        //         },
+        //       },
+        //     },
+        //   ]
+        //   : []),
       ];
     }
 
+
+
     // Fetch contacts
     const contacts = await Contact.find(baseQuery)
-      .select("_id emailAddresses firstname lastname")
+      .select("_id emailAddresses firstname lastname phoneNumbers")
       .limit(50) // Limit results for better performance
       .lean();
 
@@ -514,12 +622,13 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
       firstname: c.firstname || "",
       lastname: c.lastname || "",
       emailAddresses: c.emailAddresses || [],
+      phoneNumbers: c.phoneNumbers || [],
       category: "contact",
     }));
 
     // Fetch leads
     const leads = await Lead.find(baseQuery)
-      .select("_id emailAddresses firstname lastname")
+      .select("_id emailAddresses firstname lastname phoneNumbers")
       .limit(50) // Limit results for better performance
       .lean();
 
@@ -529,6 +638,7 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
       firstname: l.firstname || "",
       lastname: l.lastname || "",
       emailAddresses: l.emailAddresses || [],
+      phoneNumbers: l.phoneNumbers || [],
       category: "lead",
     }));
 
@@ -708,9 +818,8 @@ exports.searchByPhone = async (req, res) => {
       firstname: c.firstname,
       lastname: c.lastname,
       phoneNumbers: c.phoneNumbers,
-      ownerName: `${c.createdByUser?.firstname || ""} ${
-        c.createdByUser?.lastname || ""
-      }`,
+      ownerName: `${c.createdByUser?.firstname || ""} ${c.createdByUser?.lastname || ""
+        }`,
       ownerEmail: c.createdByUser?.email || "",
       ownerRole: c.createdByUser?.role || "user",
       ownerId: c.createdByUser?._id?.toString() || "",
@@ -722,9 +831,8 @@ exports.searchByPhone = async (req, res) => {
       firstname: l.firstname,
       lastname: l.lastname,
       phoneNumbers: l.phoneNumbers,
-      ownerName: `${l.createdByUser?.firstname || ""} ${
-        l.createdByUser?.lastname || ""
-      }`,
+      ownerName: `${l.createdByUser?.firstname || ""} ${l.createdByUser?.lastname || ""
+        }`,
       ownerEmail: l.createdByUser?.email || "",
       ownerRole: l.createdByUser?.role || "user",
       ownerId: l.createdByUser?._id?.toString() || "",
