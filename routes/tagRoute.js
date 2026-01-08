@@ -1,9 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const { updateContactTags, addTag, getTags, getTagWithContact, editTag, deleteTag } = require("../controllers/tagController");
+const { updateContactTags, updateMultipleContactTags, addTag, getTags, getTagWithContact, editTag, deleteTag } = require("../controllers/tagController");
 const checkAccountStatus = require("../middlewares/checkAccountStatus")
 
 router.post("/assignedToContact", checkAccountStatus, updateContactTags);
+
+router.post("/assignedToMultipleContacts", checkAccountStatus, updateMultipleContactTags);
 
 router.post("/addTagToUser", checkAccountStatus, addTag);
 

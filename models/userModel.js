@@ -368,6 +368,25 @@ const userSchema = new Schema(
       tokenExpiresAt: Date,
     },
 
+    whatsappWaba: {
+      isConnected: { type: Boolean, default: false },
+      wabaId: String,
+      phoneNumberId: String,
+      businessAccountId: String,
+      accessToken: String,
+
+      templates: [
+        {
+          templateId: String,        // Meta template ID
+          name: String,
+          category: String,          // MARKETING, UTILITY
+          language: String,          // en_US
+          status: String,            // APPROVED, PENDING
+          components: Array
+        }
+      ]
+    },
+
     microsoftId: { type: String }, // ✅ Store Microsoft ID as String (not ObjectId)
     microsoftEmail: String,
     microsoftAccessToken: String,

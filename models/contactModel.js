@@ -164,7 +164,10 @@ const contactSchema = new Schema(
           default: "🏷️",
         },
         order: {
-          type: Number, // New field
+          type: Number,        // per-contact / per-lead order
+        },
+        globalOrder: {
+          type: Number         // snapshot of User.tags[].order
         },
       },
     ],
