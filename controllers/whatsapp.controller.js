@@ -1,11 +1,12 @@
 const axios = require("axios");
 const User = require("../models/userModel");
+const { emitMessage } = require("../socketServer");
 const { META_GRAPH_URL } = require("../config/whatsapp");
 
 const {
     META_APP_ID,
     META_APP_SECRET,
-    META_REDIRECT_URI,
+    META_WHATSAPP_REDIRECT_URI,
     WHATSAPP_VERIFY_TOKEN,
     FRONTEND_URL,
 } = process.env;
@@ -19,7 +20,7 @@ exports.connectWhatsApp = (req, res) => {
     const url =
         `https://www.facebook.com/v23.0/dialog/oauth?` +
         `client_id=${META_APP_ID}` +
-        `&redirect_uri=${META_REDIRECT_URI}` +
+        `&redirect_uri=${META_WHATSAPP_REDIRECT_URI}` +
         `&scope=business_management,whatsapp_business_management,whatsapp_business_messaging` +
         `&response_type=code` +
         `&state=${userId}`;
@@ -42,7 +43,7 @@ exports.whatsappCallback = async (req, res) => {
                 params: {
                     client_id: META_APP_ID,
                     client_secret: META_APP_SECRET,
-                    redirect_uri: META_REDIRECT_URI,
+                    redirect_uri: META_WHATSAPP_REDIRECT_URI,
                     code,
                 },
             }
@@ -104,10 +105,63 @@ exports.whatsappCallback = async (req, res) => {
             },
         });
 
-        res.redirect(`${FRONTEND_URL}/settings/whatsapp?connected=true`);
+        // res.redirect(`${FRONTEND_URL}/settings/whatsapp?connected=true`);
+        const resultData = {
+            status: 'success',
+            message: 'WhatsApp connected successfully',
+            whatsappWaba: {
+                isConnected: true,
+                wabaId,
+                phoneNumberId,
+                phoneNumber, // 👈 VERY IMPORTANT
+                businessAccountId,
+                accessToken,
+            }
+        };
+
+        // res.json({ status: 'success', message: 'Microsoft account connected', user });
+
+        return res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Whatsapp Connected</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                text-align: center; 
+                padding-top: 50px; 
+            }
+            .success { color: green; font-size: 18px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="success">Whatsapp account connected Successfully! You can close this window.</div>
+        <script>
+    try {
+        if (window.opener) {
+            window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+        } else {
+            console.warn("No opener window found");
+        }
+    } catch (e) {
+        console.error("postMessage failed", e);
+    }
+    window.close();
+</script>
+
+    </body>
+    </html>
+`);
     } catch (err) {
         console.error("WhatsApp OAuth Error:", err.response?.data || err);
-        res.redirect(`${FRONTEND_URL}/settings/whatsapp?error=true`);
+        // res.redirect(`${FRONTEND_URL}/settings/whatsapp?error=true`);
+        return res.send(`
+            <script>
+                window.opener.postMessage({ status: 'error', message: 'WhatsApp OAuth failed', error: '${err.response?.data || err.message}' }, '*');
+                window.close();
+            </script>
+        `);
     }
 };
 
@@ -120,22 +174,54 @@ exports.webhookVerify = (req, res) => {
     const challenge = req.query["hub.challenge"];
 
     if (mode === "subscribe" && token === WHATSAPP_VERIFY_TOKEN) {
+        console.log("Webhook verified");
         return res.status(200).send(challenge);
     }
+    console.log("Invalid webhook verification");
     return res.sendStatus(403);
 };
 
 /**
  * STEP 4: Receive messages
  */
+// exports.webhookReceive = async (req, res) => {
+//     const value = req.body.entry?.[0]?.changes?.[0]?.value;
+//     console.log("value = " + value);
+
+//     if (value?.messages) {
+//         const msg = value.messages[0];
+//         console.log("Incoming WhatsApp Message:", msg);
+//         // 👉 Save to DB here
+//     }
+//     res.sendStatus(200);
+// };
+
 exports.webhookReceive = async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
 
     if (value?.messages) {
         const msg = value.messages[0];
+
         console.log("Incoming WhatsApp Message:", msg);
-        // 👉 Save to DB here
+
+        // Example mapping
+        const messagePayload = {
+            from: msg.from,
+            text: msg.text?.body,
+            timestamp: msg.timestamp,
+            type: msg.type,
+        };
+
+        // 👉 IMPORTANT: Map phone number to userId from DB
+        const user = await User.findOne({
+            "whatsappWaba.phoneNumber": value.metadata.display_phone_number,
+        });
+
+        if (user) {
+            emitMessage(user._id, messagePayload);
+        }
     }
+
     res.sendStatus(200);
 };
 

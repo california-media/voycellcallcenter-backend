@@ -76,7 +76,7 @@ const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
 const superadmin = require("./routes/admin/superAdminRoutes");
 const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
 // const chatAgentRoutes = require("./routes/chatAgentRoutes");
-
+const initGraphQL = require("./graphql");
 
 console.log("Setting up Express app...");
 
@@ -88,7 +88,9 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(express.static(path.resolve("./public")));
 app.use("/user", userRoutes);
 // app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+// ✅ NOW mount GraphQL
 
+initGraphQL(app, checkForAuthentication);
 console.log("Setting up routes...");
 app.use("/api/yeastar", express.json(), yeastarRoutes);
 app.use(
@@ -325,8 +327,13 @@ const http = require("http");
 
     // ✅ Local/dev mode: Start HTTP + Socket.IO
     if (process.env.NODE_ENV !== "serverless") {
+
       const PORT = process.env.PORT || 3000;
       const server = http.createServer(app);
+
+
+      const { initSocket } = require("./socketServer");
+      initSocket(server);
 
       server.listen(PORT, () =>
         console.log(
