@@ -374,6 +374,7 @@ const userSchema = new Schema(
       phoneNumberId: String,
       businessAccountId: String,
       accessToken: String,
+      phoneNumber: String,
 
       templates: [
         {

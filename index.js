@@ -65,6 +65,8 @@ const deleteAllTheDataBySuperAdminRoutes = require("./routes/deleteAllTheDataByS
 const getProfileEventRoutes = require("./routes/getProfileEventRoutes");
 const apiKeyRoutes = require("./routes/apiKeyRoutes");
 const addEditTempleteRoutes = require("./routes/addEditTempleteRoutes");
+const whatsappRoutes = require("./routes/whatsapp.routes");
+
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -151,14 +153,7 @@ app.use("/addEditTemplete", checkForAuthentication(), addEditTempleteRoutes);
 app.use("/faq", checkForAuthentication(), faqRoutes);
 // app.use("/chatAgent", checkForAuthentication(), chatAgentRoutes);
 
-
-
-
-
-
-
-
-
+app.use("/api/whatsapp", whatsappRoutes);
 
 app.use(
   "/help-support",
