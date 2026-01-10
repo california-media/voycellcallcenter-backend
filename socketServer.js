@@ -26,6 +26,8 @@ function initSocket(server) {
 function emitMessage(userId, message) {
   if (!io) return;
   io.to(userId.toString()).emit("whatsapp_message", message);
+  console.log("Message emitted to user:", userId);
+  console.log("Message content:", message);
 }
 
 module.exports = { initSocket, emitMessage };

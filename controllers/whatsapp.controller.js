@@ -196,33 +196,85 @@ exports.webhookVerify = (req, res) => {
 //     res.sendStatus(200);
 // };
 
+// exports.webhookReceive = async (req, res) => {
+//     const value = req.body.entry?.[0]?.changes?.[0]?.value;
+//     console.log(value);
+//     console.log(req.body.entry);
+
+//     if (value?.messages) {
+//         const msg = value.messages[0];
+
+//         console.log("Incoming WhatsApp Message:", msg);
+
+//         // Example mapping
+//         const messagePayload = {
+//             id: msg.id,
+//             from: msg.from,
+//             text: msg.text?.body,
+//             timestamp: msg.timestamp,
+//             type: msg.type,
+//         };
+
+//         // 👉 IMPORTANT: Map phone number to userId from DB
+//         const user = await User.findOne({
+//             "whatsappWaba.phoneNumber": value.metadata.display_phone_number,
+//         });
+
+//         if (user) {
+//             emitMessage(user._id, messagePayload);
+//         }
+//     }
+
+//     res.sendStatus(200);
+// };
+
 exports.webhookReceive = async (req, res) => {
-    const value = req.body.entry?.[0]?.changes?.[0]?.value;
+    try {
+        const entries = req.body.entry || [];
 
-    if (value?.messages) {
-        const msg = value.messages[0];
+        for (const entry of entries) {
+            for (const change of entry.changes || []) {
+                const value = change.value;
+                console.log(value.metadata);
 
-        console.log("Incoming WhatsApp Message:", msg);
+                if (!value?.messages) continue;
 
-        // Example mapping
-        const messagePayload = {
-            from: msg.from,
-            text: msg.text?.body,
-            timestamp: msg.timestamp,
-            type: msg.type,
-        };
+                const phoneNumberId = value.metadata.phone_number_id;
 
-        // 👉 IMPORTANT: Map phone number to userId from DB
-        const user = await User.findOne({
-            "whatsappWaba.phoneNumber": value.metadata.display_phone_number,
-        });
+                // 🔐 Find business owner
+                const user = await User.findOne({
+                    "whatsappWaba.phoneNumberId": phoneNumberId,
+                });
 
-        if (user) {
-            emitMessage(user._id, messagePayload);
+                if (!user) continue;
+
+                for (const msg of value.messages) {
+                    const messagePayload = {
+                        whatsappMessageId: msg.id,
+                        businessPhoneNumberId: phoneNumberId,
+                        from: msg.from, // customer number
+                        to: value.metadata.display_phone_number,
+                        text: msg.text?.body || null,
+                        type: msg.type,
+                        timestamp: Number(msg.timestamp) * 1000,
+                    };
+
+                    console.log("Incoming message:", messagePayload);
+
+                    // 🔹 Save to DB (VERY IMPORTANT)
+                    // await saveIncomingMessage(user._id, messagePayload);
+
+                    // 🔹 Emit to frontend socket
+                    emitMessage(user._id, messagePayload);
+                }
+            }
         }
-    }
 
-    res.sendStatus(200);
+        res.sendStatus(200);
+    } catch (err) {
+        console.error("Webhook error:", err);
+        res.sendStatus(200); // ⚠️ Always 200 for Meta
+    }
 };
 
 /**
