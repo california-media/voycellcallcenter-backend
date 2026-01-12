@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.966.0",
     "@aws-sdk/client-s3": "^3.787.0",
     "@pipedrive/app-extensions-sdk": "^0.13.1",
     "apollo-server-express": "^3.13.0",
@@ -34,8 +35,7 @@
     "openai": "^6.15.0",
     "pipedrive": "^30.8.0",
     "qs": "^6.14.0",
-    "serverless-http": "^3.2.0",
-    "socket.io": "^4.8.3"
+    "serverless-http": "^3.2.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

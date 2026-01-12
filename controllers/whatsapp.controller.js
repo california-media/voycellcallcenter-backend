@@ -1,6 +1,7 @@
 const axios = require("axios");
 const User = require("../models/userModel");
-const { emitMessage } = require("../socketServer");
+// const { emitMessage } = require("../socketServer");
+const { sendToUser } = require("../services/wsSender");
 const { META_GRAPH_URL } = require("../config/whatsapp");
 
 const {
@@ -228,54 +229,105 @@ exports.webhookVerify = (req, res) => {
 //     res.sendStatus(200);
 // };
 
+// exports.webhookReceive = async (req, res) => {
+//     try {
+//         const entries = req.body.entry || [];
+
+//         for (const entry of entries) {
+//             for (const change of entry.changes || []) {
+//                 const value = change.value;
+//                 console.log(value.metadata);
+
+//                 if (!value?.messages) continue;
+
+//                 const phoneNumberId = value.metadata.phone_number_id;
+
+//                 // 🔐 Find business owner
+//                 const user = await User.findOne({
+//                     "whatsappWaba.phoneNumberId": phoneNumberId,
+//                 });
+
+//                 if (!user) continue;
+
+//                 for (const msg of value.messages) {
+//                     const messagePayload = {
+//                         whatsappMessageId: msg.id,
+//                         businessPhoneNumberId: phoneNumberId,
+//                         from: msg.from, // customer number
+//                         to: value.metadata.display_phone_number,
+//                         text: msg.text?.body || null,
+//                         type: msg.type,
+//                         timestamp: Number(msg.timestamp) * 1000,
+//                     };
+
+//                     console.log("Incoming message:", messagePayload);
+
+//                     // 🔹 Save to DB (VERY IMPORTANT)
+//                     // await saveIncomingMessage(user._id, messagePayload);
+
+//                     // 🔹 Emit to frontend socket
+//                     // emitMessage(user._id, messagePayload);
+//                 }
+//             }
+//         }
+
+//         res.sendStatus(200);
+//     } catch (err) {
+//         console.error("Webhook error:", err);
+//         res.sendStatus(200); // ⚠️ Always 200 for Meta
+//     }
+// };
+
 exports.webhookReceive = async (req, res) => {
+    console.log("🔥🔥 WHATSAPP WEBHOOK HIT 🔥🔥");
     try {
         const entries = req.body.entry || [];
-
+        console.log("Webhook entries:", JSON.stringify(entries, null, 2));
         for (const entry of entries) {
             for (const change of entry.changes || []) {
                 const value = change.value;
-                console.log(value.metadata);
-
                 if (!value?.messages) continue;
 
                 const phoneNumberId = value.metadata.phone_number_id;
 
+                console.log("Processing messages for phoneNumberId:", phoneNumberId);
+
                 // 🔐 Find business owner
+
                 const user = await User.findOne({
                     "whatsappWaba.phoneNumberId": phoneNumberId,
                 });
 
+                console.log("Mapped user:", user);
+
                 if (!user) continue;
 
                 for (const msg of value.messages) {
-                    const messagePayload = {
-                        whatsappMessageId: msg.id,
-                        businessPhoneNumberId: phoneNumberId,
-                        from: msg.from, // customer number
-                        to: value.metadata.display_phone_number,
-                        text: msg.text?.body || null,
-                        type: msg.type,
-                        timestamp: Number(msg.timestamp) * 1000,
+                    const payload = {
+                        type: "whatsapp_message",
+                        data: {
+                            from: msg.from,
+                            text: msg.text?.body,
+                            timestamp: msg.timestamp,
+                        },
                     };
 
-                    console.log("Incoming message:", messagePayload);
+                    console.log("Incoming message payload:", payload);
 
-                    // 🔹 Save to DB (VERY IMPORTANT)
-                    // await saveIncomingMessage(user._id, messagePayload);
-
-                    // 🔹 Emit to frontend socket
-                    emitMessage(user._id, messagePayload);
+                    // 🔥 REAL-TIME PUSH
+                    await sendToUser(user._id, payload);
                 }
             }
         }
 
         res.sendStatus(200);
     } catch (err) {
-        console.error("Webhook error:", err);
-        res.sendStatus(200); // ⚠️ Always 200 for Meta
+        console.error(err);
+        res.sendStatus(200);
     }
 };
+
+
 
 /**
  * STEP 5: Send Text Message

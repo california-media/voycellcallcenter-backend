@@ -13,6 +13,7 @@ const multer = require("multer");
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
+const { sendToUser } = require("./services/wsSender");
 
 const mongoose = require("mongoose");
 const serverless = require("serverless-http");
@@ -250,6 +251,26 @@ app.use(
   superadmin
 );
 
+app.post("/ws-test", async (req, res) => {
+  try {
+    const payload = {
+      type: "health_check",
+      data: {
+        message: "Hello from LOCAL backend",
+        time: new Date().toISOString(),
+      },
+    };
+
+    await sendToUser(req.body.userId, payload);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("WS test failed:", err);
+    res.status(500).json({ ok: false });
+  }
+});
+
+
 app.use("/check", (req, res) => {
   res.json({ message: "API checkPage" });
 });
@@ -332,8 +353,8 @@ const http = require("http");
       const server = http.createServer(app);
 
 
-      const { initSocket } = require("./socketServer");
-      initSocket(server);
+      // const { initSocket } = require("./socketServer");
+      // initSocket(server);
 
       server.listen(PORT, () =>
         console.log(
