@@ -1,7 +1,7 @@
 const axios = require("axios");
 const User = require("../models/userModel");
+const mongoose = require("mongoose");
 // const { emitMessage } = require("../socketServer");
-const { sendToUser } = require("../services/wsSender");
 const { META_GRAPH_URL } = require("../config/whatsapp");
 
 const {
@@ -182,214 +182,270 @@ exports.webhookVerify = (req, res) => {
     return res.sendStatus(403);
 };
 
-/**
- * STEP 4: Receive messages
- */
-// exports.webhookReceive = async (req, res) => {
-//     const value = req.body.entry?.[0]?.changes?.[0]?.value;
-//     console.log("value = " + value);
 
-//     if (value?.messages) {
-//         const msg = value.messages[0];
-//         console.log("Incoming WhatsApp Message:", msg);
-//         // 👉 Save to DB here
-//     }
-//     res.sendStatus(200);
-// };
+let isConnected = false;
+async function connectDB() {
+    if (isConnected) return;
+    await mongoose.connect(process.env.MONGO_URL);
+    isConnected = true;
+}
 
-// exports.webhookReceive = async (req, res) => {
-//     const value = req.body.entry?.[0]?.changes?.[0]?.value;
-//     console.log(value);
-//     console.log(req.body.entry);
+const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 
-//     if (value?.messages) {
-//         const msg = value.messages[0];
-
-//         console.log("Incoming WhatsApp Message:", msg);
-
-//         // Example mapping
-//         const messagePayload = {
-//             id: msg.id,
-//             from: msg.from,
-//             text: msg.text?.body,
-//             timestamp: msg.timestamp,
-//             type: msg.type,
-//         };
-
-//         // 👉 IMPORTANT: Map phone number to userId from DB
-//         const user = await User.findOne({
-//             "whatsappWaba.phoneNumber": value.metadata.display_phone_number,
-//         });
-
-//         if (user) {
-//             emitMessage(user._id, messagePayload);
-//         }
-//     }
-
-//     res.sendStatus(200);
-// };
-
-// exports.webhookReceive = async (req, res) => {
-//     try {
-//         const entries = req.body.entry || [];
-
-//         for (const entry of entries) {
-//             for (const change of entry.changes || []) {
-//                 const value = change.value;
-//                 console.log(value.metadata);
-
-//                 if (!value?.messages) continue;
-
-//                 const phoneNumberId = value.metadata.phone_number_id;
-
-//                 // 🔐 Find business owner
-//                 const user = await User.findOne({
-//                     "whatsappWaba.phoneNumberId": phoneNumberId,
-//                 });
-
-//                 if (!user) continue;
-
-//                 for (const msg of value.messages) {
-//                     const messagePayload = {
-//                         whatsappMessageId: msg.id,
-//                         businessPhoneNumberId: phoneNumberId,
-//                         from: msg.from, // customer number
-//                         to: value.metadata.display_phone_number,
-//                         text: msg.text?.body || null,
-//                         type: msg.type,
-//                         timestamp: Number(msg.timestamp) * 1000,
-//                     };
-
-//                     console.log("Incoming message:", messagePayload);
-
-//                     // 🔹 Save to DB (VERY IMPORTANT)
-//                     // await saveIncomingMessage(user._id, messagePayload);
-
-//                     // 🔹 Emit to frontend socket
-//                     // emitMessage(user._id, messagePayload);
-//                 }
-//             }
-//         }
-
-//         res.sendStatus(200);
-//     } catch (err) {
-//         console.error("Webhook error:", err);
-//         res.sendStatus(200); // ⚠️ Always 200 for Meta
-//     }
-// };
-
+const lambdaClient = new LambdaClient({
+    region: "eu-north-1"
+});
 exports.webhookReceive = async (req, res) => {
     console.log("🔥🔥 WHATSAPP WEBHOOK HIT 🔥🔥");
+
     try {
-        const entries = req.body.entry || [];
-        console.log("Webhook entries:", JSON.stringify(entries, null, 2));
-        for (const entry of entries) {
-            for (const change of entry.changes || []) {
-                const value = change.value;
-                if (!value?.messages) continue;
+        console.log("Forwarding raw payload to WABA Connect...");
 
-                const phoneNumberId = value.metadata.phone_number_id;
+        const command = new InvokeCommand({
+            FunctionName: "saveConnection-waba", // ✅ CHANGE
+            InvocationType: "Event",   // ✅ MUST WAIT
+            Payload: JSON.stringify({
+                action: "processWhatsappWebhook", // ✅ MATCH EXACTLY
+                payload: req.body                 // ✅ FULL RAW PAYLOAD
+            }),
+        });
+        const response = await lambdaClient.send(command);
+        console.log("Invoked waba-connect successfully");
+        console.log(response);
+        console.log(req.body);
+        console.log(req.body.entry);
 
-                console.log("Processing messages for phoneNumberId:", phoneNumberId);
-
-                // 🔐 Find business owner
-
-                const user = await User.findOne({
-                    "whatsappWaba.phoneNumberId": phoneNumberId,
-                });
-
-                console.log("Mapped user:", user);
-
-                if (!user) continue;
-
-                for (const msg of value.messages) {
-                    const payload = {
-                        type: "whatsapp_message",
-                        data: {
-                            from: msg.from,
-                            text: msg.text?.body,
-                            timestamp: msg.timestamp,
-                        },
-                    };
-
-                    console.log("Incoming message payload:", payload);
-
-                    // 🔥 REAL-TIME PUSH
-                    await sendToUser(user._id, payload);
-                }
-            }
-        }
-
-        res.sendStatus(200);
+        res.status(200).send("EVENT_RECEIVED");
     } catch (err) {
-        console.error(err);
+        console.error("Webhook Error:", err);
         res.sendStatus(200);
     }
 };
 
 
-
-/**
- * STEP 5: Send Text Message
- */
 exports.sendTextMessage = async (req, res) => {
-    const { to, text } = req.body;
-    const userId = req.user._id;
-    const user = await User.findById(userId);
-    const { phoneNumberId, accessToken } = user.whatsappWaba;
+    console.log("========== SEND TEXT MESSAGE API START ==========");
 
-    console.log("Sending message to:", to, "text:", text);
-    console.log("Using phoneNumberId:", phoneNumberId);
-    console.log("Using accessToken:", accessToken);
+    try {
+        const { to, text } = req.body;
+        const userId = req.user?._id;
 
-    await axios.post(
-        `${META_GRAPH_URL}/${phoneNumberId}/messages`,
-        {
+        console.log("Request body:", { to, text });
+        console.log("Authenticated userId:", userId);
+
+        // 1️⃣ Basic validation
+        if (!to || !text) {
+            console.warn("Validation failed: 'to' or 'text' missing");
+            return res.status(400).json({
+                success: false,
+                message: "'to' and 'text' are required",
+            });
+        }
+
+        // 2️⃣ Fetch user
+        console.log("Fetching user from DB...");
+        const user = await User.findById(userId);
+
+        if (!user) {
+            console.error("User not found for userId:", userId);
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        const { phoneNumberId, accessToken } = user.whatsappWaba || {};
+
+        console.log("WhatsApp WABA details:", {
+            phoneNumberId,
+            hasAccessToken: !!accessToken,
+        });
+
+        // 3️⃣ Validate WABA config
+        if (!phoneNumberId || !accessToken) {
+            console.error("WhatsApp WABA configuration missing");
+            return res.status(400).json({
+                success: false,
+                message: "WhatsApp WABA is not configured for this user",
+            });
+        }
+
+        // 4️⃣ Prepare request
+        const url = `${META_GRAPH_URL}/${phoneNumberId}/messages`;
+
+        const payload = {
             messaging_product: "whatsapp",
             to,
             type: "text",
             text: { body: text },
-        },
-        {
+        };
+
+        console.log("Sending WhatsApp message...");
+        console.log("Meta API URL:", url);
+        console.log("Payload:", payload);
+
+        // 5️⃣ Send message
+        const response = await axios.post(url, payload, {
             headers: {
                 Authorization: `Bearer ${accessToken}`,
                 "Content-Type": "application/json",
             },
-        }
-    );
+        });
 
-    res.json({ success: true });
+        console.log("WhatsApp API response status:", response.status);
+        console.log("WhatsApp API response data:", response.data);
+
+        // 6️⃣ Success response
+        res.json({
+            success: true,
+            message: "Message sent successfully",
+            data: response.data,
+        });
+
+    } catch (error) {
+        console.error("❌ Error while sending WhatsApp message");
+
+        // Axios / Meta API error
+        if (error.response) {
+            console.error("Meta API error status:", error.response.status);
+            console.error("Meta API error data:", error.response.data);
+
+            return res.status(error.response.status).json({
+                success: false,
+                message: "Failed to send WhatsApp message",
+                metaError: error.response.data,
+            });
+        }
+
+        // Network / unknown error
+        console.error("Unexpected error:", error.message);
+        console.error(error.stack);
+
+        res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    } finally {
+        console.log("========== SEND TEXT MESSAGE API END ==========");
+    }
 };
+
 
 /**
  * STEP 6: Send Template Message
  */
+
 exports.sendTemplateMessage = async (req, res) => {
-    const { to, templateName, language, components } = req.body;
-    const userId = req.user._id;
+    console.log("========== SEND TEMPLATE MESSAGE API START ==========");
 
-    const user = await User.findById(userId);
-    const { phoneNumberId, accessToken } = user.whatsappWaba;
+    try {
+        const { to, templateName, language, components } = req.body;
+        const userId = req.user?._id;
 
-    await axios.post(
-        `${META_GRAPH_URL}/${phoneNumberId}/messages`,
-        {
+        console.log("Request body:", {
+            to,
+            templateName,
+            language,
+            components,
+        });
+        console.log("Authenticated userId:", userId);
+
+        // 1️⃣ Validation
+        if (!to || !templateName) {
+            console.warn("Validation failed: 'to' or 'templateName' missing");
+            return res.status(400).json({
+                success: false,
+                message: "'to' and 'templateName' are required",
+            });
+        }
+
+        // 2️⃣ Fetch user
+        console.log("Fetching user from DB...");
+        const user = await User.findById(userId);
+
+        if (!user) {
+            console.error("User not found for userId:", userId);
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        const { phoneNumberId, accessToken } = user.whatsappWaba || {};
+
+        console.log("WhatsApp WABA details:", {
+            phoneNumberId,
+            hasAccessToken: !!accessToken,
+        });
+
+        // 3️⃣ Validate WABA config
+        if (!phoneNumberId || !accessToken) {
+            console.error("WhatsApp WABA configuration missing");
+            return res.status(400).json({
+                success: false,
+                message: "WhatsApp WABA is not configured for this user",
+            });
+        }
+
+        // 4️⃣ Prepare Meta request
+        const url = `${META_GRAPH_URL}/${phoneNumberId}/messages`;
+
+        const payload = {
             messaging_product: "whatsapp",
             to,
             type: "template",
             template: {
                 name: templateName,
-                language: { code: language || "en_US" },
+                language: {
+                    code: language || "en_US",
+                },
                 components: components || [],
             },
-        },
-        {
+        };
+
+        console.log("Meta API URL:", url);
+        console.log("Payload:", JSON.stringify(payload, null, 2));
+
+        // 5️⃣ Send request
+        const response = await axios.post(url, payload, {
             headers: {
                 Authorization: `Bearer ${accessToken}`,
                 "Content-Type": "application/json",
             },
-        }
-    );
+        });
 
-    res.json({ success: true });
+        console.log("WhatsApp API response status:", response.status);
+        console.log("WhatsApp API response data:", response.data);
+
+        // 6️⃣ Success response
+        res.json({
+            success: true,
+            message: "Template message sent successfully",
+            data: response.data,
+        });
+
+    } catch (error) {
+        console.error("❌ Error while sending template message");
+
+        if (error.response) {
+            console.error("Meta API error status:", error.response.status);
+            console.error("Meta API error data:", error.response.data);
+
+            return res.status(error.response.status).json({
+                success: false,
+                message: "Failed to send template message",
+                metaError: error.response.data,
+            });
+        }
+
+        console.error("Unexpected error:", error.message);
+        console.error(error.stack);
+
+        res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    } finally {
+        console.log("========== SEND TEMPLATE MESSAGE API END ==========");
+    }
 };

@@ -13,7 +13,7 @@ const multer = require("multer");
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
-const { sendToUser } = require("./services/wsSender");
+
 
 const mongoose = require("mongoose");
 const serverless = require("serverless-http");
@@ -251,25 +251,6 @@ app.use(
   superadmin
 );
 
-app.post("/ws-test", async (req, res) => {
-  try {
-    const payload = {
-      type: "health_check",
-      data: {
-        message: "Hello from LOCAL backend",
-        time: new Date().toISOString(),
-      },
-    };
-
-    await sendToUser(req.body.userId, payload);
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("WS test failed:", err);
-    res.status(500).json({ ok: false });
-  }
-});
-
 
 app.use("/check", (req, res) => {
   res.json({ message: "API checkPage" });
@@ -346,17 +327,14 @@ const http = require("http");
   try {
     await connectToDatabase();
 
-    // ✅ Local/dev mode: Start HTTP + Socket.IO
-    if (process.env.NODE_ENV !== "serverless") {
+    // ✅ Local/dev mode: Start HTTP server (ONLY if NOT on AWS)
+    const IS_AWS = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+    if (!IS_AWS && process.env.NODE_ENV !== "serverless") {
 
-      const PORT = process.env.PORT || 3000;
-      const server = http.createServer(app);
+      const PORT = process.env.PORT || 4004;
+      // const server = http.createServer(app);
 
-
-      // const { initSocket } = require("./socketServer");
-      // initSocket(server);
-
-      server.listen(PORT, () =>
+      app.listen(PORT, () =>
         console.log(
           `🚀 Server running on http://localhost:${PORT}`,
           "env",
@@ -369,7 +347,7 @@ const http = require("http");
   }
 })();
 
-// ------------------- SERVERLESS EXPORT -------------------
+// ------------------- SERVERLESS EXPORT (HTTP) -------------------
 module.exports.handler = serverless(async (event, context) => {
   // CRITICAL: Prevent Lambda from waiting for connections to close
   context.callbackWaitsForEmptyEventLoop = false;

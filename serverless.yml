@@ -1,9 +1,13 @@
 service: my-express-api
+useDotenv: true
 provider:
   name: aws
   runtime: nodejs18.x
   environment:
-    MONGO_URL: mongodb+srv://makvanayash2112_db_user:rG2eoqvZZz3JjB5k@cluster0.3o1mxes.mongodb.net/
+    MONGO_URL: ${env:MONGO_URL}
+    JWT_SECRET: ${env:JWT_SECRET}
+    FRONTEND_URL: ${env:FRONTEND_URL}
+    NODE_ENV: production
 functions:
   app:
     handler: index.handler
