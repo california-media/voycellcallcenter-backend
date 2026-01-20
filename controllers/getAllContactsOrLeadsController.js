@@ -156,10 +156,27 @@ exports.getAllContactsOrLeads = async (req, res) => {
       status = "",
     } = req.body;
 
-    const createdBy = req.user._id;
+    // const createdBy = req.user._id;
+    const userId = req.user._id;
+    const user = await User.findById(userId).select("role");
+    const userRole = user.role;
+    // -----------------------  
+    // Pagination Setup
+    // -----------------------
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const perPage = Math.max(1, parseInt(limit, 10) || 10);
     const skip = (pageNum - 1) * perPage;
+
+    let allowedUserIds = [userId];
+    if (userRole === "companyAdmin") {
+      const agents = await User.find(
+        { createdByWhichCompanyAdmin: userId },
+        { _id: 1 }
+      ).lean();
+
+      const agentIds = agents.map(a => a._id);
+      allowedUserIds = [userId, ...agentIds];
+    }
 
     var Model;
     if (category === "lead") {
@@ -168,8 +185,19 @@ exports.getAllContactsOrLeads = async (req, res) => {
       Model = Contact;
     }
 
+    // -----------------------
+
     // Base query
-    const query = { createdBy };
+    // const query = { createdBy };
+
+    const query = {
+      createdBy: { $in: allowedUserIds }
+    };
+
+    console.log("Allowed User IDs:", allowedUserIds);
+    // -----------------------
+    // Filters
+    // -----------------------
 
     // Filter favourites - only filter if explicitly set to true
     if (isFavourite === true || String(isFavourite).toLowerCase() === "true") {
