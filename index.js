@@ -54,7 +54,7 @@ const meetingRoutes = require("./routes/meetingRoutes");
 const hubSpotContactFetchRoutes = require("./routes/hubSpotContactFetchRoutes");
 const zohoContactFetchRoutes = require("./routes/zuhuContactFetchRoutes");
 const zohoAuthRoutes = require("./routes/zohoAuthRoutes");
-const pipedriveRoutes = require("./routes/pipedriveRoutes");
+// const pipedriveRoutes = require("./routes/pipedriveRoutes");
 const metaRoutes = require("./routes/metaRoutes");
 const faqRoutes = require("./routes/faqRoutes");
 const fetchGoogleContacts = require("./routes/googleContactFatchRoutes");
@@ -77,7 +77,7 @@ const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
 const superadmin = require("./routes/admin/superAdminRoutes");
 const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
 // const chatAgentRoutes = require("./routes/chatAgentRoutes");
-const initGraphQL = require("./graphql");
+// const initGraphQL = require("./graphql");
 
 console.log("Setting up Express app...");
 
@@ -91,7 +91,7 @@ app.use("/user", userRoutes);
 // app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 // ✅ NOW mount GraphQL
 
-initGraphQL(app, checkForAuthentication);
+// initGraphQL(app, checkForAuthentication);
 console.log("Setting up routes...");
 app.use("/api/yeastar", express.json(), yeastarRoutes);
 app.use(
@@ -177,7 +177,7 @@ app.use(
 );
 app.use("/disconnect", checkForAuthentication(), disconnectAccountRoutes);
 app.use("/api/zoho", zohoAuthRoutes);
-app.use("/api/pipedrive", pipedriveRoutes);
+// app.use("/api/pipedrive", pipedriveRoutes);
 app.use(
   "/save-bulk-contacts",
   checkForAuthentication(),

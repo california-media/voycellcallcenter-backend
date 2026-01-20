@@ -3,6 +3,10 @@ const User = require("../models/userModel");
 const mongoose = require("mongoose");
 // const { emitMessage } = require("../socketServer");
 const { META_GRAPH_URL } = require("../config/whatsapp");
+const WsConnection = require("../models/wsConnection");
+const WhatsAppMessage = require("../models/whatsappMessage");
+const dotenv = require("dotenv");
+dotenv.config();
 
 const {
     META_APP_ID,
@@ -195,26 +199,84 @@ const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 const lambdaClient = new LambdaClient({
     region: "eu-north-1"
 });
+
 exports.webhookReceive = async (req, res) => {
     console.log("🔥🔥 WHATSAPP WEBHOOK HIT 🔥🔥");
 
     try {
         console.log("Forwarding raw payload to WABA Connect...");
 
-        const command = new InvokeCommand({
-            FunctionName: "saveConnection-waba", // ✅ CHANGE
-            InvocationType: "Event",   // ✅ MUST WAIT
-            Payload: JSON.stringify({
-                action: "processWhatsappWebhook", // ✅ MATCH EXACTLY
-                payload: req.body                 // ✅ FULL RAW PAYLOAD
-            }),
-        });
-        const response = await lambdaClient.send(command);
         console.log("Invoked waba-connect successfully");
-        console.log(response);
+        console.log(responce);
         console.log(req.body);
         console.log(req.body.entry);
 
+        const entry = req.body.entry?.[0];
+        const change = entry?.changes?.[0];
+        const value = change?.value;
+
+        if (!value) {
+            console.log("No value in webhook");
+            return { statusCode: 200 };
+        }
+
+        console.log("value.metadata", value.metadata);
+        const phoneNumberId = value?.metadata?.phone_number_id?.toString();
+        console.log("phoneNumberId:", phoneNumberId);
+        console.log("Webhook keys:", Object.keys(value));
+
+        if (!Array.isArray(value.messages) || value.messages.length === 0) {
+            console.log("ℹ️ No incoming messages");
+            return { statusCode: 200 };
+        }
+
+        const user = await User.findOne({
+            "whatsappWaba.phoneNumberId": phoneNumberId
+        }).select("_id");
+
+        if (!user) {
+            console.warn("❌ No user for phoneNumberId:", phoneNumberId);
+            return { statusCode: 200 };
+        }
+
+        console.log("✅ User found:", user._id);
+
+        const connections = await WsConnection.find({ userId: user._id });
+
+        console.log("connections", connections);
+
+        if (connections.length === 0) {
+            console.log("No active WebSocket connections for user:", user._id);
+            return { statusCode: 200 };
+        }
+
+        for (const msg of value.messages || []) {
+            console.log(`� New message from ${msg.from}`);
+            // Save to permanent collection
+            await WhatsAppMessage.create({
+                userId: user._id,
+                wabaId: entry.id,
+                from: msg.from,
+                message: msg,
+                timestamp: msg.timestamp
+            });
+
+            const eventPayload = {
+                whatsappEvent: req.body,          // full Meta webhook
+                userId: user._id.toString(),      // user reference
+                connections: connections.map(c => ({
+                    connectionId: c.connectionId
+                }))
+            };
+
+            const responce = await lambdaClient.send(new InvokeCommand({
+                FunctionName: "waba-webhook",
+                InvocationType: "RequestResponse",
+                Payload: JSON.stringify(eventPayload)
+            }));
+            console.log("Invoked waba-webhook successfully");
+            console.log(responce);
+        }
         res.status(200).send("EVENT_RECEIVED");
     } catch (err) {
         console.error("Webhook Error:", err);
