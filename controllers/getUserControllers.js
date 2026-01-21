@@ -1,4 +1,7 @@
 const User = require("../models/userModel");
+const Lead = require("../models/leadModel");
+const Contact = require("../models/contactModel");
+const mongoose = require("mongoose");
 const YeastarToken = require("../models/YeastarToken");
 const { getValidToken } = require("../utils/yeastarClient");
 const axios = require("axios");
@@ -143,6 +146,15 @@ const getUserData = async (req, res) => {
         .status(404)
         .json({ status: "error", message: "User not found" });
     }
+
+    const ContactCount = await Contact.countDocuments({
+      createdBy: new mongoose.Types.ObjectId(req.user._id),
+    });
+
+    const LeadCount = await Lead.countDocuments({
+      createdBy: new mongoose.Types.ObjectId(req.user._id),
+    });
+
     // --------- Normalize phonenumbers for response based on apiType ----------
     const phonenumbersForResponse = (() => {
       const phones = Array.isArray(user.phonenumbers) ? user.phonenumbers : [];
@@ -244,6 +256,8 @@ const getUserData = async (req, res) => {
           referralCode: user.referralCode || null,
           isActive: user.isActive,
           lastSeen: user.lastSeen,
+          contactCount: ContactCount,
+          leadCount: LeadCount,
           phonenumbers: phonenumbersForResponse,
           popupSettings: user.popupSettings || {},
           accounts: {
@@ -387,6 +401,8 @@ const getUserData = async (req, res) => {
           referralCode: user.referralCode || null,
           isActive: user.isActive,
           lastSeen: user.lastSeen,
+          contactCount: ContactCount,
+          leadCount: LeadCount,
           phonenumbers: phonenumbersForResponse,
           popupSettings: user.popupSettings || {},
           accounts: {
@@ -501,6 +517,8 @@ const getUserData = async (req, res) => {
       referralCode: user.referralCode || null,
       isActive: user.isActive,
       lastSeen: user.lastSeen,
+      contactCount: ContactCount,
+      leadCount: LeadCount,
       phonenumbers: phonenumbersForResponse,
       popupSettings: user.popupSettings || {},
       accounts: {

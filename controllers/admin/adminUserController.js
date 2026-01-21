@@ -1,5 +1,8 @@
 const crypto = require("crypto");
 const User = require("../../models/userModel");
+const Lead = require("../../models/leadModel");
+const mongoose = require("mongoose");
+const Contact = require("../../models/contactModel");
 const { sendVerificationEmail } = require("../../utils/emailUtils");
 const {
   createYeastarExtensionForUser,
@@ -119,21 +122,100 @@ exports.adminRegisterUser = async (req, res) => {
 };
 
 ///get all agents(role = user) created by company admin
+// exports.getAllUsersByCompanyAdmin = async (req, res) => {
+//   try {
+//     const companyAdminId = req.user._id; // ✅ from auth middleware
+
+//     const users = await User.find({
+//       createdByWhichCompanyAdmin: companyAdminId,
+//     })
+//       .select(
+//         "-password -salt -otp -otpExpiresAt -resetPasswordToken -resetPasswordExpires"
+//       ) // hide sensitive data
+//       .sort({ createdAt: -1 });
+
+
+//     return res.status(200).json({
+//       message: "Agents fetched successfully",
+//       status: "success",
+//       count: users.length,
+//       data: users,
+//     });
+//   } catch (error) {
+//     console.error("❌ getAllUsersByCompanyAdmin error:", error);
+//     res.status(500).json({
+//       status: "error",
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
 exports.getAllUsersByCompanyAdmin = async (req, res) => {
   try {
-    const companyAdminId = req.user._id; // ✅ from auth middleware
+    // ✅ IMPORTANT: Cast to ObjectId
+    const companyAdminId = new mongoose.Types.ObjectId(req.user._id);
 
-    const users = await User.find({
-      createdByWhichCompanyAdmin: companyAdminId,
-    })
-      .select(
-        "-password -salt -otp -otpExpiresAt -resetPasswordToken -resetPasswordExpires"
-      ) // hide sensitive data
-      .sort({ createdAt: -1 });
+    const users = await User.aggregate([
+      // 1️⃣ Match agents
+      {
+        $match: {
+          createdByWhichCompanyAdmin: companyAdminId,
+          role: "user",
+        },
+      },
+
+      // 2️⃣ Lookup contacts
+      {
+        $lookup: {
+          from: "contacts",
+          localField: "_id",
+          foreignField: "createdBy",
+          as: "contacts",
+        },
+      },
+
+      // 3️⃣ Lookup leads
+      {
+        $lookup: {
+          from: "leads",
+          localField: "_id",
+          foreignField: "createdBy",
+          as: "leads",
+        },
+      },
+
+      // 4️⃣ Add counts
+      {
+        $addFields: {
+          contactCount: { $size: "$contacts" },
+          leadCount: { $size: "$leads" },
+        },
+      },
+
+      // 5️⃣ Remove sensitive + heavy fields
+      {
+        $project: {
+          password: 0,
+          salt: 0,
+          otp: 0,
+          otpExpiresAt: 0,
+          resetPasswordToken: 0,
+          resetPasswordExpires: 0,
+          contacts: 0,
+          leads: 0,
+        },
+      },
+
+      // 6️⃣ Sort
+      {
+        $sort: { createdAt: -1 },
+      },
+    ]);
 
     return res.status(200).json({
-      message: "Agents fetched successfully",
       status: "success",
+      message: "Agents fetched successfully",
       count: users.length,
       data: users,
     });
@@ -146,6 +228,8 @@ exports.getAllUsersByCompanyAdmin = async (req, res) => {
     });
   }
 };
+
+
 
 /**
  * ======================================================

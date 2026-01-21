@@ -102,6 +102,25 @@ const uploadMediaToFB = async (
   }
 };
 
+const generateExampleForParam = (paramName) => {
+  const key = paramName.toLowerCase();
+
+  if (key.includes("name")) return "John";
+  if (key.includes("order")) return "ORD-12345";
+  if (key.includes("amount")) return "499";
+  if (key.includes("price")) return "499";
+  if (key.includes("date")) return "12 Jan 2026";
+  if (key.includes("time")) return "10:30 AM";
+  if (key.includes("otp")) return "123456";
+  if (key.includes("code")) return "ABC123";
+  if (key.includes("email")) return "john@example.com";
+  if (key.includes("phone")) return "9876543210";
+  if (key.includes("ticket")) return "TCK-8899";
+
+  return "Sample";
+};
+
+
 exports.createTemplate = async (req, res) => {
   try {
     console.log("===== Create Template Request Start =====");
@@ -165,23 +184,41 @@ exports.createTemplate = async (req, res) => {
     const bodyComponents = components.filter((c) => c.type === "BODY");
     const footerComponent = components.find((c) => c.type === "FOOTER");
     const buttonsComponent = components.find((c) => c.type === "BUTTONS");
-    const processedBody = bodyComponents.map((c, index) => {
-      if (!c.example) {
-        const matches = [...c.text.matchAll(/{{(\w+)}}/g)];
+    // const processedBody = bodyComponents.map((c, index) => {
+    //   if (!c.example) {
+    //     const matches = [...c.text.matchAll(/{{(\w+)}}/g)];
 
-        if (matches.length > 0) {
-          c.example = {
-            body_text_named_params: matches.map((m) => ({
-              param_name: m[1],
-              example: "Test",
-            })),
-          };
-        }
+    //     if (matches.length > 0) {
+    //       c.example = {
+    //         body_text_named_params: matches.map((m) => ({
+    //           param_name: m[1],
+    //           example: "Test",
+    //         })),
+    //       };
+    //     }
+    //   }
+
+    //   console.log(`BODY component[${index}] processed:`, c);
+    //   return c;
+    // });
+
+    const processedBody = bodyComponents.map((c, index) => {
+      const text = c.text || "";
+      const matches = [...text.matchAll(/{{(\w+)}}/g)];
+
+      if (matches.length > 0) {
+        c.example = {
+          body_text_named_params: matches.map((m) => ({
+            param_name: m[1],
+            example: generateExampleForParam(m[1]),
+          })),
+        };
       }
 
       console.log(`BODY component[${index}] processed:`, c);
       return c;
     });
+
 
     // 2️⃣ Process HEADER if provided
     let processedHeader = [];
@@ -197,16 +234,31 @@ exports.createTemplate = async (req, res) => {
 
       let headerObj = { type: "HEADER", format };
 
+      // if (format === "TEXT") {
+      //   headerObj.text = headerComponent.text || "";
+
+      //   // Check for variables in text header
+      //   const matches = [
+      //     ...(headerComponent.text || "").matchAll(/{{(\w+)}}/g),
+      //   ];
+      //   if (matches.length > 0) {
+      //     headerObj.example = {
+      //       header_text: [matches[0][1]], // First variable example
+      //     };
+      //   }
+      // } 
       if (format === "TEXT") {
         headerObj.text = headerComponent.text || "";
 
-        // Check for variables in text header
         const matches = [
           ...(headerComponent.text || "").matchAll(/{{(\w+)}}/g),
         ];
+
         if (matches.length > 0) {
           headerObj.example = {
-            header_text: [matches[0][1]], // First variable example
+            header_text: matches.map((m) =>
+              generateExampleForParam(m[1])
+            ),
           };
         }
       } else {
@@ -269,7 +321,7 @@ exports.createTemplate = async (req, res) => {
       console.log("Processed BUTTONS:", processedButtons);
     }
 
- 
+
     const payload = {
       name: name.toLowerCase().replace(/\s+/g, "_"),
       category: category.toUpperCase(),
@@ -281,14 +333,27 @@ exports.createTemplate = async (req, res) => {
         ...processedButtons,
       ].filter(Boolean),
     };
+    payload.parameter_format = "named";
     console.log(
       "Final payload ready for Meta API:",
       JSON.stringify(payload, null, 2)
     );
 
-   
+
     const url = `${META_GRAPH_URL}/${wabaId}/message_templates`;
     console.log("Sending request to:", url);
+
+    const hasInvalidVariables = payload.components.some((c) => {
+      if (!c.text) return false;
+      const hasVars = c.text.includes("{{");
+      return hasVars && !c.example;
+    });
+
+    if (hasInvalidVariables) {
+      return res.status(400).json({
+        message: "Template contains variables but examples could not be generated",
+      });
+    }
 
     const response = await axios.post(url, payload, {
       headers: {
@@ -298,7 +363,7 @@ exports.createTemplate = async (req, res) => {
     });
     console.log("Meta API response:", response.data);
 
-   
+
     const newWabaTemplate = await WabaTemplate.create({
       user: userId,
       wabaId,
