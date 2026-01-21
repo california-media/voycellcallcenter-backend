@@ -154,6 +154,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
       sorted = false,
       isFavourite = false,
       status = "",
+      agentId = [],   // ✅ ADD THIS
     } = req.body;
 
     // const createdBy = req.user._id;
@@ -184,6 +185,27 @@ exports.getAllContactsOrLeads = async (req, res) => {
     } else {
       Model = Contact;
     }
+
+    // -----------------------
+    // Agent Filter
+    // -----------------------
+    if (Array.isArray(agentId) && agentId.length > 0) {
+      const validAgentIds = agentId
+        .map(id => {
+          try {
+            return new mongoose.Types.ObjectId(id);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      // Intersect with allowedUserIds (security!)
+      allowedUserIds = allowedUserIds.filter(id =>
+        validAgentIds.some(aid => aid.equals(id))
+      );
+    }
+
 
     // -----------------------
 
@@ -292,8 +314,20 @@ exports.getAllContactsOrLeads = async (req, res) => {
       .sort(sorted ? { firstname: 1, lastname: 1 } : { createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(perPage)
-      .select("-__v -updatedAt -createdBy")
+      .select("-__v -updatedAt")
       .lean();
+
+
+    const usersMap = {};
+
+    const users = await User.find(
+      { _id: { $in: allowedUserIds } },
+      { firstname: 1, lastname: 1 }
+    ).lean();
+
+    users.forEach(u => {
+      usersMap[u._id.toString()] = `${u.firstname || ""} ${u.lastname || ""}`.trim();
+    });
 
     // -----------------------
     // Format Results
@@ -328,8 +362,19 @@ exports.getAllContactsOrLeads = async (req, res) => {
 
       // Add contact_id alias
       item.contact_id = item._id?.toString();
+      // ✅ ADD AGENT NAME
+      item.agentName = usersMap[item.createdBy?.toString()] || "";
+
+      // Optional: also expose agentId if frontend wants it
+      item.agentId = item.createdBy?.toString();
       return item;
     });
+
+    // -----------------------
+    // Fetch agent names
+    // -----------------------
+
+
 
     // -----------------------
     // Response
@@ -446,7 +491,7 @@ exports.getSingleContactOrLead = async (req, res) => {
       _id: contact_id,
       createdBy,
     })
-      .select("-__v -updatedAt -createdBy")
+      .select("-__v -updatedAt")
       .lean();
 
     if (!contact) {
