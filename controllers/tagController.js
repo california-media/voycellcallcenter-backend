@@ -22,13 +22,32 @@ const updateContactTags = async (req, res) => {
     }
     console.log(user_id);
 
+    // ✅ Get user
+    const user = await User.findById(user_id);
+    if (!user)
+      return res
+        .status(404)
+        .json({ status: "error", message: "User not found" });
+
+    let allowedCreatedByIds = [user_id];
+
+    if (user.role === "companyAdmin") {
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: user_id,
+        role: "user",
+      }).select("_id");
+
+      allowedCreatedByIds.push(...agents.map(a => a._id));
+    }
+
     const Model = category === "lead" ? Lead : Contact;
     console.log(category);
 
     // ✅ Validate contact
     const contact = await Model.findOne({
       contact_id: new mongoose.Types.ObjectId(contact_id),
-      createdBy: user_id,
+      // createdBy: user_id,
+      createdBy: { $in: allowedCreatedByIds },
     });
 
     if (!contact)
@@ -61,12 +80,7 @@ const updateContactTags = async (req, res) => {
       });
     }
 
-    // ✅ Get user
-    const user = await User.findById(user_id);
-    if (!user)
-      return res
-        .status(404)
-        .json({ status: "error", message: "User not found" });
+
 
     let matchedTags = [];
 
@@ -218,20 +232,176 @@ const updateContactTags = async (req, res) => {
   }
 };
 
+// const updateMultipleContactTags = async (req, res) => {
+//   try {
+//     const user_id = req.user._id;
+//     const { contact_id, tags, category } = req.body;
+
+//     // ✅ Validate category
+//     if (!category || !["contact", "lead"].includes(category)) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "category must be either 'contact' or 'lead'",
+//       });
+//     }
+
+//     // ✅ Validate contact_id (must be array)
+//     if (!Array.isArray(contact_id) || contact_id.length === 0) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "contact_id must be a non-empty array",
+//       });
+//     }
+
+//     // ✅ Validate tags
+//     if (!Array.isArray(tags) || tags.length === 0) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "tags must be a non-empty array",
+//       });
+//     }
+
+//     const Model = category === "lead" ? Lead : Contact;
+
+//     // ✅ Fetch user
+//     const user = await User.findById(user_id);
+//     if (!user) {
+//       return res.status(404).json({
+//         status: "error",
+//         message: "User not found",
+//       });
+//     }
+
+//     // ===============================
+//     // 🔖 STEP 1: Ensure tags exist at USER level
+//     // ===============================
+
+//     let nextUserTagOrder =
+//       user.tags.length > 0
+//         ? Math.max(...user.tags.map(t => t.order ?? 0)) + 1
+//         : 0;
+
+//     const userTagMap = {}; // tagText(lowercase) => userTag
+
+//     for (const tagItem of tags) {
+//       const tagText = tagItem.tag?.trim();
+//       const emoji = tagItem.emoji || "";
+
+//       if (!tagText) continue;
+
+//       let existingUserTag = user.tags.find(
+//         t => t.tag.toLowerCase() === tagText.toLowerCase()
+//       );
+
+//       if (!existingUserTag) {
+//         existingUserTag = {
+//           tag_id: new mongoose.Types.ObjectId(),
+//           tag: tagText,
+//           emoji,
+//           order: nextUserTagOrder++,
+//         };
+//         user.tags.push(existingUserTag);
+//       }
+
+//       userTagMap[tagText.toLowerCase()] = existingUserTag;
+//     }
+
+//     await user.save();
+
+//     // ===============================
+//     // 🔁 STEP 2: Apply tags to EACH contact / lead
+//     // ===============================
+
+//     const updatedContacts = [];
+
+//     for (const id of contact_id) {
+//       const contact = await Model.findOne({
+//         contact_id: new mongoose.Types.ObjectId(id),
+//         createdBy: user_id,
+//       });
+
+//       if (!contact) continue;
+
+//       let nextContactOrder =
+//         contact.tags.length > 0
+//           ? Math.max(...contact.tags.map(t => t.order ?? 0)) + 1
+//           : 0;
+
+//       const newTags = [];
+
+//       for (const tagItem of tags) {
+//         const tagText = tagItem.tag?.trim().toLowerCase();
+//         if (!tagText) continue;
+
+//         const userTag = userTagMap[tagText];
+
+//         const existingContactTag = contact.tags.find(
+//           t => String(t.tag_id) === String(userTag.tag_id)
+//         );
+
+//         newTags.push({
+//           tag_id: userTag.tag_id,
+//           tag: userTag.tag,
+//           emoji: userTag.emoji,
+//           globalOrder: userTag.order,
+//           order: existingContactTag
+//             ? existingContactTag.order
+//             : nextContactOrder++,
+//         });
+//       }
+
+//       contact.tags = newTags;
+
+//       await logActivityToContact(category, contact._id, {
+//         action: "tags_updated",
+//         type: "tag",
+//         title: "Tags Updated",
+//         description:
+//           newTags.length === 0
+//             ? "No tags"
+//             : `Tags updated to: ${newTags.map(t => t.tag).join(", ")}`,
+//       });
+
+//       await contact.save();
+//       updatedContacts.push(contact);
+//     }
+
+//     // ===============================
+//     // ✅ RESPONSE
+//     // ===============================
+
+//     return res.status(200).json({
+//       status: "success",
+//       message: "Tags assigned successfully",
+//       updatedCount: updatedContacts.length,
+//       contacts: updatedContacts,
+//     });
+
+//   } catch (error) {
+//     console.error("❌ Error updating contact tags:", error);
+//     return res.status(500).json({
+//       status: "error",
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
 const updateMultipleContactTags = async (req, res) => {
   try {
-    const user_id = req.user._id;
-    const { contact_id, tags, category } = req.body;
+    const loginUserId = req.user._id;
+    const { contact_id = [], tags = [], category } = req.body;
 
-    // ✅ Validate category
-    if (!category || !["contact", "lead"].includes(category)) {
+    // ===============================
+    // ✅ VALIDATIONS
+    // ===============================
+    if (!["contact", "lead"].includes(category)) {
       return res.status(400).json({
         status: "error",
-        message: "category must be either 'contact' or 'lead'",
+        message: "category must be contact or lead",
       });
     }
 
-    // ✅ Validate contact_id (must be array)
     if (!Array.isArray(contact_id) || contact_id.length === 0) {
       return res.status(400).json({
         status: "error",
@@ -239,7 +409,6 @@ const updateMultipleContactTags = async (req, res) => {
       });
     }
 
-    // ✅ Validate tags
     if (!Array.isArray(tags) || tags.length === 0) {
       return res.status(400).json({
         status: "error",
@@ -249,9 +418,11 @@ const updateMultipleContactTags = async (req, res) => {
 
     const Model = category === "lead" ? Lead : Contact;
 
-    // ✅ Fetch user
-    const user = await User.findById(user_id);
-    if (!user) {
+    // ===============================
+    // 👤 FETCH LOGIN USER
+    // ===============================
+    const loginUser = await User.findById(loginUserId);
+    if (!loginUser) {
       return res.status(404).json({
         status: "error",
         message: "User not found",
@@ -259,23 +430,36 @@ const updateMultipleContactTags = async (req, res) => {
     }
 
     // ===============================
-    // 🔖 STEP 1: Ensure tags exist at USER level
+    // 🔐 ALLOWED CREATED BY IDS
     // ===============================
+    let allowedCreatedByIds = [loginUserId];
 
+    if (loginUser.role === "companyAdmin") {
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: loginUserId,
+        role: "user",
+      }).select("_id");
+
+      allowedCreatedByIds.push(...agents.map(a => a._id));
+    }
+
+    // ===============================
+    // 🔖 STEP 1: ENSURE TAGS EXIST IN USER MODEL
+    // ===============================
     let nextUserTagOrder =
-      user.tags.length > 0
-        ? Math.max(...user.tags.map(t => t.order ?? 0)) + 1
+      loginUser.tags.length > 0
+        ? Math.max(...loginUser.tags.map(t => t.order ?? 0)) + 1
         : 0;
 
-    const userTagMap = {}; // tagText(lowercase) => userTag
+    const userTagMap = {}; // lowercase tag => userTag
 
     for (const tagItem of tags) {
       const tagText = tagItem.tag?.trim();
-      const emoji = tagItem.emoji || "";
-
       if (!tagText) continue;
 
-      let existingUserTag = user.tags.find(
+      const emoji = tagItem.emoji || "🏷️";
+
+      let existingUserTag = loginUser.tags.find(
         t => t.tag.toLowerCase() === tagText.toLowerCase()
       );
 
@@ -286,85 +470,75 @@ const updateMultipleContactTags = async (req, res) => {
           emoji,
           order: nextUserTagOrder++,
         };
-        user.tags.push(existingUserTag);
+        loginUser.tags.push(existingUserTag);
       }
 
       userTagMap[tagText.toLowerCase()] = existingUserTag;
     }
 
-    await user.save();
+    await loginUser.save();
 
     // ===============================
-    // 🔁 STEP 2: Apply tags to EACH contact / lead
+    // 🔁 STEP 2: APPLY TAGS TO CONTACTS / LEADS
     // ===============================
-
-    const updatedContacts = [];
+    let updatedCount = 0;
 
     for (const id of contact_id) {
-      const contact = await Model.findOne({
+      const doc = await Model.findOne({
         contact_id: new mongoose.Types.ObjectId(id),
-        createdBy: user_id,
+        createdBy: { $in: allowedCreatedByIds },
       });
 
-      if (!contact) continue;
+      if (!doc) continue;
 
       let nextContactOrder =
-        contact.tags.length > 0
-          ? Math.max(...contact.tags.map(t => t.order ?? 0)) + 1
+        doc.tags.length > 0
+          ? Math.max(...doc.tags.map(t => t.order ?? 0)) + 1
           : 0;
 
-      const newTags = [];
-
       for (const tagItem of tags) {
-        const tagText = tagItem.tag?.trim().toLowerCase();
-        if (!tagText) continue;
+        const tagKey = tagItem.tag?.trim().toLowerCase();
+        if (!tagKey) continue;
 
-        const userTag = userTagMap[tagText];
+        const userTag = userTagMap[tagKey];
 
-        const existingContactTag = contact.tags.find(
+        const alreadyExists = doc.tags.find(
           t => String(t.tag_id) === String(userTag.tag_id)
         );
 
-        newTags.push({
+        if (alreadyExists) continue;
+
+        doc.tags.push({
           tag_id: userTag.tag_id,
           tag: userTag.tag,
           emoji: userTag.emoji,
           globalOrder: userTag.order,
-          order: existingContactTag
-            ? existingContactTag.order
-            : nextContactOrder++,
+          order: nextContactOrder++,
         });
       }
 
-      contact.tags = newTags;
-
-      await logActivityToContact(category, contact._id, {
-        action: "tags_updated",
+      await logActivityToContact(category, doc._id, {
+        action: "tags_added",
         type: "tag",
-        title: "Tags Updated",
-        description:
-          newTags.length === 0
-            ? "No tags"
-            : `Tags updated to: ${newTags.map(t => t.tag).join(", ")}`,
+        title: "Tags Added",
+        description: `Tags added: ${tags.map(t => t.tag).join(", ")}`,
       });
 
-      await contact.save();
-      updatedContacts.push(contact);
+      await doc.save();
+      updatedCount++;
     }
 
     // ===============================
     // ✅ RESPONSE
     // ===============================
-
     return res.status(200).json({
       status: "success",
       message: "Tags assigned successfully",
-      updatedCount: updatedContacts.length,
-      contacts: updatedContacts,
+      updatedCount,
     });
 
   } catch (error) {
-    console.error("❌ Error updating contact tags:", error);
+    console.error("❌ Tag update error:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -372,6 +546,7 @@ const updateMultipleContactTags = async (req, res) => {
     });
   }
 };
+
 
 const addTag = async (req, res) => {
   try {
@@ -875,6 +1050,7 @@ const deleteTag = async (req, res) => {
     return res.status(200).json({
       status: "success",
       message: "Tag deleted",
+      tag_id,
     });
 
   } catch (error) {

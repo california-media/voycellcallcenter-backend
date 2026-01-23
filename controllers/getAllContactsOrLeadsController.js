@@ -470,12 +470,23 @@ exports.getAllActivities = async (req, res) => {
 exports.getSingleContactOrLead = async (req, res) => {
   try {
     const { contact_id, category } = req.body;
-    const createdBy = req.user._id;
+    console.log("getSingleContactOrLead called with:", { contact_id, category });
+    // const createdBy = req.user._id;
+    const loginUserId = req.user._id;
+    const user = await User.findById(loginUserId).select("role");
+    const loginUserRole = user.role;
 
     if (!contact_id) {
       return res.status(400).json({
         status: "error",
         message: "contact_id is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(contact_id)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid contact_id",
       });
     }
 
@@ -487,12 +498,49 @@ exports.getSingleContactOrLead = async (req, res) => {
       Model = Contact;
     }
 
-    const contact = await Model.findOne({
-      _id: contact_id,
-      createdBy,
-    })
+    // const contact = await Model.findOne({
+    //   _id: contact_id,
+    //   createdBy,
+    // })
+    //   .select("-__v -updatedAt")
+    //   .lean();
+
+    let query = {
+      contact_id: contact_id,
+    };
+
+    console.log("Login User Role:", loginUserRole);
+    console.log("Constructed Query Before Role Check:", query);
+
+    // Apply role-based access control
+    console.log("Applying role-based access control...");
+
+    if (loginUserRole === "user") {
+      // agent → only their own contacts
+      query.createdBy = loginUserId;
+    }
+
+    if (loginUserRole === "companyAdmin") {
+
+      // 1️⃣ Get all agents under this company admin
+      const agentIds = await User.find({
+        createdByWhichCompanyAdmin: loginUserId,
+        role: "user",
+      }).distinct("_id");
+
+      // 2️⃣ Allow admin's own + agents' contacts
+      query.createdBy = {
+        $in: [loginUserId, ...agentIds],
+      };
+    }
+    console.log("Final Query After Role Check:", query);
+
+    const contact = await Model.findOne(query)
       .select("-__v -updatedAt")
       .lean();
+
+    console.log("Fetched Contact/Lead:", contact);
+
 
     if (!contact) {
       return res.status(404).json({
@@ -500,6 +548,8 @@ exports.getSingleContactOrLead = async (req, res) => {
         message: "Contact not found",
       });
     }
+
+
 
     // Clean phone numbers
     if (Array.isArray(contact.phoneNumbers)) {

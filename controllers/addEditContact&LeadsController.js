@@ -635,16 +635,36 @@ const deleteContactOrLead = async (req, res) => {
       });
     }
 
+    let user = await User.findById(req.user._id);
+
+    let allowedUserIds = [req.user._id]; // default: self
+
+    if (user.role === "companyAdmin") {
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: req.user._id,
+        role: "user",
+      }).select("_id");
+
+      const agentIds = agents.map((agent) => agent._id);
+
+      // company admin can delete:
+      // 1. their own contacts
+      // 2. their agents' contacts
+      allowedUserIds = [req.user._id, ...agentIds];
+    }
+
     // If category is not provided, try both models
     if (!category) {
       const record =
         (await Contact.findOneAndDelete({
           _id: contact_id,
-          createdBy: userId,
+          // createdBy: userId,
+          createdBy: { $in: allowedUserIds },
         })) ||
         (await Lead.findOneAndDelete({
           _id: contact_id,
-          createdBy: userId,
+          // createdBy: userId,
+          createdBy: { $in: allowedUserIds },
         }));
 
       if (!record) {
@@ -668,7 +688,8 @@ const deleteContactOrLead = async (req, res) => {
     // Find and delete record
     const record = await currentModel.findOneAndDelete({
       _id: contact_id,
-      createdBy: userId,
+      // createdBy: userId,
+      createdBy: { $in: allowedUserIds },
     });
 
     if (!record) {
@@ -870,10 +891,28 @@ const batchDeleteContacts = async (req, res) => {
     const isLeadReq = category && category.toLowerCase() === "lead";
     const currentModel = isLeadReq ? Lead : Contact;
 
+    // 🔐 Determine who this user can delete for
+    let allowedUserIds = [req.user._id]; // default: self
+
+    if (user.role === "companyAdmin") {
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: req.user._id,
+        role: "user",
+      }).select("_id");
+
+      const agentIds = agents.map((agent) => agent._id);
+
+      // company admin can delete:
+      // 1. their own contacts
+      // 2. their agents' contacts
+      allowedUserIds = [req.user._id, ...agentIds];
+    }
+
     // Delete records that belong to this user
     const result = await currentModel.deleteMany({
       _id: { $in: contact_ids },
-      createdBy: req.user._id,
+      // createdBy: req.user._id,
+      createdBy: { $in: allowedUserIds }
     });
 
     const itemType = isLeadReq ? "lead" : "contact";
