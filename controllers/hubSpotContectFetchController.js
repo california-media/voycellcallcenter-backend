@@ -80,12 +80,25 @@ const redirectToHubSpot = (req, res) => {
   const scopes = ["crm.objects.contacts.read", "oauth"];
   const user_id = req.user._id;
   const defaultCountryCode = req.query.defaultCountryCode || "971";
+  const tags = req.query.tags || "[]"; // 👈 ADD
+  const category = req.query.category || "contact"; // 👈 ADD (default)
+  console.log("user_id:", user_id);
+  console.log("tags:", tags);
+  console.log("category:", category);
   console.log("defaultCountryCode:", defaultCountryCode);
   const params = querystring.stringify({
     client_id: process.env.HUBSPOT_CLIENT_ID,
     redirect_uri: process.env.HUBSPOT_REDIRECT_URI,
     scope: scopes.join(" "),
-    state: `${user_id}::${defaultCountryCode}`,
+    // state: `${user_id}::${defaultCountryCode}`,
+    state: Buffer.from(
+      JSON.stringify({
+        userId: user_id,
+        defaultCountryCode,
+        tags,
+        category // 👈 ADD
+      })
+    ).toString("base64"),
     response_type: "code",
   });
 
@@ -98,8 +111,14 @@ const handleHubSpotCallback = async (req, res) => {
   if (!code || !state)
     return res.status(400).json({ status: "error", message: "Missing code" });
 
-  const [userId, defaultCountryCode = "971"] = state.split("::");
-  console.log("userId:", userId, "defaultCountryCode:", defaultCountryCode);
+  // const [userId, defaultCountryCode = "971"] = state.split("::");
+  const {
+    userId,
+    defaultCountryCode = "971",
+    tags = "[]",
+    category = "contact", // 👈 ADD
+  } = JSON.parse(Buffer.from(state, "base64").toString());
+  console.log("userId:", userId, "defaultCountryCode:", defaultCountryCode, "tags:", tags, "category:", category);
 
   try {
     // ✅ TOKEN
@@ -126,9 +145,75 @@ const handleHubSpotCallback = async (req, res) => {
       }
     );
 
+    let parsedTags = [];
+
+    try {
+      parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
+      if (!Array.isArray(parsedTags)) parsedTags = [];
+    } catch {
+      parsedTags = [];
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ status: "error", message: "User not found" });
+    }
+
     const { existingPhones, existingEmails, addPhoneVariants, addEmailVariants } = await buildGlobalDuplicateSets(
       userId
     );
+
+    const isLeadImport = category === "lead";
+
+    // 🔥 Dynamic target model
+    const TargetModel = isLeadImport ? Lead : Contact;
+
+    let nextUserTagOrder =
+      user.tags.length > 0
+        ? Math.max(...user.tags.map(t => t.order ?? 0)) + 1
+        : 0;
+
+    const ensuredUserTags = [];
+
+    for (const tagItem of parsedTags) {
+      const tagText = tagItem.tag?.trim();
+      const emoji = tagItem.emoji || "🏷️";
+
+      if (!tagText) continue;
+
+      let existingUserTag = user.tags.find(
+        t => t.tag.toLowerCase() === tagText.toLowerCase()
+      );
+
+      if (!existingUserTag) {
+        existingUserTag = {
+          tag_id: new mongoose.Types.ObjectId(),
+          tag: tagText,
+          emoji,
+          order: nextUserTagOrder++,
+        };
+
+        user.tags.push(existingUserTag);
+      }
+
+      ensuredUserTags.push(existingUserTag);
+    }
+
+    if (ensuredUserTags.length > 0) {
+      await user.save();
+    }
+
+
+    const baseContactTags = ensuredUserTags.map((t, index) => ({
+      tag_id: t.tag_id,
+      tag: t.tag,
+      emoji: t.emoji,
+      globalOrder: t.order,
+      order: index, // 👈 per-contact order starts from 0
+    }));
+
 
     const contactsToInsert = [];
 
@@ -235,6 +320,20 @@ const handleHubSpotCallback = async (req, res) => {
         emailAddresses: emailList,
         phoneNumbers: phoneList,
         createdBy: userId,
+
+        isLead: isLeadImport, // 👈 ADD (true for lead)
+
+        tags: baseContactTags.map(t => ({ ...t })),
+        activities: [
+          {
+            action: isLeadImport ? "lead_created" : "contact_created",
+            type: isLeadImport ? "lead" : "contact",
+            title: isLeadImport
+              ? "Lead Imported from hubSpot"
+              : "Contact Imported from hubSpot",
+            description: `${firstname} ${lastname}`,
+          },
+        ],
       });
 
       // emailList.forEach(e => existingEmails.add(e));
@@ -250,12 +349,16 @@ const handleHubSpotCallback = async (req, res) => {
       `Contacts to insert (after deduplication): ${contactsToInsert.length}`
     );
 
-    const savedContacts = await Contact.insertMany(contactsToInsert);
+    const savedContacts = await TargetModel.insertMany(contactsToInsert);
     console.log(`✅ Successfully saved: ${savedContacts.length} contacts`);
 
     const resultData = {
       status: "success",
-      message: "HubSpot Contacts imported successfully",
+      message: isLeadImport
+        ? "HubSpot Leads imported successfully"
+        : "HubSpot Contacts imported successfully",
+      totalFetched: (contactResponse.data.results || []).length,
+      totalImported: savedContacts.length,
       contacts: savedContacts,
     };
 
@@ -264,7 +367,7 @@ const handleHubSpotCallback = async (req, res) => {
       <html>
       <head><title>HubSpot Connected</title></head>
       <body style="font-family: Arial; text-align:center; padding: 50px;">
-        <div style="color:green;">HubSpot Contact fetch successful! You can close this window.</div>
+        <div style="color:green;">${resultData.message} ! You can close this window.</div>
         <script>
           window.opener.postMessage(${JSON.stringify(resultData)}, '*');
           window.close();

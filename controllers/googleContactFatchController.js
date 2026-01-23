@@ -19,8 +19,12 @@ const redirectToGoogle = (req, res) => {
 
   const user_id = req.user._id; // Use user ID from request context if available
   const defaultCountryCode = req.query.defaultCountryCode || "971"; // Get from query param or default to 971
+  const tags = req.query.tags || "[]"; // 👈 ADD
+  const category = req.query.category || "contact"; // 👈 ADD (default)
   console.log("user_id", user_id);
   console.log("defaultCountryCode", defaultCountryCode);
+  console.log("tags", tags);
+  console.log("category", category);
 
   const params = querystring.stringify({
     client_id: process.env.GOOGLE_CLIENT_ID,
@@ -29,7 +33,15 @@ const redirectToGoogle = (req, res) => {
     scope: scopes.join(" "),
     access_type: "offline",
     prompt: "consent",
-    state: `${user_id}::${defaultCountryCode}`,
+    // state: `${user_id}::${defaultCountryCode}`,
+    state: Buffer.from(
+      JSON.stringify({
+        userId: user_id,
+        defaultCountryCode,
+        tags,
+        category // 👈 ADD
+      })
+    ).toString("base64"),
   });
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
@@ -71,7 +83,24 @@ const handleGoogleCallback = async (req, res) => {
       });
     }
 
-    const [userId, defaultCountryCode = "971"] = stateParam.split("::");
+    // const [userId, defaultCountryCode = "971"] = stateParam.split("::");
+    const {
+      userId,
+      defaultCountryCode = "971",
+      tags = "[]",
+      category = "contact", // 👈 ADD
+    } = JSON.parse(Buffer.from(state, "base64").toString());
+
+
+    // const parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
+    let parsedTags = [];
+
+    try {
+      parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
+      if (!Array.isArray(parsedTags)) parsedTags = [];
+    } catch {
+      parsedTags = [];
+    }
     console.log("userId:", userId, "defaultCountryCode:", defaultCountryCode);
 
     const user = await User.findById(userId);
@@ -79,6 +108,47 @@ const handleGoogleCallback = async (req, res) => {
       return res
         .status(404)
         .json({ status: "error", message: "User not found" });
+    }
+
+    const isLeadImport = category === "lead";
+
+    // 🔥 Dynamic target model
+    const TargetModel = isLeadImport ? Lead : Contact;
+
+
+    let nextUserTagOrder =
+      user.tags.length > 0
+        ? Math.max(...user.tags.map(t => t.order ?? 0)) + 1
+        : 0;
+
+    const ensuredUserTags = [];
+
+    for (const tagItem of parsedTags) {
+      const tagText = tagItem.tag?.trim();
+      const emoji = tagItem.emoji || "🏷️";
+
+      if (!tagText) continue;
+
+      let existingUserTag = user.tags.find(
+        t => t.tag.toLowerCase() === tagText.toLowerCase()
+      );
+
+      if (!existingUserTag) {
+        existingUserTag = {
+          tag_id: new mongoose.Types.ObjectId(),
+          tag: tagText,
+          emoji,
+          order: nextUserTagOrder++,
+        };
+
+        user.tags.push(existingUserTag);
+      }
+
+      ensuredUserTags.push(existingUserTag);
+    }
+
+    if (ensuredUserTags.length > 0) {
+      await user.save();
     }
 
     // ============================================================
@@ -108,6 +178,16 @@ const handleGoogleCallback = async (req, res) => {
     ).lean();
 
     const companyUserIds = companyUsers.map((u) => u._id);
+
+
+    const baseContactTags = ensuredUserTags.map((t, index) => ({
+      tag_id: t.tag_id,
+      tag: t.tag,
+      emoji: t.emoji,
+      globalOrder: t.order,
+      order: index, // 👈 per-contact order starts from 0
+    }));
+
 
     // ============================================================
     // ✅ STEP 3: LOAD ALL CONTACTS & LEADS FOR WHOLE COMPANY
@@ -266,6 +346,31 @@ const handleGoogleCallback = async (req, res) => {
       // ============================================================
       const _id = new mongoose.Types.ObjectId();
 
+      // contactsToInsert.push({
+      //   _id,
+      //   contact_id: _id,
+      //   firstname,
+      //   lastname,
+      //   emailAddresses: emailList,
+      //   phoneNumbers: phoneList,
+      //   company: "",
+      //   designation: "",
+      //   linkedin: "",
+      //   instagram: "",
+      //   telegram: "",
+      //   twitter: "",
+      //   facebook: "",
+      //   createdBy: userId,
+      //   activities: [
+      //     {
+      //       action: "contact_created",
+      //       type: "contact",
+      //       title: "Contact Imported from Google",
+      //       description: `${firstname} ${lastname}`,
+      //     },
+      //   ],
+      // });
+
       contactsToInsert.push({
         _id,
         contact_id: _id,
@@ -273,23 +378,24 @@ const handleGoogleCallback = async (req, res) => {
         lastname,
         emailAddresses: emailList,
         phoneNumbers: phoneList,
-        company: "",
-        designation: "",
-        linkedin: "",
-        instagram: "",
-        telegram: "",
-        twitter: "",
-        facebook: "",
         createdBy: userId,
+
+        isLead: isLeadImport, // 👈 ADD (true for lead)
+
+        tags: baseContactTags.map(t => ({ ...t })),
+
         activities: [
           {
-            action: "contact_created",
-            type: "contact",
-            title: "Contact Imported from Google",
+            action: isLeadImport ? "lead_created" : "contact_created",
+            type: isLeadImport ? "lead" : "contact",
+            title: isLeadImport
+              ? "Lead Imported from Google"
+              : "Contact Imported from Google",
             description: `${firstname} ${lastname}`,
           },
         ],
       });
+
     }
 
     // ============================================================
@@ -304,7 +410,8 @@ const handleGoogleCallback = async (req, res) => {
 
     let savedContacts = [];
     if (contactsToInsert.length > 0) {
-      savedContacts = await Contact.insertMany(contactsToInsert);
+      // savedContacts = await Contact.insertMany(contactsToInsert);
+      savedContacts = await TargetModel.insertMany(contactsToInsert);
       console.log(`✅ Successfully saved: ${savedContacts.length} contacts`);
     } else {
       console.log(
@@ -317,8 +424,12 @@ const handleGoogleCallback = async (req, res) => {
     // ============================================================
     const resultData = {
       status: "success",
-      message: "Google Contacts imported successfully",
-      imported: savedContacts.length,
+      // message: "Google Contacts imported successfully",
+      message: isLeadImport
+        ? "Google Leads imported successfully"
+        : "Google Contacts imported successfully",
+      totalFetched: connections.length,
+      totalImported: savedContacts.length,
       contacts: savedContacts,
     };
 
@@ -337,7 +448,7 @@ const handleGoogleCallback = async (req, res) => {
             </style>
         </head>
         <body>
-            <div class="success">Google Contact fetch Successfully! You can close this window.</div>
+            <div class="success">${resultData.message} ! You can close this window.</div>
             <script>
                 window.opener.postMessage(${JSON.stringify(resultData)}, '*');
                 window.close();
