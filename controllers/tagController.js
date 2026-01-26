@@ -1050,7 +1050,9 @@ const deleteTag = async (req, res) => {
     return res.status(200).json({
       status: "success",
       message: "Tag deleted",
-      tag_id,
+      data: {
+        tag_id,
+      }
     });
 
   } catch (error) {

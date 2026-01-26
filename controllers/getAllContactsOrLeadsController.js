@@ -150,7 +150,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
       page = 1,
       limit = 10,
       search = "",
-      tag = "",
+      tag = [],
       sorted = false,
       isFavourite = false,
       status = "",
@@ -236,16 +236,28 @@ exports.getAllContactsOrLeads = async (req, res) => {
     }
 
     // Filter by tags
+    // if (Array.isArray(tag) && tag.length > 0) {
+    //   query["tags.tag"] = {
+    //     $in: tag.map((t) => new RegExp(`^${escapeRegex(t)}$`, "i")),
+    //   };
+    // } else if (typeof tag === "string" && tag.trim() !== "") {
+    //   query["tags.tag"] = {
+    //     $regex: `^${escapeRegex(tag.trim())}$`,
+    //     $options: "i",
+    //   };
+    // }
+
+    // -----------------------
+    // Filter by tags (MULTIPLE TAGS - ANY MATCH)
+    // -----------------------
     if (Array.isArray(tag) && tag.length > 0) {
       query["tags.tag"] = {
-        $in: tag.map((t) => new RegExp(`^${escapeRegex(t)}$`, "i")),
-      };
-    } else if (typeof tag === "string" && tag.trim() !== "") {
-      query["tags.tag"] = {
-        $regex: `^${escapeRegex(tag.trim())}$`,
-        $options: "i",
+        $in: tag
+          .filter(t => typeof t === "string" && t.trim() !== "")
+          .map(t => new RegExp(`^${escapeRegex(t.trim())}$`, "i")),
       };
     }
+
 
     // -----------------------
     // Search (Name, Email, Phone)
