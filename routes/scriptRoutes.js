@@ -10,6 +10,6 @@ const checkAccountStatus = require("../middlewares/checkAccountStatus")
 // body optional: themeColor, popupHeading, popupText, calltoaction
 router.post('/generate', checkForAuthentication(), checkAccountStatus, generateScriptTag);
 
-router.post('/generateFormCall', checkForAuthentication(), checkAccountStatus, generateFormCallScriptTag);
+// router.post('/generateFormCall', checkForAuthentication(), checkAccountStatus, generateFormCallScriptTag);
 
 module.exports = router;

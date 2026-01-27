@@ -11,6 +11,7 @@ const Lead = require("../models/leadModel");
 const { zohoAfterCallSync } = require("../services/zohoAfterCallSync.service");
 const { createZoomMeeting } = require("../utils/zoomCalendar");
 const { createGoogleMeetEvent } = require("../utils/googleCalendar");
+const incomingcallConnection = require("../models/incomingcallConnection");
 
 //show all calls of number agent and company admin calls, show proper agent ya company admin name in call,extention is change so call is not show
 
@@ -2091,6 +2092,65 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ addFormDataAfterCallEnd Error:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
+
+const lambdaClient = new LambdaClient({
+  region: "eu-north-1"
+});
+
+exports.incomingCallWebhook = async (req, res) => {
+  try {
+    console.log("Incoming Call Webhook Received:", req.body);
+    const userId = req.user._id;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    const connections = await incomingcallConnection.find({ userId });
+
+    if (!connections || connections.length === 0) {
+      return res.status(400).json({ message: "No active connections found" });
+    }
+
+
+    console.log("connections", connections);
+
+
+    if (!connections) {
+      return res.status(400).json({ message: "Connection not found" });
+    }
+
+    const payload = {
+      userId,
+      message: "Incoming Call",
+    };
+
+
+    const responce = await lambdaClient.send(new InvokeCommand({
+      FunctionName: "incomingcall-connect",
+      InvocationType: "Event",
+      Payload: JSON.stringify({
+        action: "incomingcall",
+        connections: connections.map(c => c.connectionId),
+        payload,
+      })
+    }));
+    console.log("Invoked incomingcall-webhook successfully");
+    console.log(responce);
+
+    // You can process the incoming call data here
+    // For example, save it to the database or trigger other actions
+    return res.status(200).json({ message: "Webhook received successfully" });
+  } catch (error) {
+    console.error("❌ Incoming Call Webhook Error:", error);
     return res.status(500).json({
       message: "Internal server error",
       error: error.message,

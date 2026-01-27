@@ -12,6 +12,7 @@ const {
   getInboundOutBoundCallGraph,
   addFormDataAfterCallEnd,
   getMonthlyCallGraph,
+  incomingCallWebhook,
 } = require("../controllers/getYeasterCallHistoryController");
 
 router.post("/fetch-and-store", checkAccountStatus, fetchAndStoreCallHistory);
@@ -29,5 +30,7 @@ router.post("/dashboard-call-history", checkAccountStatus, getMonthlyCallGraph);
 router.get("/inbound-outbound-call-graph", checkAccountStatus, getInboundOutBoundCallGraph);
 
 router.post("/addFormDataAfterCallEnd", checkAccountStatus, addFormDataAfterCallEnd)
+
+router.get("/incoming-call-webhook", incomingCallWebhook);
 
 module.exports = router;
