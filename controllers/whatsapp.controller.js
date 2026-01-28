@@ -5,6 +5,8 @@ const mongoose = require("mongoose");
 const { META_GRAPH_URL } = require("../config/whatsapp");
 const WsConnection = require("../models/wsConnection");
 const WhatsAppMessage = require("../models/whatsappMessage");
+const Contact = require("../models/contactModel");
+const Lead = require("../models/leadModel");
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -194,12 +196,109 @@ async function connectDB() {
     isConnected = true;
 }
 
+/** STEP 4: Webhook to receive messages
+ */
 const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 
+// Initialize AWS Lambda client 
 const lambdaClient = new LambdaClient({
     region: "eu-north-1"
 });
 
+/** Helper: Normalize WhatsApp number
+ */
+function normalizeWhatsAppNumber(waId) {
+    // Example: 917046658651 → countryCode: 91, number: 7046658651
+    return {
+        countryCode: waId.slice(0, 2),
+        number: waId.slice(2)
+    };
+}
+
+/** Helper: Find name from CRM (Contact/Lead) based on WhatsApp ID
+ */
+async function findNameFromCRM({ userId, role, waId }) {
+
+    console.log("findNameFromCRM userId", userId);
+    console.log("findNameFromCRM role", role);
+    console.log("findNameFromCRM waId", waId);
+
+    const { countryCode, number } = normalizeWhatsAppNumber(waId);
+
+    // 🔹 Query helper
+    const phoneQuery = {
+        phoneNumbers: {
+            $elemMatch: {
+                countryCode,
+                number
+            }
+        }
+    };
+
+    // ==============================
+    // 👤 AGENT FLOW
+    // ==============================
+    if (role === "user") {
+        const contact =
+            await Contact.findOne({ ...phoneQuery, createdBy: userId }) ||
+            await Lead.findOne({ ...phoneQuery, createdBy: userId });
+
+        if (contact) {
+            return `${contact.firstname || ""} ${contact.lastname || ""}`.trim();
+        }
+
+        return null;
+    }
+
+    // ==============================
+    // 👑 COMPANY ADMIN FLOW
+    // ==============================
+    if (role === "companyAdmin") {
+        // 1️⃣ Check admin’s own contacts/leads
+        let record =
+            await Contact.findOne({ ...phoneQuery, createdBy: userId }) ||
+            await Lead.findOne({ ...phoneQuery, createdBy: userId });
+
+        if (record) {
+            return `${record.firstname || ""} ${record.lastname || ""}`.trim();
+        }
+
+        console.log("record is found in company admin", record);
+
+
+        // 2️⃣ Check agents under this admin
+        const agentIds = await User.find(
+            { createdByWhichCompanyAdmin: userId },
+            { _id: 1 }
+        ).lean();
+
+        const agentIdList = agentIds.map(a => a._id);
+
+        console.log("agentIdList of this company admin", agentIdList);
+
+
+        record =
+            await Contact.findOne({
+                ...phoneQuery,
+                createdBy: { $in: agentIdList }
+            }) ||
+            await Lead.findOne({
+                ...phoneQuery,
+                createdBy: { $in: agentIdList }
+            });
+
+        console.log("record found in its company admin agent", record);
+
+        if (record) {
+            return `${record.firstname || ""} ${record.lastname || ""}`.trim();
+        }
+    }
+
+    return null;
+}
+
+/** STEP 4: Webhook to receive messages
+ */
 exports.webhookReceive = async (req, res) => {
     console.log("🔥🔥 WHATSAPP WEBHOOK HIT 🔥🔥");
 
@@ -207,13 +306,26 @@ exports.webhookReceive = async (req, res) => {
         console.log("Forwarding raw payload to WABA Connect...");
 
         console.log("Invoked waba-connect successfully");
-        console.log(responce);
         console.log(req.body);
         console.log(req.body.entry);
 
         const entry = req.body.entry?.[0];
         const change = entry?.changes?.[0];
         const value = change?.value;
+
+        console.log("change", value.contacts);
+
+        const contact = value.contacts?.[0];
+        let senderName = "";
+        let senderWabaID = "";
+
+        if (contact) {
+            senderName = contact.profile?.name || "";
+            senderWabaID = contact.wa_id || "";
+        }
+
+        console.log("Sender Name:", senderName);
+        console.log("Sender WA ID:", senderWabaID);
 
         if (!value) {
             console.log("No value in webhook");
@@ -232,7 +344,7 @@ exports.webhookReceive = async (req, res) => {
 
         const user = await User.findOne({
             "whatsappWaba.phoneNumberId": phoneNumberId
-        }).select("_id");
+        }).select("_id role");
 
         if (!user) {
             console.warn("❌ No user for phoneNumberId:", phoneNumberId);
@@ -240,6 +352,20 @@ exports.webhookReceive = async (req, res) => {
         }
 
         console.log("✅ User found:", user._id);
+
+        console.log("full user", user);
+
+
+        const crmName = await findNameFromCRM({
+            userId: user._id,
+            role: user.role,
+            waId: senderWabaID
+        });
+
+        // ✅ Final senderName decision
+        const finalSenderName = crmName || senderName;
+
+        console.log("Final Sender Name:", finalSenderName);
 
         const connections = await WsConnection.find({ userId: user._id });
 
@@ -253,17 +379,37 @@ exports.webhookReceive = async (req, res) => {
         for (const msg of value.messages || []) {
             console.log(`� New message from ${msg.from}`);
             // Save to permanent collection
+            // await WhatsAppMessage.create({
+            //     userId: user._id,
+            //     phoneNumberId: phoneNumberId,
+            //     from: msg.from,
+            //     message: msg,
+            //     timestamp: msg.timestamp
+            // });
+
             await WhatsAppMessage.create({
                 userId: user._id,
-                wabaId: entry.id,
+                phoneNumberId,
+                conversationId: msg.from,
+                senderName: finalSenderName,
+                senderWabaId: senderWabaID,
+                direction: "incoming",
                 from: msg.from,
-                message: msg,
-                timestamp: msg.timestamp
+                to: phoneNumberId,
+                messageType: "text",
+                content: {
+                    text: msg.text.body
+                },
+                metaMessageId: msg.id,
+                status: "received",
+                messageTimestamp: new Date(msg.timestamp * 1000),
+                raw: msg
             });
 
             const eventPayload = {
                 whatsappEvent: req.body,          // full Meta webhook
                 userId: user._id.toString(),      // user reference
+                finalSenderName: finalSenderName,
                 connections: connections.map(c => ({
                     connectionId: c.connectionId
                 }))
@@ -284,7 +430,8 @@ exports.webhookReceive = async (req, res) => {
     }
 };
 
-
+/** STEP 5: Send Text Message
+ */
 exports.sendTextMessage = async (req, res) => {
     console.log("========== SEND TEXT MESSAGE API START ==========");
 
@@ -357,6 +504,27 @@ exports.sendTextMessage = async (req, res) => {
         console.log("WhatsApp API response status:", response.status);
         console.log("WhatsApp API response data:", response.data);
 
+        // 6️⃣ Extract Meta message ID
+        const metaMessageId = response.data?.messages?.[0]?.id || null;
+
+        // 7️⃣ Save outgoing message in DB
+        await WhatsAppMessage.create({
+            userId: user._id,
+            phoneNumberId,
+            conversationId: to,              // chat grouping
+            direction: "outgoing",
+            from: user.whatsappWaba.phoneNumber, // business number
+            to,
+            messageType: "text",
+            content: {
+                text: text
+            },
+            metaMessageId,
+            status: "sent",
+            messageTimestamp: new Date(),
+            raw: response.data
+        });
+
         // 6️⃣ Success response
         res.json({
             success: true,
@@ -391,7 +559,6 @@ exports.sendTextMessage = async (req, res) => {
         console.log("========== SEND TEXT MESSAGE API END ==========");
     }
 };
-
 
 /**
  * STEP 6: Send Template Message
@@ -509,5 +676,77 @@ exports.sendTemplateMessage = async (req, res) => {
         });
     } finally {
         console.log("========== SEND TEMPLATE MESSAGE API END ==========");
+    }
+};
+
+/** STEP 7: Get WhatsApp Conversations
+ */
+exports.getWhatsappConversations = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        const conversations = await WhatsAppMessage.aggregate([
+            {
+                // 1️⃣ Only this user's messages
+                $match: {
+                    userId: new mongoose.Types.ObjectId(userId),
+                },
+            },
+
+            {
+                // 2️⃣ Sort messages inside conversation
+                $sort: { messageTimestamp: 1 },
+            },
+
+            {
+                // 3️⃣ Group by conversation (customer number)
+                $group: {
+                    _id: "$conversationId",
+                    from: { $first: "$conversationId" },
+                    messages: {
+                        $push: {
+                            _id: "$_id",
+                            direction: "$direction",
+                            from: "$from",
+                            to: "$to",
+                            senderName: "$senderName",
+                            senderWabaId: "$senderWabaId",
+                            messageType: "$messageType",
+                            content: "$content",
+                            status: "$status",
+                            messageTimestamp: "$messageTimestamp",
+                        },
+                    },
+                },
+            },
+
+            {
+                // 4️⃣ Rename fields
+                $project: {
+                    _id: 0,
+                    from: 1,
+                    messages: 1,
+                },
+            },
+
+            {
+                // 5️⃣ Latest conversation on top
+                $sort: {
+                    "messages.messageTimestamp": -1,
+                },
+            },
+        ]);
+
+        res.json({
+            status: "success",
+            message: "chats received",
+            data: conversations,
+        });
+    } catch (error) {
+        console.error("❌ Get WhatsApp conversations error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch conversations",
+        });
     }
 };
