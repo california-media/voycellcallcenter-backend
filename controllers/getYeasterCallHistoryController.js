@@ -2099,6 +2099,103 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
   }
 };
 
+exports.findByPhoneNumber = async (req, res) => {
+  try {
+    const { phoneNumbers } = req.body;
+    const loggedInUser = req.user;
+    console.log("loggedInUser", loggedInUser);
+    if (!phoneNumbers?.countryCode || !phoneNumbers?.number) {
+      return res.status(400).json({
+        success: false,
+        message: "countryCode and number are required",
+      });
+    }
+
+    const user = await User.findById(loggedInUser._id);
+    if (!user) {
+      return res.status(400).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
+
+    const { countryCode, number } = phoneNumbers;
+
+    /**
+     * 🔐 Decide allowed userIds
+     */
+    let allowedUserIds = [];
+
+    if (user.role === "user") {
+      // normal user → only own data
+      allowedUserIds = [loggedInUser._id];
+      console.log("allowedUserIds", allowedUserIds);
+    }
+
+    if (user.role === "companyAdmin") {
+      // company admin → self + agents
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: loggedInUser._id,
+      }).select("_id");
+
+      allowedUserIds = [
+        loggedInUser._id,
+        ...agents.map((a) => a._id),
+      ];
+      console.log("allowedUserIds", allowedUserIds);
+    }
+
+    /**
+     * 🔎 Common phone query
+     */
+    const phoneQuery = {
+      phoneNumbers: {
+        $elemMatch: {
+          countryCode,
+          number,
+        },
+      },
+      createdBy: { $in: allowedUserIds },
+    };
+
+    /**
+     * 🔍 Search Contact & Lead
+     */
+    const [contact, lead] = await Promise.all([
+      Contact.findOne(phoneQuery),
+      Lead.findOne(phoneQuery),
+    ]);
+
+    /**
+     * ❌ Nothing found
+     */
+    if (!contact && !lead) {
+      return res.status(200).json({
+        status: "success",
+        message: "Found contact/lead",
+        data: {}
+      });
+    }
+
+    /**
+     * ✅ Found
+     */
+    const mergedResult = contact || lead;
+    console.log("Found contact/lead:", mergedResult);
+    return res.status(200).json({
+      status: "success",
+      message: "Found contact/lead",
+      data: mergedResult,
+    });
+  } catch (error) {
+    console.error("Phone lookup error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
 const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 
 const lambdaClient = new LambdaClient({

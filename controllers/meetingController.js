@@ -128,7 +128,7 @@ exports.addOrUpdateMeeting = async (req, res) => {
       meetingLocation,
       timezone = "UTC",
     } = req.body;
-   
+
     const user_id = req.user._id;
     const user = await User.findById(user_id);
 
@@ -187,6 +187,12 @@ exports.addOrUpdateMeeting = async (req, res) => {
     // }
 
     if (meetingType === "online") {
+      if (!meetingProvider || (meetingProvider !== "google" && meetingProvider !== "zoom")) {
+        return res.status(400).json({
+          status: "error",
+          message: "meetingProvider is required for online meetings and must be either 'google' or 'zoom'.",
+        });
+      }
       if (meetingProvider === "google") {
         if (!user?.googleAccessToken || !user?.googleRefreshToken) {
           return res.status(400).json({
@@ -381,7 +387,7 @@ exports.addOrUpdateMeeting = async (req, res) => {
 
     const activityTitle = isUpdate
       ? record.meetings.find((m) => m.meeting_id.toString() === meeting_id)
-          ?.meetingTitle
+        ?.meetingTitle
       : meetingObj.meetingTitle;
 
     // =============================================================

@@ -528,7 +528,7 @@ const addEditContactisLeads = async (req, res) => {
       website: website,
       // Note: isFavourite and notes are missing from req.body destructuring but
       // often included in update payloads, ensure they are present if needed.
-      // isFavourite: req.body.isFavourite,
+      isFavourite: req.body.isFavourite,
       // notes: req.body.notes,
     };
 

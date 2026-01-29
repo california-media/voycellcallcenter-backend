@@ -11,6 +11,7 @@ const {
   getAgentCallHistory,
   getInboundOutBoundCallGraph,
   addFormDataAfterCallEnd,
+  findByPhoneNumber,
   getMonthlyCallGraph,
   incomingCallWebhook,
 } = require("../controllers/getYeasterCallHistoryController");
@@ -29,7 +30,9 @@ router.post("/dashboard-call-history", checkAccountStatus, getMonthlyCallGraph);
 
 router.get("/inbound-outbound-call-graph", checkAccountStatus, getInboundOutBoundCallGraph);
 
-router.post("/addFormDataAfterCallEnd", checkAccountStatus, addFormDataAfterCallEnd)
+router.post("/addFormDataAfterCallEnd", checkAccountStatus, addFormDataAfterCallEnd);
+
+router.post("/find-by-phone-number", checkAccountStatus, findByPhoneNumber);
 
 router.get("/incoming-call-webhook", incomingCallWebhook);
 
