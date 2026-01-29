@@ -297,6 +297,79 @@ async function findNameFromCRM({ userId, role, waId }) {
     return null;
 }
 
+/** Helper: Parse WhatsApp message content
+ */
+function parseWhatsAppMessage(msg) {
+    let messageType = msg.type;
+    let content = {};
+
+    switch (msg.type) {
+        case "text":
+            content.text = msg.text?.body || "";
+            break;
+
+        case "image":
+            content = {
+                mediaId: msg.image.id,
+                caption: msg.image.caption || "",
+                mimeType: msg.image.mime_type,
+                sha256: msg.image.sha256
+            };
+            break;
+
+        case "video":
+            content = {
+                mediaId: msg.video.id,
+                caption: msg.video.caption || "",
+                mimeType: msg.video.mime_type
+            };
+            break;
+
+        case "audio":
+            content = {
+                mediaId: msg.audio.id,
+                mimeType: msg.audio.mime_type,
+                voice: msg.audio.voice || false
+            };
+            break;
+
+        case "document":
+            content = {
+                mediaId: msg.document.id,
+                filename: msg.document.filename,
+                mimeType: msg.document.mime_type
+            };
+            break;
+
+        case "sticker":
+            content = {
+                mediaId: msg.sticker.id,
+                animated: msg.sticker.animated
+            };
+            break;
+
+        case "contacts":
+            content = {
+                contacts: msg.contacts
+            };
+            break;
+
+        case "location":
+            content = {
+                latitude: msg.location.latitude,
+                longitude: msg.location.longitude,
+                address: msg.location.address,
+                name: msg.location.name
+            };
+            break;
+
+        default:
+            content = { raw: msg };
+    }
+
+    return { messageType, content };
+}
+
 /** STEP 4: Webhook to receive messages
  */
 exports.webhookReceive = async (req, res) => {
@@ -387,6 +460,8 @@ exports.webhookReceive = async (req, res) => {
             //     timestamp: msg.timestamp
             // });
 
+            const { messageType, content } = parseWhatsAppMessage(msg);
+
             await WhatsAppMessage.create({
                 userId: user._id,
                 phoneNumberId,
@@ -396,10 +471,12 @@ exports.webhookReceive = async (req, res) => {
                 direction: "incoming",
                 from: msg.from,
                 to: phoneNumberId,
-                messageType: "text",
-                content: {
-                    text: msg.text.body
-                },
+                // messageType: "text",
+                // content: {
+                //     text: msg.text.body
+                // },
+                messageType,
+                content,
                 metaMessageId: msg.id,
                 status: "received",
                 messageTimestamp: new Date(msg.timestamp * 1000),
@@ -436,10 +513,10 @@ exports.sendTextMessage = async (req, res) => {
     console.log("========== SEND TEXT MESSAGE API START ==========");
 
     try {
-        const { to, text } = req.body;
+        const { to, text, name } = req.body;
         const userId = req.user?._id;
 
-        console.log("Request body:", { to, text });
+        console.log("Request body:", { to, text, name });
         console.log("Authenticated userId:", userId);
 
         // 1️⃣ Basic validation
@@ -503,6 +580,7 @@ exports.sendTextMessage = async (req, res) => {
 
         console.log("WhatsApp API response status:", response.status);
         console.log("WhatsApp API response data:", response.data);
+        console.log("response.data.messages", response);
 
         // 6️⃣ Extract Meta message ID
         const metaMessageId = response.data?.messages?.[0]?.id || null;
@@ -512,6 +590,7 @@ exports.sendTextMessage = async (req, res) => {
             userId: user._id,
             phoneNumberId,
             conversationId: to,              // chat grouping
+            senderName: name || to, // business name/number
             direction: "outgoing",
             from: user.whatsappWaba.phoneNumber, // business number
             to,
@@ -559,6 +638,176 @@ exports.sendTextMessage = async (req, res) => {
         console.log("========== SEND TEXT MESSAGE API END ==========");
     }
 };
+
+/** STEP 6: Upload Media
+ */
+
+/** Helper: Build WhatsApp message payload
+ */
+function buildWhatsAppPayload({ to, type, text, mediaId, caption, filename }) {
+    const base = {
+        messaging_product: "whatsapp",
+        to,
+        type
+    };
+
+    switch (type) {
+        case "text":
+            return {
+                ...base,
+                text: { body: text }
+            };
+
+        case "image":
+            return {
+                ...base,
+                image: { id: mediaId, caption }
+            };
+
+        case "video":
+            return {
+                ...base,
+                video: { id: mediaId, caption }
+            };
+
+        case "audio":
+            return {
+                ...base,
+                audio: { id: mediaId }
+            };
+
+        case "document":
+            return {
+                ...base,
+                document: {
+                    id: mediaId,
+                    caption,
+                    filename // ✅ THIS FIXES "Untitled"
+                }
+            };
+
+        case "sticker":
+            return {
+                ...base,
+                sticker: { id: mediaId }
+            };
+
+        default:
+            throw new Error("Unsupported message type");
+    }
+}
+
+
+const fs = require("fs");
+const FormData = require("form-data");
+
+exports.sendMessage = async (req, res) => {
+    try {
+        const { to, type, text, caption, name } = req.body;
+        const file = req.file; // multer
+        const userId = req.user._id;
+
+        if (!to || !type) {
+            return res.status(400).json({ success: false, message: "to & type required" });
+        }
+
+        const user = await User.findById(userId);
+        const { phoneNumberId, accessToken, phoneNumber } = user.whatsappWaba;
+
+        let mediaId = null;
+
+        // 🔹 STEP 1: Upload media if NOT text
+        if (type !== "text") {
+            if (!file) {
+                return res.status(400).json({
+                    success: false,
+                    message: "File required for media message"
+                });
+            }
+
+            const form = new FormData();
+            // form.append("file", fs.createReadStream(file.path));
+            form.append("file", file.buffer, {
+                filename: file.originalname,
+                contentType: file.mimetype
+            });
+            form.append("type", file.mimetype);
+            form.append("messaging_product", "whatsapp");
+
+            const uploadRes = await axios.post(
+                `${META_GRAPH_URL}/${phoneNumberId}/media`,
+                form,
+                {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        ...form.getHeaders()
+                    }
+                }
+            );
+
+            mediaId = uploadRes.data.id;
+        }
+
+        // 🔹 STEP 2: Build payload
+        const payload = buildWhatsAppPayload({
+            to,
+            type,
+            text,
+            mediaId,
+            caption,
+            filename: file?.originalname // 👈 THIS IS KEY
+        });
+
+        // 🔹 STEP 3: Send message
+        const response = await axios.post(
+            `${META_GRAPH_URL}/${phoneNumberId}/messages`,
+            payload,
+            {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+        const metaMessageId = response.data?.messages?.[0]?.id;
+
+        // 🔹 STEP 4: Save to DB
+        await WhatsAppMessage.create({
+            userId,
+            phoneNumberId,
+            conversationId: to,
+            senderName: name || phoneNumber,
+            direction: "outgoing",
+            from: phoneNumber,
+            to,
+            messageType: type,
+            content: {
+                text,
+                mediaId,
+                caption
+            },
+            metaMessageId,
+            status: "sent",
+            messageTimestamp: new Date(),
+            raw: response.data
+        });
+
+        // 🔹 cleanup temp file
+        if (file?.path) fs.unlinkSync(file.path);
+
+        res.json({
+            success: true,
+            mediaId,            // 👈 optional, useful
+            metaMessageId
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false });
+    }
+};
+
 
 /**
  * STEP 6: Send Template Message

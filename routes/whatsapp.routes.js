@@ -12,6 +12,7 @@ const {
     sendTextMessage,
     sendTemplateMessage,
     getWhatsappConversations,
+    sendMessage,
 } = require("../controllers/whatsapp.controller");
 const { createTemplate, getWabaTemplates, deleteWabaTemplate } = require("../controllers/whatsappTemplateController");
 const upload = multer();
@@ -30,4 +31,5 @@ router.get("/get-waba-templates", checkForAuthentication(), getWabaTemplates);
 router.post("/send-text", checkForAuthentication(), sendTextMessage);
 router.post("/send-template", checkForAuthentication(), sendTemplateMessage);
 router.get("/conversations", checkForAuthentication(), getWhatsappConversations);
+router.post("/send-message", checkForAuthentication(), upload.single("file"), sendMessage);
 module.exports = router;
