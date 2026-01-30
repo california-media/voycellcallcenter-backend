@@ -7,6 +7,8 @@ const WsConnection = require("../models/wsConnection");
 const WhatsAppMessage = require("../models/whatsappMessage");
 const Contact = require("../models/contactModel");
 const Lead = require("../models/leadModel");
+const { downloadMetaMedia } = require("../services/metaMedia");
+const { uploadWhatsAppMediaToS3 } = require("../utils/uploadWhatsAppMedia");
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -299,76 +301,93 @@ async function findNameFromCRM({ userId, role, waId }) {
 
 /** Helper: Parse WhatsApp message content
  */
+// function parseWhatsAppMessage(msg) {
+//     let messageType = msg.type;
+//     let content = {};
+
+//     switch (msg.type) {
+//         case "text":
+//             content.text = msg.text?.body || "";
+//             break;
+
+//         case "image":
+//             content = {
+//                 mediaId: msg.image.id,
+//                 caption: msg.image.caption || "",
+//                 mimeType: msg.image.mime_type,
+//                 sha256: msg.image.sha256
+//             };
+//             break;
+
+//         case "video":
+//             content = {
+//                 mediaId: msg.video.id,
+//                 caption: msg.video.caption || "",
+//                 mimeType: msg.video.mime_type
+//             };
+//             break;
+
+//         case "audio":
+//             content = {
+//                 mediaId: msg.audio.id,
+//                 mimeType: msg.audio.mime_type,
+//                 voice: msg.audio.voice || false
+//             };
+//             break;
+
+//         case "document":
+//             content = {
+//                 mediaId: msg.document.id,
+//                 filename: msg.document.filename,
+//                 mimeType: msg.document.mime_type
+//             };
+//             break;
+
+//         case "sticker":
+//             content = {
+//                 mediaId: msg.sticker.id,
+//                 animated: msg.sticker.animated
+//             };
+//             break;
+
+//         case "contacts":
+//             content = {
+//                 contacts: msg.contacts
+//             };
+//             break;
+
+//         case "location":
+//             content = {
+//                 latitude: msg.location.latitude,
+//                 longitude: msg.location.longitude,
+//                 address: msg.location.address,
+//                 name: msg.location.name
+//             };
+//             break;
+
+//         default:
+//             content = { raw: msg };
+//     }
+
+//     return { messageType, content };
+// }
 function parseWhatsAppMessage(msg) {
-    let messageType = msg.type;
+    const messageType = msg.type;
     let content = {};
 
-    switch (msg.type) {
-        case "text":
-            content.text = msg.text?.body || "";
-            break;
+    if (msg[messageType]?.id) {
+        content.mediaId = msg[messageType].id;
+        content.mimeType = msg[messageType].mime_type;
+        content.caption = msg[messageType].caption || "";
+    }
 
-        case "image":
-            content = {
-                mediaId: msg.image.id,
-                caption: msg.image.caption || "",
-                mimeType: msg.image.mime_type,
-                sha256: msg.image.sha256
-            };
-            break;
-
-        case "video":
-            content = {
-                mediaId: msg.video.id,
-                caption: msg.video.caption || "",
-                mimeType: msg.video.mime_type
-            };
-            break;
-
-        case "audio":
-            content = {
-                mediaId: msg.audio.id,
-                mimeType: msg.audio.mime_type,
-                voice: msg.audio.voice || false
-            };
-            break;
-
-        case "document":
-            content = {
-                mediaId: msg.document.id,
-                filename: msg.document.filename,
-                mimeType: msg.document.mime_type
-            };
-            break;
-
-        case "sticker":
-            content = {
-                mediaId: msg.sticker.id,
-                animated: msg.sticker.animated
-            };
-            break;
-
-        case "contacts":
-            content = {
-                contacts: msg.contacts
-            };
-            break;
-
-        case "location":
-            content = {
-                latitude: msg.location.latitude,
-                longitude: msg.location.longitude,
-                address: msg.location.address,
-                name: msg.location.name
-            };
-            break;
-
-        default:
-            content = { raw: msg };
+    if (messageType === "text") {
+        content.text = msg.text.body;
     }
 
     return { messageType, content };
 }
+
 
 /** STEP 4: Webhook to receive messages
  */
@@ -417,7 +436,7 @@ exports.webhookReceive = async (req, res) => {
 
         const user = await User.findOne({
             "whatsappWaba.phoneNumberId": phoneNumberId
-        }).select("_id role");
+        });
 
         if (!user) {
             console.warn("❌ No user for phoneNumberId:", phoneNumberId);
@@ -461,6 +480,26 @@ exports.webhookReceive = async (req, res) => {
             // });
 
             const { messageType, content } = parseWhatsAppMessage(msg);
+            console.log("content.mediaId", content.mediaId);
+
+            let s3dataurl = "";
+
+            if (content.mediaId) {
+                const { buffer, mimeType } = await downloadMetaMedia({
+                    mediaId: content.mediaId,
+                    accessToken: user.whatsappWaba.accessToken
+                });
+
+                const s3Url = await uploadWhatsAppMediaToS3({
+                    userId: user._id,
+                    messageType,
+                    buffer,
+                    mimeType
+                });
+
+                s3dataurl = s3Url; // ✅ THIS is gold
+                console.log("final content", content);
+            }
 
             await WhatsAppMessage.create({
                 userId: user._id,
@@ -477,6 +516,7 @@ exports.webhookReceive = async (req, res) => {
                 // },
                 messageType,
                 content,
+                s3dataurl,
                 metaMessageId: msg.id,
                 status: "received",
                 messageTimestamp: new Date(msg.timestamp * 1000),
@@ -487,6 +527,7 @@ exports.webhookReceive = async (req, res) => {
                 whatsappEvent: req.body,          // full Meta webhook
                 userId: user._id.toString(),      // user reference
                 finalSenderName: finalSenderName,
+                s3dataurl,
                 connections: connections.map(c => ({
                     connectionId: c.connectionId
                 }))

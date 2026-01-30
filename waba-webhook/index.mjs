@@ -14,12 +14,17 @@ export const handler = async (event) => {
         ? JSON.parse(Buffer.from(event.Payload).toString())
         : event;
 
-    const { whatsappEvent, userId, finalSenderName, connections } = payload;
+    const { whatsappEvent, userId, finalSenderName, s3dataurl, connections } = payload;
 
     if (!whatsappEvent || !connections || connections.length === 0) {
       console.log("No data to process");
       return { statusCode: 200 };
     }
+
+    console.log("whatsappEvent", whatsappEvent);
+
+    console.log("s3dataurl", s3dataurl);
+
 
     const entry = whatsappEvent.entry?.[0];
     const change = entry?.changes?.[0];
@@ -70,7 +75,8 @@ export const handler = async (event) => {
           const enrichedMsg = {
             ...msg,
             senderName,       // 👈 added
-            senderWabaID      // 👈 optional but useful
+            senderWabaID,      // 👈 optional but useful
+            s3dataurl
           };
 
           console.log("enrichedMsg", enrichedMsg);

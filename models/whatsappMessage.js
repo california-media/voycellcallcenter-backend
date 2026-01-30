@@ -30,6 +30,10 @@ const whatsappMessageSchema = new mongoose.Schema(
       index: true,
     },
 
+    s3dataurl: {
+      type: String, // S3 URL of the media
+    },
+
     // ↔️ Direction
     direction: {
       type: String,

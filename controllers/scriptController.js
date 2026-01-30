@@ -1,7 +1,6 @@
 // controllers/scriptController.js (or your existing file)
 const crypto = require("crypto");
 const ScriptToken = require("../models/ScriptToken");
-// const FormCallScriptToken = require("../models/FormCallScriptToken");
 const User = require("../models/userModel");
 
 const FRONTEND_BASE =
@@ -154,109 +153,58 @@ exports.generateScriptTag = async (req, res) => {
       });
     }
 
-    let scriptUrl;
+    // let scriptUrl;
 
-    // === 6️⃣ Build script URL (no .js) ===
-    scriptUrl = `${FRONTEND_BASE.replace(
-      /\/+$/,
-      ""
-    )}/voycell_callback/${token}`;
+    // // === 6️⃣ Build script URL (no .js) ===
+    // scriptUrl = `${FRONTEND_BASE.replace(
+    //   /\/+$/,
+    //   ""
+    // )}/voycell_callback/${token}`;
 
-    if (fieldName) {
-      scriptUrl = `${FRONTEND_BASE.replace(
-        /\/+$/,
-        ""
-      )}/voycell_callback/${token}/${fieldName}`;
-    }
+    // if (fieldName) {
+    //   scriptUrl = `${FRONTEND_BASE.replace(
+    //     /\/+$/,
+    //     ""
+    //   )}/voycell_callback/${token}/${fieldName}`;
+    // }
+
+    //     const loaderUrl = "https://d1zr8dznwp2wv9.cloudfront.net/voycell-loader.js";
+
+    //     let configScript = `
+    // <script>
+    //   window.VOYCELL_TOKEN = "${token}";
+    //   ${fieldName ? `window.VOYCELL_FIELD_NAME = "${fieldName}";` : ""}
+    // </script>
+    // `;
+
+    //     let loaderScript = `
+    // <script src="${loaderUrl}" async defer></script>
+    // `;
+
+    //     res.setHeader("Content-Type", "text/html; charset=utf-8");
+    //     return res.status(200).send(configScript + loaderScript);
+
+    const loaderUrl = "https://d3dt131388gl2h.cloudfront.net/voycell-loader.js";
+
+    let scriptTag = `
+<script
+  src="${loaderUrl}"
+  data-voycell-token="${token}"
+  ${fieldName ? `data-voycell-field="${fieldName}"` : ""}
+  async
+  defer>
+</script>
+`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(scriptTag);
+
 
     // === 7️⃣ Return <script> tag ===
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    return res.status(200).send(`<script src="${scriptUrl}"></script>`);
+    // res.setHeader("Content-Type", "text/html; charset=utf-8");
+    // return res.status(200).send(`<script src="${scriptUrl}"></script>`);
   } catch (err) {
     console.error("generateScriptTag Error:", err);
     return res.status(500).json({ error: "Server Error" });
   }
 };
-
-// exports.generateFormCallScriptTag = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const user = await User.findById(userId);
-
-//     if (!user || !user.extensionNumber) {
-//       return res.status(400).json({ error: "User or extension not found" });
-//     }
-
-//     if (!user.extensionStatus) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "Calling facility not activated",
-//       });
-//     }
-
-//     // normalize allowed origins
-//     const allowedOrigins = Array.isArray(req.body.allowedOrigin)
-//       ? req.body.allowedOrigin
-//         .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
-//         .filter(Boolean)
-//       : [];
-
-//     // 🆕 ADD THIS: normalize restricted URLs
-//     const restrictedUrls = Array.isArray(req.body.restrictedUrls)
-//       ? req.body.restrictedUrls
-//         .map(u => u.trim().toLowerCase())
-//         .filter(Boolean)
-//       : [];
-
-//     // 🔒 One stable token per user (recommended)
-//     let tokenDoc = await FormCallScriptToken.findOne({ userId }).sort({ createdAt: -1 });
-//     let token;
-
-//     if (tokenDoc) {
-//       token = tokenDoc.token;
-
-//       const update = {
-//         extensionNumber: user.extensionNumber,
-//         updatedAt: new Date(),
-//       };
-
-//       if (allowedOrigins.length > 0) {
-//         update.allowedOrigin = allowedOrigins;
-//       }
-
-//       if (restrictedUrls.length > 0) {
-//         update.restrictedUrls = restrictedUrls;
-//       }
-
-//       if (fieldName) {
-//         update.fieldName = fieldName;
-//       }
-
-//       await FormCallScriptToken.findByIdAndUpdate(tokenDoc._id, update);
-//     } else {
-//       token = crypto.randomBytes(16).toString("hex");
-
-//       await FormCallScriptToken.create({
-//         token,
-//         userId,
-//         extensionNumber: user.extensionNumber,
-//         allowedOrigin: allowedOrigins,
-//         restrictedUrls: restrictedUrls
-//       });
-//     }
-
-//     const dummyFieldName = "phone"; // 👈 default dummy name
-
-//     const scriptUrl = `${FRONTEND_BASE.replace(
-//       /\/+$/,
-//       ""
-//     )}/voycell_form_call/${token}/${dummyFieldName}`;
-
-
-//     res.setHeader("Content-Type", "text/html; charset=utf-8");
-//     return res.status(200).send(`<script src="${scriptUrl}"></script>`);
-//   } catch (err) {
-//     console.error("generateFormCallScriptTag error:", err);
-//     return res.status(500).json({ error: "Server error" });
-//   }
-// };
