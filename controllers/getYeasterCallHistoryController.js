@@ -1607,23 +1607,23 @@ exports.incomingCallWebhook = async (req, res) => {
     console.log("Incoming Call Webhook Received:", req.body);
     const userId = req.user._id;
 
-    if (!userId) {
-      return res.status(400).json({ message: "User not found" });
-    }
+    // if (!userId) {
+    //   return res.status(400).json({ message: "User not found" });
+    // }
 
     const connections = await incomingcallConnection.find({ userId });
 
-    if (!connections || connections.length === 0) {
-      return res.status(400).json({ message: "No active connections found" });
-    }
+    // if (!connections || connections.length === 0) {
+    //   return res.status(400).json({ message: "No active connections found" });
+    // }
 
 
     console.log("connections", connections);
 
 
-    if (!connections) {
-      return res.status(400).json({ message: "Connection not found" });
-    }
+    // if (!connections) {
+    //   return res.status(400).json({ message: "Connection not found" });
+    // }
 
     const payload = {
       userId,
