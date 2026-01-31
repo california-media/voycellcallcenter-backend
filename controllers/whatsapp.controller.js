@@ -755,7 +755,11 @@ exports.sendMessage = async (req, res) => {
         const user = await User.findById(userId);
         const { phoneNumberId, accessToken, phoneNumber } = user.whatsappWaba;
 
+        // let mediaId = null;
         let mediaId = null;
+        let s3dataurl = "";
+        let mimeType = null;
+        let fileSize = null;
 
         // 🔹 STEP 1: Upload media if NOT text
         if (type !== "text") {
@@ -787,6 +791,20 @@ exports.sendMessage = async (req, res) => {
             );
 
             mediaId = uploadRes.data.id;
+
+            // 🔥 NEW: upload same file to S3
+            s3dataurl = await uploadWhatsAppMediaToS3({
+                userId,
+                messageType: type,
+                buffer: file.buffer,
+                mimeType: file.mimetype,
+                originalName: file.originalname
+            });
+
+            mimeType = file.mimetype;
+            fileSize = file.size;
+            console.log("s3dataurl", s3dataurl);
+
         }
 
         // 🔹 STEP 2: Build payload
@@ -823,6 +841,7 @@ exports.sendMessage = async (req, res) => {
             from: phoneNumber,
             to,
             messageType: type,
+            s3dataurl: s3dataurl,
             content: {
                 text,
                 mediaId,
@@ -838,9 +857,13 @@ exports.sendMessage = async (req, res) => {
         if (file?.path) fs.unlinkSync(file.path);
 
         res.json({
-            success: true,
+            status: "success",
             mediaId,            // 👈 optional, useful
-            metaMessageId
+            metaMessageId,
+            message: "Message sent successfully",
+            s3dataurl,
+            fileSize,
+            data: response.data
         });
 
     } catch (err) {

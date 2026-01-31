@@ -164,278 +164,6 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
   }
 };
 
-// exports.getCompanyCallHistory = async (req, res) => {
-//   try {
-//     const loginUserId = req.user._id;
-
-//     // 1️⃣ Fetch logged-in company admin
-//     const admin = await User.findById(loginUserId).select(
-//       "_id firstname lastname extensionNumber role"
-//     );
-
-//     if (!admin) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "Company admin not found",
-//       });
-//     }
-
-//     const adminExtension = admin.extensionNumber;
-
-//     // 2️⃣ Request filters
-//     const {
-//       page = 1,
-//       page_size = 20,
-//       search = "",
-//       status = [],
-//       callType = [],
-//       startDate = "",
-//       endDate = "",
-//       agentId = "",
-//     } = req.body;
-
-//     // 3️⃣ Decide whose calls to show
-//     let finalExtension = adminExtension; // default → show only admin calls
-//     let agentName = `${admin.firstname} ${admin.lastname}`;
-
-//     // if (agentId) {
-//     //   // Validate agent belongs to this company admin
-//     //   const agent = await User.findOne({
-//     //     _id: agentId,
-//     //     createdByWhichCompanyAdmin: loginUserId   // ensure it's this admin's agent
-//     //   }).select("firstname lastname extensionNumber");
-
-//     //   if (!agent) {
-//     //     return res.status(400).json({
-//     //       status: "error",
-//     //       message: "Invalid agentId or agent not under this company admin"
-//     //     });
-//     //   }
-
-//     //   finalExtension = agent.extensionNumber;
-//     //   agentName = `${agent.firstname} ${agent.lastname}`;
-//     // }
-
-//     // --- support multiple agent ids (agentId can be string or array) ---
-//     let agentIdsArray = [];
-
-//     // normalize input: if agentId is an array use it, if string convert to single-element array
-//     if (agentId) {
-//       if (Array.isArray(agentId)) {
-//         agentIdsArray = agentId;
-//       } else {
-//         agentIdsArray = [agentId];
-//       }
-//     }
-
-//     // If agentIdsArray provided, fetch agents and validate they belong to this admin
-//     let agentExtensions = [adminExtension]; // default - show admin extension only
-//     let agentMap = {}; // map extension -> agent name (for attaching to records)
-
-//     if (agentIdsArray.length > 0) {
-//       // get agents that belong to this admin and match provided ids
-//       const agents = await User.find({
-//         _id: { $in: agentIdsArray },
-//         createdByWhichCompanyAdmin: loginUserId,
-//       }).select("firstname lastname extensionNumber");
-
-//       if (!agents || agents.length === 0) {
-//         return res.status(400).json({
-//           status: "error",
-//           message:
-//             "No valid agents found for provided agentId(s) or they are not under this company admin",
-//         });
-//       }
-
-//       // prepare extension list and map names
-//       agentExtensions = agents.map((a) => a.extensionNumber);
-//       agents.forEach((a) => {
-//         agentMap[a.extensionNumber] = `${a.firstname} ${a.lastname}`;
-//       });
-//     }
-
-//     // // 4️⃣ Base query (very important: ONLY ONE extension)
-//     // let query = {
-//     //   extensionNumber: agentExtensions,
-//     // };
-
-//     // 4️⃣ Base query (USER BASED FILTER — NOT EXTENSION BASED)
-//     let query = {};
-
-//     if (agentIdsArray.length > 0) {
-//       // ✅ Multiple agents selected → filter by their userIds
-//       query.extensionNumber = agentExtensions;
-//       query.userId = { $in: agentIdsArray };
-//     } else {
-//       // ✅ No agent selected → only show company admin calls
-//       query.extensionNumber = agentExtensions;
-//       query.userId = loginUserId;
-//     }
-
-//     // 5️⃣ Search filter
-//     if (search.trim() !== "") {
-//       query.$or = [
-//         { call_from: { $regex: search, $options: "i" } },
-//         { call_to: { $regex: search, $options: "i" } },
-//       ];
-//     }
-
-//     // 6️⃣ Status array filter
-//     if (Array.isArray(status) && status.length > 0) {
-//       const statusMap = {
-//         answered: "ANSWERED",
-//         missedCall: "NO ANSWER",
-//         noAnswered: "NO ANSWER",
-//         cancelled: "BUSY",
-//         invalid: "FAILED",
-//       };
-
-//       const mapped = status.map((s) => statusMap[s]).filter(Boolean);
-
-//       if (mapped.length > 0) {
-//         query.status = { $in: mapped };
-//       }
-//     }
-
-//     // 7️⃣ Call types array (Inbound/Outbound/Internal)
-//     if (Array.isArray(callType) && callType.length > 0) {
-//       const typeMap = {
-//         inbound: "Inbound",
-//         outbound: "Outbound",
-//         internal: "Internal",
-//       };
-
-//       const mapped = callType.map((t) => typeMap[t]).filter(Boolean);
-
-//       if (mapped.length > 0) {
-//         query.direction = { $in: mapped };
-//       }
-//     }
-
-//     // // 8️⃣ Date Filter
-//     // if (startDate && endDate) {
-//     //   query.start_time = {
-//     //     $gte: new Date(startDate),
-//     //     $lte: new Date(endDate)
-//     //   };
-//     // }
-
-//     // 8️⃣ Date Filter (SAFE for STRING + DATE + NULL values)
-//     if (startDate && endDate) {
-//       query.$expr = {
-//         $and: [
-//           {
-//             $gte: [
-//               {
-//                 $dateFromString: {
-//                   dateString: { $toString: "$start_time" }, // ✅ forces to string
-//                   format: "%m/%d/%Y %H:%M:%S",
-//                   onError: new Date("1970-01-01"), // ✅ prevents crash
-//                   onNull: new Date("1970-01-01"), // ✅ prevents crash
-//                 },
-//               },
-//               new Date(startDate),
-//             ],
-//           },
-//           {
-//             $lte: [
-//               {
-//                 $dateFromString: {
-//                   dateString: { $toString: "$start_time" }, // ✅ forces to string
-//                   format: "%m/%d/%Y %H:%M:%S",
-//                   onError: new Date("2999-01-01"), // ✅ prevents crash
-//                   onNull: new Date("2999-01-01"), // ✅ prevents crash
-//                 },
-//               },
-//               new Date(endDate),
-//             ],
-//           },
-//         ],
-//       };
-//     }
-
-//     // 9️⃣ Pagination
-//     const skip = (page - 1) * page_size;
-
-//     const totalRecords = await CallHistory.countDocuments(query);
-
-//     const callRecords = await CallHistory.find(query)
-//       .sort({ start_time: -1 })
-//       .skip(skip)
-//       .limit(page_size);
-
-//     console.log();
-
-//     // 🔟 Summary filter
-//     // const summaryFilter = { extensionNumber: finalExtension };
-
-//     // 🔟 Summary filter (SAME AS MAIN QUERY but WITHOUT PAGINATION)
-//     let summaryFilter = {};
-
-//     // if (agentIdsArray.length > 0) {
-//     //   summaryFilter.userId = { $in: agentIdsArray };
-//     //   summaryFilter.extensionNumber = finalExtension;
-//     // } else {
-//     summaryFilter.extensionNumber = finalExtension;
-//     summaryFilter.userId = loginUserId;
-//     // }
-
-//     // if (query.direction) summaryFilter.direction = query.direction;
-//     // if (query.status) summaryFilter.status = query.status;
-//     // if (query.start_time) summaryFilter.start_time = query.start_time;
-
-//     const inbound = await CallHistory.countDocuments({
-//       ...summaryFilter,
-//       direction: "Inbound",
-//     });
-
-//     const outbound = await CallHistory.countDocuments({
-//       ...summaryFilter,
-//       direction: "Outbound",
-//     });
-
-//     const internal = await CallHistory.countDocuments({
-//       ...summaryFilter,
-//       direction: "Internal",
-//     });
-
-//     const missed = await CallHistory.countDocuments({
-//       ...summaryFilter,
-//       status: "NO ANSWER",
-//     });
-
-//     const total = inbound + outbound + internal;
-
-//     // 1️⃣1️⃣ Add agentName to each record
-//     const finalData = callRecords.map((c) => ({
-//       ...c._doc,
-//       agentName,
-//     }));
-
-//     return res.json({
-//       status: "success",
-//       summary: {
-//         inboundCalls: inbound,
-//         internal,
-//         outboundCalls: outbound,
-//         missedCalls: missed,
-//         totalCalls: total,
-//       },
-//       page: Number(page),
-//       page_size: Number(page_size),
-//       totalRecords,
-//       callRecords: finalData,
-//     });
-//   } catch (err) {
-//     console.error("❌ CompanyAdmin Get Call History Error:", err);
-//     return res.status(500).json({
-//       status: "error",
-//       message: "Failed to retrieve call history",
-//       error: err.message,
-//     });
-//   }
-// };
-
 exports.getCompanyCallHistory = async (req, res) => {
   try {
     const loginUserId = req.user._id;
@@ -491,6 +219,10 @@ exports.getCompanyCallHistory = async (req, res) => {
       userId: { $in: recordUserIds },
     };
 
+    // ❌ Exclude Internal calls
+    recordMatch.direction = { $ne: "Internal" };
+
+
     if (search.trim()) {
       recordMatch.$or = [
         { call_from: { $regex: search, $options: "i" } },
@@ -514,7 +246,7 @@ exports.getCompanyCallHistory = async (req, res) => {
       const map = {
         inbound: "Inbound",
         outbound: "Outbound",
-        internal: "Internal",
+        // internal: "Internal",
       };
       recordMatch.direction = {
         $in: callType.map(t => map[t]).filter(Boolean),
@@ -622,9 +354,9 @@ exports.getCompanyCallHistory = async (req, res) => {
           outbound: {
             $sum: { $cond: [{ $eq: ["$direction", "Outbound"] }, 1, 0] },
           },
-          internal: {
-            $sum: { $cond: [{ $eq: ["$direction", "Internal"] }, 1, 0] },
-          },
+          // internal: {
+          //   $sum: { $cond: [{ $eq: ["$direction", "Internal"] }, 1, 0] },
+          // },
           missed: {
             $sum: { $cond: [{ $eq: ["$status", "NO ANSWER"] }, 1, 0] },
           },
@@ -644,10 +376,11 @@ exports.getCompanyCallHistory = async (req, res) => {
       summary: {
         inboundCalls: summary.inbound,
         outboundCalls: summary.outbound,
-        internalCalls: summary.internal,
+        // internalCalls: summary.internal,
         missedCalls: summary.missed,
         totalCalls:
-          summary.inbound + summary.outbound + summary.internal,
+          summary.inbound + summary.outbound,
+        // + summary.internal,
       },
       page,
       page_size,
@@ -702,6 +435,9 @@ exports.getAgentCallHistory = async (req, res) => {
       userId: loginUserId,
     };
 
+    // ❌ Exclude Internal calls globally
+    query.direction = { $ne: "Internal" };
+
     // 5️⃣ Search filter
     if (search.trim() !== "") {
       query.$or = [
@@ -732,7 +468,7 @@ exports.getAgentCallHistory = async (req, res) => {
       const typeMap = {
         inbound: "Inbound",
         outbound: "Outbound",
-        internal: "Internal",
+        // internal: "Internal",
       };
 
       const mapped = callType.map((t) => typeMap[t]).filter(Boolean);
@@ -814,17 +550,18 @@ exports.getAgentCallHistory = async (req, res) => {
       direction: "Outbound",
     });
 
-    const internal = await CallHistory.countDocuments({
-      ...summaryFilter,
-      direction: "Internal",
-    });
+    // const internal = await CallHistory.countDocuments({
+    //   ...summaryFilter,
+    //   direction: "Internal",
+    // });
 
     const missed = await CallHistory.countDocuments({
       ...summaryFilter,
       status: "NO ANSWER",
     });
 
-    const total = inbound + outbound + internal;
+    const total = inbound + outbound;
+    // + internal;
 
     // 1️⃣1️⃣ Add agentName to each record
     const finalData = callRecords.map((c) => ({
@@ -836,7 +573,7 @@ exports.getAgentCallHistory = async (req, res) => {
       status: "success",
       summary: {
         inboundCalls: inbound,
-        internal,
+        // internal,
         outboundCalls: outbound,
         missedCalls: missed,
         totalCalls: total,
@@ -855,343 +592,6 @@ exports.getAgentCallHistory = async (req, res) => {
     });
   }
 };
-
-// exports.getPhoneNumberCallHistory = async (req, res) => {
-//   try {
-//     const loginUserId = req.user._id;
-
-//     // ✅ 1️⃣ Get logged-in admin
-//     const admin = await User.findById(loginUserId).select(
-//       "_id firstname lastname extensionNumber role"
-//     );
-
-//     if (!admin) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "Company admin not found",
-//       });
-//     }
-
-//     const adminExtension = admin.extensionNumber;
-
-//     // ✅ 2️⃣ Request body
-//     const {
-//       page = 1,
-//       page_size = 20,
-//       search = "",
-//       status = [],
-//       callType = [],
-//       startDate = "",
-//       endDate = "",
-//       phonenumbers = [],
-//     } = req.body;
-
-//     if (!Array.isArray(phonenumbers) || phonenumbers.length === 0) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "Phone numbers list is required",
-//       });
-//     }
-
-//     // ✅ 3️⃣ UNIVERSAL PHONE NORMALIZER
-//     const normalizePhone = (phone) => {
-//       if (!phone) return "";
-//       return phone
-//         .toString()
-//         .replace(/\s+/g, "")
-//         .replace(/[^0-9]/g, "")
-//         .replace(/^00/, "");
-//     };
-
-//     // ✅ 4️⃣ BUILD ALL POSSIBLE PHONE VARIATIONS
-//     const flatNumbers = new Set();
-
-//     phonenumbers.forEach((p) => {
-//       const raw = normalizePhone(p.number); // 558894938
-//       const cc = normalizePhone(p.countryCode); // 971
-
-//       if (!raw) return;
-
-//       flatNumbers.add(raw); // 558894938
-//       flatNumbers.add("0" + raw); // 0558894938
-
-//       if (cc) {
-//         flatNumbers.add(cc + raw); // 971558894938
-//         flatNumbers.add(cc + "0" + raw); // 9710558894938
-//       }
-//     });
-
-//     const normalizedNumbers = [...flatNumbers];
-
-//     // ✅ 5️⃣ BASE PHONE FILTER QUERY (MAIN LOGIC)
-//     let query = {
-//       userId: loginUserId, // ✅ FILTER BY LOGGED-IN USER
-//       extensionNumber: adminExtension, // ✅ FILTER BY EXTENSION
-//       $expr: {
-//         $or: [
-//           {
-//             $and: [
-//               {
-//                 $in: [
-//                   {
-//                     $replaceAll: {
-//                       input: {
-//                         $replaceAll: {
-//                           input: "$call_from",
-//                           find: " ",
-//                           replacement: "",
-//                         },
-//                       },
-//                       find: "+",
-//                       replacement: "",
-//                     },
-//                   },
-//                   normalizedNumbers,
-//                 ],
-//               },
-//               { $eq: ["$call_to", adminExtension] },
-//             ],
-//           },
-//           {
-//             $and: [
-//               { $eq: ["$call_from", adminExtension] },
-//               {
-//                 $in: [
-//                   {
-//                     $replaceAll: {
-//                       input: {
-//                         $replaceAll: {
-//                           input: "$call_to",
-//                           find: " ",
-//                           replacement: "",
-//                         },
-//                       },
-//                       find: "+",
-//                       replacement: "",
-//                     },
-//                   },
-//                   normalizedNumbers,
-//                 ],
-//               },
-//             ],
-//           },
-//         ],
-//       },
-//     };
-
-//     // ✅ 6️⃣ SEARCH FILTER
-//     if (search.trim()) {
-//       query.$and = query.$and || [];
-//       query.$and.push({
-//         $or: [
-//           { call_from: { $regex: search, $options: "i" } },
-//           { call_to: { $regex: search, $options: "i" } },
-//         ],
-//       });
-//     }
-
-//     // ✅ 7️⃣ STATUS FILTER
-//     if (Array.isArray(status) && status.length > 0) {
-//       const statusMap = {
-//         answered: "ANSWERED",
-//         missedCall: "NO ANSWER",
-//         noAnswered: "NO ANSWER",
-//         cancelled: "BUSY",
-//         invalid: "FAILED",
-//       };
-
-//       const mapped = status.map((s) => statusMap[s]).filter(Boolean);
-//       if (mapped.length > 0) {
-//         query.status = { $in: mapped };
-//       }
-//     }
-
-//     // ✅ 8️⃣ CALL TYPE FILTER
-//     if (Array.isArray(callType) && callType.length > 0) {
-//       const typeMap = {
-//         inbound: "Inbound",
-//         outbound: "Outbound",
-//         internal: "Internal",
-//       };
-
-//       const mapped = callType.map((t) => typeMap[t]).filter(Boolean);
-//       if (mapped.length > 0) {
-//         query.direction = { $in: mapped };
-//       }
-//     }
-
-//     // ✅ 9️⃣ DATE FILTER (SAFE FOR STRING DATABASE)
-//     if (startDate && endDate) {
-//       query.$and = query.$and || [];
-//       query.$and.push({
-//         $expr: {
-//           $and: [
-//             {
-//               $gte: [
-//                 {
-//                   $dateFromString: {
-//                     dateString: "$start_time",
-//                     format: "%m/%d/%Y %H:%M:%S",
-//                     onError: new Date("1970-01-01"),
-//                     onNull: new Date("1970-01-01"),
-//                   },
-//                 },
-//                 new Date(startDate),
-//               ],
-//             },
-//             {
-//               $lte: [
-//                 {
-//                   $dateFromString: {
-//                     dateString: "$start_time",
-//                     format: "%m/%d/%Y %H:%M:%S",
-//                     onError: new Date("2999-01-01"),
-//                     onNull: new Date("2999-01-01"),
-//                   },
-//                 },
-//                 new Date(endDate),
-//               ],
-//             },
-//           ],
-//         },
-//       });
-//     }
-
-//     // ✅ 🔟 PAGINATION
-//     const skip = (page - 1) * page_size;
-
-//     const totalRecords = await CallHistory.countDocuments(query);
-
-//     const callRecords = await CallHistory.find(query)
-//       .sort({ start_time: -1 })
-//       .skip(skip)
-//       .limit(page_size);
-
-//     // // ✅ 1️⃣1️⃣ SUMMARY (USES SAME FILTER = ALWAYS ACCURATE)
-//     // const allSummaryCalls = await CallHistory.find(query).select("direction status");
-
-//     // let inboundCalls = 0;
-//     // let outboundCalls = 0;
-//     // let missedCalls = 0;
-
-//     // allSummaryCalls.forEach(call => {
-//     //   if (call.direction === "Inbound") inboundCalls++;
-//     //   if (call.direction === "Outbound") outboundCalls++;
-//     //   if (call.status === "NO ANSWER") missedCalls++;
-//     // });
-
-//     // const totalCalls = inboundCalls + outboundCalls;
-
-//     // const summary = {
-//     //   inboundCalls,
-//     //   outboundCalls,
-//     //   missedCalls,
-//     //   totalCalls
-//     // };
-
-//     // ✅ 1️⃣1️⃣ SUMMARY (PHONE-ONLY, IGNORE OTHER REQ FILTERS)
-//     // Build a phone-only $expr exactly like the base filter but WITHOUT
-//     // the other request-driven filters (search, status, callType, date).
-//     const phoneOnlyExpr = {
-//       $or: [
-//         {
-//           $and: [
-//             {
-//               $in: [
-//                 {
-//                   $replaceAll: {
-//                     input: {
-//                       $replaceAll: {
-//                         input: "$call_from",
-//                         find: " ",
-//                         replacement: "",
-//                       },
-//                     },
-//                     find: "+",
-//                     replacement: "",
-//                   },
-//                 },
-//                 normalizedNumbers,
-//               ],
-//             },
-//             { $eq: ["$call_to", adminExtension] },
-//           ],
-//         },
-//         {
-//           $and: [
-//             { $eq: ["$call_from", adminExtension] },
-//             {
-//               $in: [
-//                 {
-//                   $replaceAll: {
-//                     input: {
-//                       $replaceAll: {
-//                         input: "$call_to",
-//                         find: " ",
-//                         replacement: "",
-//                       },
-//                     },
-//                     find: "+",
-//                     replacement: "",
-//                   },
-//                 },
-//                 normalizedNumbers,
-//               ],
-//             },
-//           ],
-//         },
-//       ],
-//     };
-
-//     // phoneOnlyQuery only filters by phone variations (ignores search/status/type/date)
-//     const phoneOnlyQuery = {
-//       userId: loginUserId, // ✅ FILTER BY LOGGED-IN USER
-//       extensionNumber: adminExtension, // ✅ FILTER BY EXTENSION
-//       $expr: phoneOnlyExpr,
-//     };
-
-//     // Get all matching calls for the phone(s) — used only for the summary counts.
-//     const allSummaryCalls = await CallHistory.find(phoneOnlyQuery).select(
-//       "direction status"
-//     );
-
-//     let inboundCalls = 0;
-//     let outboundCalls = 0;
-//     let missedCalls = 0;
-
-//     allSummaryCalls.forEach((call) => {
-//       if (call.direction === "Inbound") inboundCalls++;
-//       if (call.direction === "Outbound") outboundCalls++;
-//       if (call.status === "NO ANSWER") missedCalls++;
-//     });
-
-//     const totalCalls = inboundCalls + outboundCalls;
-
-//     const summary = {
-//       inboundCalls,
-//       outboundCalls,
-//       missedCalls,
-//       totalCalls,
-//     };
-
-//     // ✅ ✅ ✅ FINAL RESPONSE
-//     return res.json({
-//       status: "success",
-//       summary,
-//       page,
-//       page_size,
-//       totalRecords,
-//       callRecords,
-//     });
-//   } catch (err) {
-//     console.error("❌ PhoneNumber Call History Error:", err);
-//     return res.status(500).json({
-//       status: "error",
-//       message: "Failed to retrieve phone number call history",
-//       error: err.message,
-//     });
-//   }
-// };
 
 exports.getPhoneNumberCallHistory = async (req, res) => {
   try {
