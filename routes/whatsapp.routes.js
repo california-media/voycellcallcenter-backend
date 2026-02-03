@@ -30,6 +30,6 @@ router.post("/create-template", upload.single("media_url"), checkForAuthenticati
 router.get("/get-waba-templates", checkForAuthentication(), getWabaTemplates);
 router.post("/send-text", checkForAuthentication(), sendTextMessage);
 router.post("/send-template", checkForAuthentication(), sendTemplateMessage);
-router.get("/conversations", checkForAuthentication(), getWhatsappConversations);
+router.post("/conversations", checkForAuthentication(), getWhatsappConversations);
 router.post("/send-message", checkForAuthentication(), upload.single("file"), sendMessage);
 module.exports = router;

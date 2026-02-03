@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const { META_GRAPH_URL } = require("../config/whatsapp");
 const WsConnection = require("../models/wsConnection");
 const WhatsAppMessage = require("../models/whatsappMessage");
+const WabaTemplate = require("../models/wabaTemplateModel");
 const Contact = require("../models/contactModel");
 const Lead = require("../models/leadModel");
 const { downloadMetaMedia } = require("../services/metaMedia");
@@ -190,7 +191,6 @@ exports.webhookVerify = (req, res) => {
     return res.sendStatus(403);
 };
 
-
 let isConnected = false;
 async function connectDB() {
     if (isConnected) return;
@@ -371,23 +371,120 @@ async function findNameFromCRM({ userId, role, waId }) {
 
 //     return { messageType, content };
 // }
+// function parseWhatsAppMessage(msg) {
+//     const messageType = msg.type;
+//     let content = {};
+
+//     if (msg[messageType]?.id) {
+//         content.mediaId = msg[messageType].id;
+//         content.mimeType = msg[messageType].mime_type;
+//         content.caption = msg[messageType].caption || "";
+//     }
+
+//     if (messageType === "text") {
+//         content.text = msg.text.body;
+//     }
+
+//     return { messageType, content };
+// }
+
 function parseWhatsAppMessage(msg) {
     const messageType = msg.type;
     let content = {};
 
-    if (msg[messageType]?.id) {
-        content.mediaId = msg[messageType].id;
-        content.mimeType = msg[messageType].mime_type;
-        content.caption = msg[messageType].caption || "";
+    // 🔹 TEXT
+    if (messageType === "text") {
+        content.text = msg.text?.body;
     }
 
-    if (messageType === "text") {
-        content.text = msg.text.body;
+    // 🔹 MEDIA (image, video, audio, document, sticker, voice)
+    if (
+        ["image", "video", "audio", "document", "sticker", "voice"].includes(messageType)
+    ) {
+        const media = msg[messageType];
+
+        content.mediaId = media?.id;
+        content.mimeType = media?.mime_type;
+        content.caption = media?.caption || "";
+        content.sha256 = media?.sha256;
+
+        // document only
+        if (messageType === "document") {
+            content.fileName = media?.filename;
+        }
+
+        // voice / audio
+        if (messageType === "voice" || messageType === "audio") {
+            content.isVoice = messageType === "voice";
+            content.duration = media?.duration;
+        }
+    }
+
+    // 🔹 CONTACTS ✅ (THIS IS YOUR ISSUE)
+    if (messageType === "contacts") {
+        content.contacts = msg.contacts || [];
+    }
+
+    // 🔹 LOCATION
+    if (messageType === "location") {
+        content.latitude = msg.location?.latitude;
+        content.longitude = msg.location?.longitude;
+        content.address = msg.location?.address;
+        content.name = msg.location?.name;
+    }
+
+    // 🔹 INTERACTIVE (buttons / list)
+    if (messageType === "interactive") {
+        content.interactiveType = msg.interactive?.type;
+
+        if (msg.interactive?.button_reply) {
+            content.interactiveId = msg.interactive.button_reply.id;
+            content.interactiveTitle = msg.interactive.button_reply.title;
+        }
+
+        if (msg.interactive?.list_reply) {
+            content.interactiveId = msg.interactive.list_reply.id;
+            content.interactiveTitle = msg.interactive.list_reply.title;
+        }
+    }
+
+    // 🔹 TEMPLATE MESSAGE
+    if (messageType === "template") {
+        content.templateName = msg.template?.name;
+        content.templateLanguage = msg.template?.language?.code;
+        content.templateParams =
+            msg.template?.components?.flatMap(c => c.parameters) || [];
     }
 
     return { messageType, content };
 }
 
+function getAttachmentName(msg, mimeType) {
+    const ext = mimeType?.split("/")[1] || "bin";
+
+    switch (msg.type) {
+        case "document":
+            return msg.document?.filename || `document_${Date.now()}.${ext}`;
+
+        case "image":
+            return `image_${Date.now()}.${ext}`;
+
+        case "video":
+            return `video_${Date.now()}.${ext}`;
+
+        case "audio":
+            return `audio_${Date.now()}.${ext}`;
+
+        case "voice":
+            return `voice_${Date.now()}.ogg`;
+
+        case "sticker":
+            return `sticker_${Date.now()}.webp`;
+
+        default:
+            return `file_${Date.now()}.${ext}`;
+    }
+}
 
 /** STEP 4: Webhook to receive messages
  */
@@ -483,21 +580,49 @@ exports.webhookReceive = async (req, res) => {
             console.log("content.mediaId", content.mediaId);
 
             let s3dataurl = "";
+            let attachmentName = "";
+            let mimeType = "";
+            let fileSize = 0;
 
             if (content.mediaId) {
-                const { buffer, mimeType } = await downloadMetaMedia({
+                // const { buffer, mimeType } = await downloadMetaMedia({
+                //     mediaId: content.mediaId,
+                //     accessToken: user.whatsappWaba.accessToken
+                // });
+
+                const downloaded = await downloadMetaMedia({
                     mediaId: content.mediaId,
                     accessToken: user.whatsappWaba.accessToken
                 });
 
+                mimeType = downloaded.mimeType;
+                fileSize = downloaded.buffer.length;
+
+                attachmentName = getAttachmentName(msg, mimeType);
+
+                // const s3Url = await uploadWhatsAppMediaToS3({
+                //     userId: user._id,
+                //     messageType,
+                //     buffer,
+                //     mimeType
+                // });
+
                 const s3Url = await uploadWhatsAppMediaToS3({
                     userId: user._id,
                     messageType,
-                    buffer,
-                    mimeType
+                    buffer: downloaded.buffer,
+                    mimeType,
+                    originalName: attachmentName
                 });
 
                 s3dataurl = s3Url; // ✅ THIS is gold
+                // enrich content (VERY IMPORTANT)
+                content.mimeType = mimeType;
+                content.fileName = attachmentName;
+                content.fileSize = fileSize;
+                content.mediaUrl = s3Url;
+                content.sha256 = msg[messageType]?.sha256;
+                content.isVoice = msg.type === "voice";
                 console.log("final content", content);
             }
 
@@ -517,6 +642,7 @@ exports.webhookReceive = async (req, res) => {
                 messageType,
                 content,
                 s3dataurl,
+                attachmentName: attachmentName,
                 metaMessageId: msg.id,
                 status: "received",
                 messageTimestamp: new Date(msg.timestamp * 1000),
@@ -528,6 +654,7 @@ exports.webhookReceive = async (req, res) => {
                 userId: user._id.toString(),      // user reference
                 finalSenderName: finalSenderName,
                 s3dataurl,
+                attachmentName,
                 connections: connections.map(c => ({
                     connectionId: c.connectionId
                 }))
@@ -738,7 +865,6 @@ function buildWhatsAppPayload({ to, type, text, mediaId, caption, filename }) {
     }
 }
 
-
 const fs = require("fs");
 const FormData = require("form-data");
 
@@ -760,6 +886,7 @@ exports.sendMessage = async (req, res) => {
         let s3dataurl = "";
         let mimeType = null;
         let fileSize = null;
+        let attachmentName = "";
 
         // 🔹 STEP 1: Upload media if NOT text
         if (type !== "text") {
@@ -817,6 +944,8 @@ exports.sendMessage = async (req, res) => {
             filename: file?.originalname // 👈 THIS IS KEY
         });
 
+        attachmentName = file?.originalname || "";
+
         // 🔹 STEP 3: Send message
         const response = await axios.post(
             `${META_GRAPH_URL}/${phoneNumberId}/messages`,
@@ -842,9 +971,13 @@ exports.sendMessage = async (req, res) => {
             to,
             messageType: type,
             s3dataurl: s3dataurl,
+            attachmentName: attachmentName,
             content: {
                 text,
                 mediaId,
+                fileSize,
+                mimeType: mimeType,
+                fileName: attachmentName,
                 caption
             },
             metaMessageId,
@@ -862,6 +995,7 @@ exports.sendMessage = async (req, res) => {
             metaMessageId,
             message: "Message sent successfully",
             s3dataurl,
+            attachmentName: attachmentName,
             fileSize,
             data: response.data
         });
@@ -872,150 +1006,914 @@ exports.sendMessage = async (req, res) => {
     }
 };
 
+function resolveTemplate(template, params) {
+    let headerText = "";
+    let bodyText = "";
+    let buttons = [];
 
+    for (const component of template.components) {
+
+        // HEADER
+        if (component.type === "HEADER" && component.text) {
+            headerText = component.text;
+            if (params.header?.length) {
+                params.header.forEach((val, i) => {
+                    headerText = headerText.replace(`{{${i + 1}}}`, val);
+                });
+            }
+        }
+
+        // BODY (NAMED PARAMS)
+        if (component.type === "BODY" && component.text) {
+            bodyText = component.text;
+
+            if (component.example?.body_text_named_params?.length) {
+                component.example.body_text_named_params.forEach(p => {
+                    bodyText = bodyText.replace(
+                        `{{${p.param_name}}}`,
+                        params.body?.[p.param_name] ?? ""
+                    );
+                });
+            }
+        }
+
+        // BUTTONS
+        if (component.type === "BUTTONS") {
+            buttons = component.buttons || [];
+        }
+    }
+
+    return {
+        header: headerText,
+        body: bodyText,
+        buttons,
+    };
+}
 /**
- * STEP 6: Send Template Message
+ * SEND WHATSAPP TEMPLATE MESSAGE (FINAL & SAFE)
  */
+// exports.sendTemplateMessage = async (req, res) => {
+//     console.log("========== SEND TEMPLATE MESSAGE START ==========");
+
+//     try {
+//         const { to, templateId, params = {} } = req.body;
+//         const userId = req.user._id;
+
+//         if (!to || !templateId) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "to and templateId are required",
+//             });
+//         }
+
+//         /* ───────── USER / WABA ───────── */
+//         const user = await User.findById(userId);
+//         if (!user?.whatsappWaba) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "WhatsApp WABA not connected",
+//             });
+//         }
+
+//         const { phoneNumberId, accessToken } = user.whatsappWaba;
+
+//         /* ───────── TEMPLATE FETCH ───────── */
+//         const template = await WabaTemplate.findOne({
+//             _id: templateId,
+//             user: userId,
+//             status: "APPROVED",
+//         });
+
+//         if (!template) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "Approved template not found",
+//             });
+//         }
+
+//         /* ───────── BUILD COMPONENTS ───────── */
+//         const components = [];
+
+//         for (const component of template.components) {
+
+//             /* ───── HEADER ───── */
+//             if (component.type === "HEADER") {
+
+//                 // TEXT HEADER
+//                 if (component.format === "TEXT") {
+//                     const varCount =
+//                         (component.text?.match(/{{\d+}}/g) || []).length;
+
+//                     if (varCount > 0) {
+//                         if (!Array.isArray(params.header)) {
+//                             throw new Error("HEADER params array required");
+//                         }
+
+//                         if (params.header.length !== varCount) {
+//                             throw new Error(`HEADER params mismatch`);
+//                         }
+
+//                         components.push({
+//                             type: "header",
+//                             parameters: params.header.map(v => ({
+//                                 type: "text",
+//                                 text: String(v),
+//                             })),
+//                         });
+//                     }
+//                 }
+
+//                 // MEDIA HEADER
+//                 if (
+//                     ["IMAGE", "VIDEO", "DOCUMENT"].includes(component.format)
+//                 ) {
+//                     if (!params.header?.mediaId) {
+//                         throw new Error("Header mediaId required");
+//                     }
+
+//                     components.push({
+//                         type: "header",
+//                         parameters: [
+//                             {
+//                                 type: component.format.toLowerCase(),
+//                                 [component.format.toLowerCase()]: {
+//                                     id: params.header.mediaId,
+//                                 },
+//                             },
+//                         ],
+//                     });
+//                 }
+//             }
+
+//             /* ───── BODY ───── */
+//             if (component.type === "BODY") {
+
+//                 // CASE 1: NAMED PARAMETERS (your case)
+//                 if (component.example?.body_text_named_params?.length) {
+
+//                     if (!Array.isArray(params.body)) {
+//                         throw new Error("params.body must be an ARRAY");
+//                     }
+
+//                     if (
+//                         params.body.length !==
+//                         component.example.body_text_named_params.length
+//                     ) {
+//                         throw new Error(
+//                             `Expected ${component.example.body_text_named_params.length} body params, got ${params.body.length}`
+//                         );
+//                     }
+
+//                     components.push({
+//                         type: "body",
+//                         parameters: params.body.map(val => ({
+//                             type: "text",
+//                             text: String(val),
+//                         })),
+//                     });
+//                 }
+
+//                 // CASE 2: POSITIONAL (body_text)
+//                 else if (component.example?.body_text?.length) {
+
+//                     if (!Array.isArray(params.body)) {
+//                         throw new Error("params.body must be ARRAY");
+//                     }
+
+//                     components.push({
+//                         type: "body",
+//                         parameters: params.body.map(val => ({
+//                             type: "text",
+//                             text: String(val),
+//                         })),
+//                     });
+//                 }
+//             }
+
+
+//             /* ───── BUTTONS ───── */
+//             if (component.type === "BUTTONS" && params.buttons?.length) {
+//                 params.buttons.forEach((btn, index) => {
+//                     components.push({
+//                         type: "button",
+//                         sub_type: btn.type || "quick_reply",
+//                         index: String(index),
+//                         parameters:
+//                             btn.type === "url"
+//                                 ? [{ type: "text", text: btn.value }]
+//                                 : [{ type: "payload", payload: btn.payload }],
+//                     });
+//                 });
+//             }
+//         }
+
+//         /* ───────── META PAYLOAD ───────── */
+//         const payload = {
+//             messaging_product: "whatsapp",
+//             to,
+//             type: "template",
+//             template: {
+//                 name: template.name,
+//                 language: { code: template.language },
+//                 ...(components.length && { components }),
+//             },
+//         };
+
+//         console.log("Meta payload:", JSON.stringify(payload, null, 2));
+
+//         /* ───────── SEND TO META ───────── */
+//         const response = await axios.post(
+//             `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+//             payload,
+//             {
+//                 headers: {
+//                     Authorization: `Bearer ${accessToken}`,
+//                     "Content-Type": "application/json",
+//                 },
+//             }
+//         );
+
+//         return res.json({
+//             success: true,
+//             message: "Template message sent successfully",
+//             metaMessageId: response.data?.messages?.[0]?.id,
+//             data: response.data,
+//         });
+
+//     } catch (error) {
+//         console.error(
+//             "❌ SEND TEMPLATE ERROR:",
+//             error.response?.data || error.message
+//         );
+
+//         return res.status(400).json({
+//             success: false,
+//             message:
+//                 error.response?.data?.error?.message ||
+//                 error.message ||
+//                 "Failed to send template",
+//         });
+//     } finally {
+//         console.log("========== SEND TEMPLATE MESSAGE END ==========");
+//     }
+// };
+
+// /** STEP 7: Get WhatsApp Conversations
+//  */
+// exports.getWhatsappConversations = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+//         const type = req.body.type || "history"; // default chats
+
+//         const now = new Date();
+//         const before24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+
+//         // const conversations = await WhatsAppMessage.aggregate([
+//         //     {
+//         //         $match: {
+//         //             userId: new mongoose.Types.ObjectId(userId),
+//         //         },
+//         //     },
+
+//         //     // 1️⃣ latest message first
+//         //     {
+//         //         $sort: { messageTimestamp: -1 },
+//         //     },
+
+//         //     // 2️⃣ group by conversation
+//         //     {
+//         //         $group: {
+//         //             _id: "$conversationId",
+//         //             from: { $first: "$conversationId" },
+//         //             lastMessageTime: { $first: "$messageTimestamp" },
+//         //             messages: {
+//         //                 $push: {
+//         //                     _id: "$_id",
+//         //                     direction: "$direction",
+//         //                     from: "$from",
+//         //                     to: "$to",
+//         //                     senderName: "$senderName",
+//         //                     senderWabaId: "$senderWabaId",
+//         //                     s3dataurl: "$s3dataurl",
+//         //                     messageType: "$messageType",
+//         //                     content: "$content",
+//         //                     status: "$status",
+//         //                     messageTimestamp: "$messageTimestamp",
+//         //                 },
+//         //             },
+//         //         },
+//         //     },
+
+//         //     // 3️⃣ oldest → newest inside chat
+//         //     {
+//         //         $addFields: {
+//         //             messages: { $reverseArray: "$messages" },
+//         //         },
+//         //     },
+
+//         //     // 4️⃣ response shape
+//         //     {
+//         //         $project: {
+//         //             _id: 0,
+//         //             from: 1,
+//         //             lastMessageTime: 1,
+//         //             messages: 1,
+//         //         },
+//         //     },
+
+//         //     // 5️⃣ latest chat on top
+//         //     {
+//         //         $sort: { lastMessageTime: -1 },
+//         //     },
+//         // ]);
+
+//         const conversations = await WhatsAppMessage.aggregate([
+//             {
+//                 $match: {
+//                     userId: new mongoose.Types.ObjectId(userId),
+//                 },
+//             },
+
+//             { $sort: { messageTimestamp: -1 } },
+
+//             {
+//                 $group: {
+//                     _id: "$conversationId",
+//                     from: { $first: "$conversationId" },
+
+//                     messages: {
+//                         $push: {
+//                             _id: "$_id",
+//                             direction: "$direction",
+//                             from: "$from",
+//                             to: "$to",
+//                             senderName: "$senderName",
+//                             senderWabaId: "$senderWabaId",
+//                             s3dataurl: "$s3dataurl",
+//                             messageType: "$messageType",
+//                             content: "$content",
+//                             status: "$status",
+//                             messageTimestamp: "$messageTimestamp",
+//                         },
+//                     },
+
+//                     // 👇 collect incoming timestamps only
+//                     incomingTimestamps: {
+//                         $push: {
+//                             $cond: [
+//                                 { $eq: ["$direction", "incoming"] },
+//                                 "$messageTimestamp",
+//                                 null
+//                             ]
+//                         }
+//                     }
+//                 }
+//             },
+
+//             {
+//                 $addFields: {
+//                     lastMessageTime: {
+//                         $max: {
+//                             $filter: {
+//                                 input: "$incomingTimestamps",
+//                                 as: "ts",
+//                                 cond: { $ne: ["$$ts", null] }
+//                             }
+//                         }
+//                     }
+//                 }
+//             },
+
+//             {
+//                 $addFields: {
+//                     messages: { $reverseArray: "$messages" },
+//                 },
+//             },
+
+//             // {
+//             //     $project: {
+//             //         _id: 0,
+//             //         from: 1,
+//             //         lastMessageTime: 1,
+//             //         messages: 1,
+//             //     },
+//             // },
+
+//             // 🔥 ONLY FILTERING LOGIC (NEW)
+//             ...(type === "chats"
+//                 ? [{ $match: { lastMessageTime: { $gte: before24Hours } } }]
+//                 : type === "history"
+//                     ? [{ $match: { lastMessageTime: { $lt: before24Hours } } }]
+//                     : []),
+
+//             { $sort: { lastMessageTime: -1 } },
+//         ]);
+
+//         res.json({
+//             status: "success",
+//             message: "chats received",
+//             data: conversations,
+//         });
+//     } catch (error) {
+//         console.error("❌ Get WhatsApp conversations error:", error);
+//         res.status(500).json({
+//             success: false,
+//             message: "Failed to fetch conversations",
+//         });
+//     }
+// };
+
+// const mongoose = require("mongoose");
+// const WhatsAppMessage = require("../models/WhatsAppMessage");
 
 exports.sendTemplateMessage = async (req, res) => {
-    console.log("========== SEND TEMPLATE MESSAGE API START ==========");
+    console.log("\n========== SEND TEMPLATE MESSAGE START ==========");
 
     try {
-        const { to, templateName, language, components } = req.body;
-        const userId = req.user?._id;
+        const { to, templateId, name, params = {} } = req.body;
+        const userId = req.user._id;
 
-        console.log("Request body:", {
-            to,
-            templateName,
-            language,
-            components,
-        });
-        console.log("Authenticated userId:", userId);
-
-        // 1️⃣ Validation
-        if (!to || !templateName) {
-            console.warn("Validation failed: 'to' or 'templateName' missing");
+        /* ───────── BASIC VALIDATION ───────── */
+        if (!to || !templateId) {
             return res.status(400).json({
                 success: false,
-                message: "'to' and 'templateName' are required",
+                message: "`to` and `templateId` are required",
             });
         }
 
-        // 2️⃣ Fetch user
-        console.log("Fetching user from DB...");
+        /* ───────── USER / WABA ───────── */
         const user = await User.findById(userId);
+        if (!user?.whatsappWaba) {
+            return res.status(400).json({
+                success: false,
+                message: "WhatsApp WABA not connected",
+            });
+        }
 
-        if (!user) {
-            console.error("User not found for userId:", userId);
+        const { phoneNumberId, accessToken, wabaId, phoneNumber } = user.whatsappWaba;
+
+        console.log("🔑 WABA DETAILS", {
+            phoneNumberId,
+            wabaId,
+            hasToken: !!accessToken,
+        });
+
+        /* ───────── TEMPLATE FETCH ───────── */
+        const template = await WabaTemplate.findOne({
+            _id: templateId,
+            user: userId,
+            status: "APPROVED",
+        });
+
+        if (!template) {
             return res.status(404).json({
                 success: false,
-                message: "User not found",
+                message: "Approved template not found",
             });
         }
 
-        const { phoneNumberId, accessToken } = user.whatsappWaba || {};
-
-        console.log("WhatsApp WABA details:", {
-            phoneNumberId,
-            hasAccessToken: !!accessToken,
+        console.log("📄 TEMPLATE FOUND", {
+            name: template.name,
+            language: template.language,
+            templateWabaId: template.wabaId,
         });
 
-        // 3️⃣ Validate WABA config
-        if (!phoneNumberId || !accessToken) {
-            console.error("WhatsApp WABA configuration missing");
-            return res.status(400).json({
-                success: false,
-                message: "WhatsApp WABA is not configured for this user",
-            });
+        /* 🔥 CRITICAL SAFETY CHECK */
+        if (String(template.wabaId) !== String(wabaId)) {
+            throw new Error(
+                "Template WABA ID does not match sender WABA ID"
+            );
         }
 
-        // 4️⃣ Prepare Meta request
-        const url = `${META_GRAPH_URL}/${phoneNumberId}/messages`;
+        /* ───────── BUILD COMPONENTS ───────── */
+        const components = [];
 
+        for (const component of template.components) {
+
+            /* ───── BODY COMPONENT ───── */
+            if (component.type === "BODY") {
+
+                const namedParams =
+                    component.example?.body_text_named_params || [];
+
+                const positionalParams =
+                    component.example?.body_text || [];
+
+                // 🔹 Named params (your template case)
+                if (namedParams.length) {
+
+                    if (!Array.isArray(params.body)) {
+                        throw new Error("params.body must be ARRAY");
+                    }
+
+                    if (params.body.length !== namedParams.length) {
+                        throw new Error(
+                            `Expected ${namedParams.length} body params, got ${params.body.length}`
+                        );
+                    }
+
+                    components.push({
+                        type: "body",
+                        parameters: namedParams.map((metaParam, index) => ({
+                            type: "text",
+                            parameter_name: metaParam.param_name, // 🔥 REQUIRED
+                            text: String(params.body[index]),
+                        })),
+                    });
+                }
+
+                // 🔹 Positional params
+                else if (positionalParams.length) {
+
+                    if (!Array.isArray(params.body)) {
+                        throw new Error("params.body must be ARRAY");
+                    }
+
+                    components.push({
+                        type: "body",
+                        parameters: params.body.map(val => ({
+                            type: "text",
+                            text: String(val),
+                        })),
+                    });
+                }
+            }
+
+            /* ───── HEADER (TEXT ONLY) ───── */
+            if (component.type === "HEADER" && component.format === "TEXT") {
+
+                const headerVars =
+                    (component.text?.match(/{{\d+}}/g) || []).length;
+
+                if (headerVars > 0) {
+                    if (!Array.isArray(params.header)) {
+                        throw new Error("params.header must be ARRAY");
+                    }
+
+                    if (params.header.length !== headerVars) {
+                        throw new Error(
+                            `Expected ${headerVars} header params, got ${params.header.length}`
+                        );
+                    }
+
+                    components.push({
+                        type: "header",
+                        parameters: params.header.map(val => ({
+                            type: "text",
+                            text: String(val),
+                        })),
+                    });
+                }
+            }
+
+            /* ───── BUTTONS ───── */
+            if (component.type === "BUTTONS" && params.buttons?.length) {
+                params.buttons.forEach((btn, index) => {
+                    components.push({
+                        type: "button",
+                        sub_type: btn.type || "quick_reply",
+                        index: String(index),
+                        parameters:
+                            btn.type === "url"
+                                ? [{ type: "text", text: btn.value }]
+                                : [{ type: "payload", payload: btn.payload }],
+                    });
+                });
+            }
+        }
+
+        /* ───────── META PAYLOAD ───────── */
         const payload = {
             messaging_product: "whatsapp",
             to,
             type: "template",
             template: {
-                name: templateName,
-                language: {
-                    code: language || "en_US",
-                },
-                components: components || [],
+                name: template.name,
+                language: { code: template.language },
+                components,
             },
         };
 
-        console.log("Meta API URL:", url);
-        console.log("Payload:", JSON.stringify(payload, null, 2));
+        console.log("📤 META PAYLOAD");
+        console.dir(payload, { depth: null });
 
-        // 5️⃣ Send request
-        const response = await axios.post(url, payload, {
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
+        /* ───────── SEND TO META ───────── */
+        const response = await axios.post(
+            `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+            payload,
+            {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        console.log("✅ META RESPONSE", response.data);
+
+
+        const resolvedTemplate = resolveTemplate(template, params);
+        console.log("Resolved template preview:", resolvedTemplate);
+
+        const metaMessageId = response.data?.messages?.[0]?.id;
+        const message = response.data?.messages?.[0] || {};
+
+        /* ───────────── SAVE MESSAGE ───────────── */
+        await WhatsAppMessage.create({
+            userId,
+            phoneNumberId,
+            conversationId: to,
+            senderName: name || to,
+            senderWabaId: wabaId,
+            direction: "outgoing",
+            from: phoneNumber,
+            to,
+            messageType: "template",
+
+            content: {
+                template: {
+                    name: template.name,
+                    language: template.language,
+
+                    // FULL TEMPLATE FROM DB
+                    components: template.components,
+
+                    // VALUES USED
+                    params,
+
+                    // FINAL USER-VISIBLE MESSAGE
+                    resolved: resolvedTemplate,
+                },
             },
+
+            metaMessageId,
+            status: "sent",
+            messageTimestamp: new Date(),
+            raw: response.data,
         });
 
-        console.log("WhatsApp API response status:", response.status);
-        console.log("WhatsApp API response data:", response.data);
 
-        // 6️⃣ Success response
-        res.json({
+        return res.json({
             success: true,
             message: "Template message sent successfully",
+            metaMessageId: response.data?.messages?.[0]?.id,
+            payload,
             data: response.data,
         });
 
     } catch (error) {
-        console.error("❌ Error while sending template message");
+        console.error("❌ SEND TEMPLATE ERROR");
+        console.dir(error.response?.data || error.message, { depth: null });
 
-        if (error.response) {
-            console.error("Meta API error status:", error.response.status);
-            console.error("Meta API error data:", error.response.data);
-
-            return res.status(error.response.status).json({
-                success: false,
-                message: "Failed to send template message",
-                metaError: error.response.data,
-            });
-        }
-
-        console.error("Unexpected error:", error.message);
-        console.error(error.stack);
-
-        res.status(500).json({
+        return res.status(400).json({
             success: false,
-            message: "Internal server error",
+            message:
+                error.response?.data?.error?.message ||
+                error.message ||
+                "Failed to send template",
         });
     } finally {
-        console.log("========== SEND TEMPLATE MESSAGE API END ==========");
+        console.log("========== SEND TEMPLATE MESSAGE END ==========\n");
     }
 };
 
-/** STEP 7: Get WhatsApp Conversations
+// exports.sendTemplateMessage = async (req, res) => {
+//     console.log("========== SEND TEMPLATE MESSAGE START ==========");
+
+//     try {
+//         const { to, templateId, params = {} } = req.body;
+//         const userId = req.user?._id;
+
+//         /* ───────────── BASIC VALIDATION ───────────── */
+//         if (!to || !templateId) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "to and templateId are required",
+//             });
+//         }
+
+//         /* ───────────── USER / WABA ───────────── */
+//         const user = await User.findById(userId);
+//         if (!user?.whatsappWaba) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "WhatsApp WABA not connected",
+//             });
+//         }
+
+//         const {
+//             phoneNumberId,
+//             accessToken,
+//             phoneNumber,
+//             wabaId,
+//         } = user.whatsappWaba;
+
+//         console.log("WABA details:", {
+//             phoneNumberId,
+//             hasAccessToken: !!accessToken,
+//         });
+
+//         /* ───────────── TEMPLATE FETCH ───────────── */
+//         const template = await WabaTemplate.findOne({
+//             _id: templateId,
+//             user: userId,
+//             status: "APPROVED",
+//         });
+
+//         if (!template) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "Approved template not found",
+//             });
+//         }
+
+//         console.log("Template found:", template.name);
+
+//         /* ───────────── BUILD COMPONENTS ───────────── */
+//         const metaComponents = [];
+
+//         for (const component of template.components) {
+
+//             /* HEADER (TEXT ONLY) */
+//             if (component.type === "HEADER" && params.header?.length) {
+//                 metaComponents.push({
+//                     type: "header",
+//                     parameters: params.header.map(val => ({
+//                         type: "text",
+//                         text: String(val),
+//                     })),
+//                 });
+//             }
+
+//             /* BODY (NAMED PARAMETERS ONLY IF EXISTS) */
+//             if (
+//                 component.type === "BODY" &&
+//                 component.example?.body_text_named_params?.length
+//             ) {
+//                 const bodyParams = component.example.body_text_named_params.map(p => {
+//                     const value = params.body?.[p.param_name];
+//                     if (!value) {
+//                         throw new Error(`Missing body parameter: ${p.param_name}`);
+//                     }
+//                     return {
+//                         type: "text",
+//                         text: String(value),
+//                     };
+//                 });
+
+//                 metaComponents.push({
+//                     type: "body",
+//                     parameters: bodyParams,
+//                 });
+//             }
+
+//             /* BUTTONS (OPTIONAL) */
+//             if (component.type === "BUTTONS" && params.buttons?.length) {
+//                 params.buttons.forEach((btn, index) => {
+//                     metaComponents.push({
+//                         type: "button",
+//                         sub_type: "quick_reply",
+//                         index: String(index),
+//                         parameters: [
+//                             {
+//                                 type: "payload",
+//                                 payload: btn.payload,
+//                             },
+//                         ],
+//                     });
+//                 });
+//             }
+//         }
+
+//         /* ───────────── META PAYLOAD ───────────── */
+//         const payload = {
+//             messaging_product: "whatsapp",
+//             to,
+//             type: "template",
+//             template: {
+//                 name: template.name,
+//                 language: { code: template.language },
+//                 ...(metaComponents.length > 0 && { components: metaComponents }),
+//             },
+//         };
+
+//         console.log("Meta payload:", JSON.stringify(payload, null, 2));
+
+//         /* ───────────── SEND TO META ───────────── */
+//         const response = await axios.post(
+//             `${META_GRAPH_URL}/${phoneNumberId}/messages`,
+//             payload,
+//             {
+//                 headers: {
+//                     Authorization: `Bearer ${accessToken}`,
+//                     "Content-Type": "application/json",
+//                 },
+//             }
+//         );
+
+//         console.log("Meta response:", response.data);
+
+//         const resolvedTemplate = resolveTemplate(template, params);
+//         console.log("Resolved template preview:", resolvedTemplate);
+
+//         const metaMessageId = response.data?.messages?.[0]?.id;
+//         const message = response.data?.messages?.[0] || {};
+
+//         console.log("Meta message:", message);
+
+//         /* ───────────── SAVE MESSAGE ───────────── */
+//         await WhatsAppMessage.create({
+//             userId,
+//             phoneNumberId,
+//             conversationId: to,
+//             senderName: phoneNumber,
+//             senderWabaId: wabaId,
+//             direction: "outgoing",
+//             from: phoneNumber,
+//             to,
+//             messageType: "template",
+
+//             content: {
+//                 template: {
+//                     name: template.name,
+//                     language: template.language,
+
+//                     // FULL TEMPLATE FROM DB
+//                     components: template.components,
+
+//                     // VALUES USED
+//                     params,
+
+//                     // FINAL USER-VISIBLE MESSAGE
+//                     resolved: resolvedTemplate,
+//                 },
+//             },
+
+//             metaMessageId,
+//             status: "sent",
+//             messageTimestamp: new Date(),
+//             raw: response.data,
+//         });
+
+
+//         return res.json({
+//             success: true,
+//             message: "Template message sent successfully",
+//             metaMessageId,
+//             payload,
+//             data: response.data,
+//         });
+
+//     } catch (error) {
+//         console.error(
+//             "❌ SEND TEMPLATE ERROR:",
+//             error.response?.data || error.message
+//         );
+
+//         return res.status(400).json({
+//             success: false,
+//             message:
+//                 error.response?.data?.error?.message ||
+//                 error.message ||
+//                 "Failed to send template",
+//         });
+//     } finally {
+//         console.log("========== SEND TEMPLATE MESSAGE END ==========");
+//     }
+// };
+
+
+/**
+ * STEP 7: Get WhatsApp Conversations
  */
 exports.getWhatsappConversations = async (req, res) => {
     try {
         const userId = req.user._id;
+        const type = req.body.type || "history"; // chats | history
+
+        const now = new Date();
+        const before24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
         const conversations = await WhatsAppMessage.aggregate([
+            /* 1️⃣ Only current user */
             {
-                // 1️⃣ Only this user's messages
                 $match: {
                     userId: new mongoose.Types.ObjectId(userId),
                 },
             },
 
+            /* 2️⃣ Latest messages first */
             {
-                // 2️⃣ Sort messages inside conversation
-                $sort: { messageTimestamp: 1 },
+                $sort: { messageTimestamp: -1 },
             },
 
+            /* 3️⃣ Group by conversation */
             {
-                // 3️⃣ Group by conversation (customer number)
                 $group: {
                     _id: "$conversationId",
                     from: { $first: "$conversationId" },
+
                     messages: {
                         $push: {
                             _id: "$_id",
@@ -1024,35 +1922,103 @@ exports.getWhatsappConversations = async (req, res) => {
                             to: "$to",
                             senderName: "$senderName",
                             senderWabaId: "$senderWabaId",
+                            s3dataurl: "$s3dataurl",
                             messageType: "$messageType",
                             content: "$content",
                             status: "$status",
                             messageTimestamp: "$messageTimestamp",
                         },
                     },
+
+                    /* collect only incoming timestamps */
+                    incomingTimestamps: {
+                        $push: {
+                            $cond: [
+                                { $eq: ["$direction", "incoming"] },
+                                "$messageTimestamp",
+                                null,
+                            ],
+                        },
+                    },
                 },
             },
 
+            /* 4️⃣ Get last incoming message time */
             {
-                // 4️⃣ Rename fields
+                $addFields: {
+                    lastIncomingMessageTime: {
+                        $max: {
+                            $filter: {
+                                input: "$incomingTimestamps",
+                                as: "ts",
+                                cond: { $ne: ["$$ts", null] },
+                            },
+                        },
+                    },
+                },
+            },
+
+            /* 5️⃣ FINAL lastMessageTime (incoming → fallback outgoing) */
+            {
+                $addFields: {
+                    lastMessageTime: {
+                        $ifNull: [
+                            "$lastIncomingMessageTime",
+                            { $max: "$messages.messageTimestamp" },
+                        ],
+                    },
+
+                    hasIncoming: {
+                        $gt: [
+                            {
+                                $size: {
+                                    $filter: {
+                                        input: "$incomingTimestamps",
+                                        as: "ts",
+                                        cond: { $ne: ["$$ts", null] },
+                                    },
+                                },
+                            },
+                            0,
+                        ],
+                    },
+                },
+            },
+
+            /* 6️⃣ Oldest → newest inside chat */
+            {
+                $addFields: {
+                    messages: { $reverseArray: "$messages" },
+                },
+            },
+
+            /* 7️⃣ Shape response */
+            {
                 $project: {
                     _id: 0,
                     from: 1,
+                    lastMessageTime: 1,
+                    hasIncoming: 1,
                     messages: 1,
                 },
             },
 
+            /* 8️⃣ Chats / History filter */
+            ...(type === "chats"
+                ? [{ $match: { lastMessageTime: { $gte: before24Hours } } }]
+                : type === "history"
+                    ? [{ $match: { lastMessageTime: { $lt: before24Hours } } }]
+                    : []),
+
+            /* 9️⃣ Latest conversation on top */
             {
-                // 5️⃣ Latest conversation on top
-                $sort: {
-                    "messages.messageTimestamp": -1,
-                },
+                $sort: { lastMessageTime: -1 },
             },
         ]);
 
         res.json({
-            status: "success",
-            message: "chats received",
+            success: true,
+            message: "Chats received successfully",
             data: conversations,
         });
     } catch (error) {

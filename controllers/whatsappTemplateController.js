@@ -120,7 +120,6 @@ const generateExampleForParam = (paramName) => {
   return "Sample";
 };
 
-
 exports.createTemplate = async (req, res) => {
   try {
     console.log("===== Create Template Request Start =====");

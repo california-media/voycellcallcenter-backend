@@ -34,6 +34,10 @@ const whatsappMessageSchema = new mongoose.Schema(
       type: String, // S3 URL of the media
     },
 
+    attachmentName: {
+      type: String, // Original name of the attachment
+    },
+
     // ↔️ Direction
     direction: {
       type: String,
@@ -113,9 +117,26 @@ const whatsappMessageSchema = new mongoose.Schema(
       interactiveTitle: String,
 
       // template
-      templateName: String,
-      templateLanguage: String,
-      templateParams: Array,
+      // template
+      template: {
+        name: String,
+        language: String,
+
+        components: Array, // full template structure from WabaTemplate
+
+        params: Object, // actual values used
+
+        resolved: {
+          header: String,
+          body: String,
+          buttons: [
+            {
+              text: String,
+              payload: String,
+            }
+          ]
+        }
+      }
     },
 
     // 🧾 Meta / WhatsApp identifiers

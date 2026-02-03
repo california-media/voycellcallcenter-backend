@@ -57,12 +57,12 @@ const checkForAuthentication = () => {
         return res.status(401).json({ message: "Unauthorized: User not found" });
       }
 
-      // ✅ SINGLE DEVICE ENFORCEMENT
-      if (user.activeSessionId !== payload.sessionId) {
-        return res.status(401).json({
-          message: "You are logged in on another device.",
-        });
-      }
+      // // ✅ SINGLE DEVICE ENFORCEMENT
+      // if (user.activeSessionId !== payload.sessionId) {
+      //   return res.status(401).json({
+      //     message: "You are logged in on another device.",
+      //   });
+      // }
 
       req.user = payload;
       next();
