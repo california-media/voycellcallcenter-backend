@@ -1,4 +1,4 @@
-// const mongoose = require("mongoose");
+const mongoose = require("mongoose");
 
 // const componentSchema = new mongoose.Schema({
 //   type: { type: String, required: true },
@@ -13,37 +13,46 @@
 //   },
 // });
 
-// const templateSchema = new mongoose.Schema(
-//   {
-//     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-//     wabaId: { type: String, required: true },
-//     name: { type: String, required: true },
-//     category: { type: String, required: true },
-//     language: { type: String, default: "en_US" },
-//     parameter_format: { type: String, default: "named" },
-//     components: [componentSchema],
-//     metaTemplateId: { type: String }, // Template ID returned from Meta
-//     status: { type: String }, // e.g., "pending", "approved", "rejected"
-//   },
-//   { timestamps: true }
-// );
+const componentSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ["HEADER", "BODY", "FOOTER", "BUTTONS"],
+      required: true,
+    },
 
-// module.exports = mongoose.model("Template", templateSchema);
+    // HEADER
+    format: {
+      type: String, // TEXT | IMAGE | VIDEO | DOCUMENT
+    },
 
-const mongoose = require("mongoose");
+    text: String, // header text / body text / footer text
 
-const componentSchema = new mongoose.Schema({
-  type: { type: String, required: true },
-  text: { type: String },
-  example: {
-    body_text_named_params: [
+    example: mongoose.Schema.Types.Mixed,
+
+    // For media headers
+    media: {
+      metaHandle: String,   // Meta header_handle
+      s3Url: String,        // Your S3 URL
+      mimeType: String,
+      fileName: String,
+    },
+
+    // BUTTONS
+    buttons: [
       {
-        param_name: String,
-        example: String,
+        type: {
+          type: String, // QUICK_REPLY | URL | PHONE_NUMBER
+        },
+        text: String,
+        url: String,
+        phone_number: String,
       },
     ],
   },
-});
+  { _id: false }
+);
+
 
 const wabaTemplateSchema = new mongoose.Schema(
   {

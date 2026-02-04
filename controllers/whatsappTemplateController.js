@@ -2,7 +2,45 @@ const axios = require("axios");
 const { META_GRAPH_URL } = require("../config/whatsapp");
 const User = require("../models/userModel");
 const WabaTemplate = require("../models/wabaTemplateModel");
+const { uploadWhatsAppMediaTemplateToS3 } = require("../utils/uploadWhatsAppMedia");
+const { downloadMetaMedia } = require("../services/metaMedia");
+const FormData = require("form-data");
 const { META_APP_ID } = process.env;
+
+//test template payload
+// {
+//     "name": "order_conformation_c6",
+//     "language": "en_US",
+//     "category": "utility", //UTILITY
+//     "parameter_format": "named",
+//     "components": [
+//         {
+//             "type": "HEADER",
+//             "format": "TEXT",
+//             "text": "Order Confirmation"
+//         },
+//         {
+//             "type": "BODY",
+//             "text": "Thank you, {{first_name}}! Your order number is {{order_number}}. Please keep it for reference.",
+//             "example": {
+//                 "body_text_named_params": [
+//                     {
+//                         "param_name": "first_name",
+//                         "example": "Pablo"
+//                     },
+//                     {
+//                         "param_name": "order_number",
+//                         "example": "860198-230332"
+//                     }
+//                 ]
+//             }
+//         },
+//         {
+//             "type": "FOOTER",
+//             "text": "contact support for any query."
+//         }
+//     ]
+// }
 
 const getMimeType = (format, fileName) => {
   const ext = fileName.split(".").pop().toLowerCase();
@@ -32,10 +70,15 @@ const uploadMediaToFB = async (
   fileBuffer,
   fileName,
   format,
-  businessAccountId
+  businessAccountId,
+  phoneNumberId
 ) => {
   try {
     console.log("===== Upload Media to FB Start =====");
+    console.log("WABA ID:", wabaId);
+    console.log("Business Account ID:", businessAccountId);
+    console.log("Access Token:", accessToken ? "Available" : "Missing");
+    console.log("File buffer length:", fileBuffer.length);
     console.log("File name:", fileName);
     console.log("Format:", format);
     console.log("File size:", fileBuffer.length, "bytes");
@@ -43,7 +86,6 @@ const uploadMediaToFB = async (
     const mimeType = getMimeType(format, fileName);
 
     const startUrl = `${META_GRAPH_URL}/${META_APP_ID}/uploads`;
-
     console.log("Starting upload session:", startUrl);
 
     const startResponse = await axios.post(startUrl, null, {
@@ -52,9 +94,10 @@ const uploadMediaToFB = async (
         file_length: fileBuffer.length,
         file_type: mimeType,
         access_token: accessToken,
-      },
+      }
     });
 
+    console.log("Start upload session response:", startResponse);
     console.log("Upload session response:", startResponse.data);
 
     if (!startResponse.data?.id) {
@@ -138,8 +181,8 @@ exports.createTemplate = async (req, res) => {
       return res.status(400).json({ message: "WABA not connected" });
     }
 
-    const { wabaId, accessToken, businessAccountId } = user.whatsappWaba;
-    console.log("WABA credentials:", { wabaId, businessAccountId });
+    const { wabaId, accessToken, businessAccountId, phoneNumberId } = user.whatsappWaba;
+    console.log("WABA credentials:", { wabaId, businessAccountId, phoneNumberId });
 
     if (!wabaId || !accessToken) {
       console.error("Missing WABA credentials");
@@ -183,23 +226,12 @@ exports.createTemplate = async (req, res) => {
     const bodyComponents = components.filter((c) => c.type === "BODY");
     const footerComponent = components.find((c) => c.type === "FOOTER");
     const buttonsComponent = components.find((c) => c.type === "BUTTONS");
-    // const processedBody = bodyComponents.map((c, index) => {
-    //   if (!c.example) {
-    //     const matches = [...c.text.matchAll(/{{(\w+)}}/g)];
-
-    //     if (matches.length > 0) {
-    //       c.example = {
-    //         body_text_named_params: matches.map((m) => ({
-    //           param_name: m[1],
-    //           example: "Test",
-    //         })),
-    //       };
-    //     }
-    //   }
-
-    //   console.log(`BODY component[${index}] processed:`, c);
-    //   return c;
-    // });
+    console.log("Decomposed components:", {
+      headerComponent,
+      bodyComponents,
+      footerComponent,
+      buttonsComponent,
+    });
 
     const processedBody = bodyComponents.map((c, index) => {
       const text = c.text || "";
@@ -233,19 +265,7 @@ exports.createTemplate = async (req, res) => {
 
       let headerObj = { type: "HEADER", format };
 
-      // if (format === "TEXT") {
-      //   headerObj.text = headerComponent.text || "";
-
-      //   // Check for variables in text header
-      //   const matches = [
-      //     ...(headerComponent.text || "").matchAll(/{{(\w+)}}/g),
-      //   ];
-      //   if (matches.length > 0) {
-      //     headerObj.example = {
-      //       header_text: [matches[0][1]], // First variable example
-      //     };
-      //   }
-      // } 
+      console.log("Header format:", format);
       if (format === "TEXT") {
         headerObj.text = headerComponent.text || "";
 
@@ -260,7 +280,7 @@ exports.createTemplate = async (req, res) => {
             ),
           };
         }
-      } else {
+      } else if (format === "IMAGE" || format === "VIDEO" || format === "DOCUMENT") {
         // Media header - check if file was uploaded
         if (!req.file) {
           console.error(
@@ -279,15 +299,40 @@ exports.createTemplate = async (req, res) => {
           size: req.file.size,
         });
 
-        // Upload file buffer to Facebook
         const mediaHandle = await uploadMediaToFB(
           accessToken,
           wabaId,
           req.file.buffer,
           req.file.originalname,
-          format,
-          businessAccountId
+          format, // IMAGE | VIDEO | DOCUMENT
+          businessAccountId,
+          phoneNumberId
         );
+
+        const s3Url = await uploadWhatsAppMediaTemplateToS3({
+          userId,
+          messageType: format.toLowerCase(), // image | video | document
+          buffer: req.file.buffer,
+          mimeType: req.file.mimetype,
+          originalName: req.file.originalname,
+        });
+
+        headerObj.example = {
+          header_handle: [mediaHandle],
+        };
+
+        headerObj.media = {
+          metaHandle: mediaHandle,
+          s3Url,
+          mimeType: req.file.mimetype,
+          fileName: req.file.originalname,
+        };
+
+        console.log("Uploading media to FB with phoneNumberId:", phoneNumberId);
+        console.log("WABA ID:", wabaId);
+        console.log("Business Account ID:", businessAccountId);
+        console.log("Access Token:", accessToken ? "Available" : "Missing");
+        console.log("File original name:", req.file.originalname);
         console.log("Media uploaded, received handle:", mediaHandle);
 
         if (!mediaHandle) {
@@ -300,8 +345,17 @@ exports.createTemplate = async (req, res) => {
         headerObj.example = {
           header_handle: [mediaHandle],
         };
-      }
 
+        // ADD THIS BLOCK:
+        if (format === "DOCUMENT") {
+          console.log("Adding example filename for DOCUMENT header");
+          console.log("Original filename:", req.file.originalname);
+          // This provides a sample filename for the UI preview
+          // Use the original filename or a generic one like "invoice.pdf"
+          headerObj.example.header_text = [req.file.originalname || "document.pdf"];
+        }
+
+      }
       processedHeader = [headerObj];
       console.log("Processed HEADER:", processedHeader);
     }
@@ -316,7 +370,20 @@ exports.createTemplate = async (req, res) => {
     // 4️⃣ Process BUTTONS if provided
     let processedButtons = [];
     if (buttonsComponent?.buttons) {
-      processedButtons = [buttonsComponent];
+      // processedButtons = [buttonsComponent];
+      if (buttonsComponent?.buttons?.length) {
+        processedButtons = [
+          {
+            type: "BUTTONS",
+            buttons: buttonsComponent.buttons.map((btn) => ({
+              type: btn.type,
+              text: btn.text,
+              url: btn.url,
+              phone_number: btn.phone_number,
+            })),
+          },
+        ];
+      }
       console.log("Processed BUTTONS:", processedButtons);
     }
 
@@ -338,6 +405,19 @@ exports.createTemplate = async (req, res) => {
       JSON.stringify(payload, null, 2)
     );
 
+    // 🔥 STRIP DB-ONLY FIELDS BEFORE SENDING TO META
+    const metaComponents = payload.components.map((c) => {
+      const clean = {
+        type: c.type,
+      };
+
+      if (c.format) clean.format = c.format;
+      if (c.text) clean.text = c.text;
+      if (c.example) clean.example = c.example;
+      if (c.buttons) clean.buttons = c.buttons;
+
+      return clean;
+    });
 
     const url = `${META_GRAPH_URL}/${wabaId}/message_templates`;
     console.log("Sending request to:", url);
@@ -354,12 +434,28 @@ exports.createTemplate = async (req, res) => {
       });
     }
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
+    // const response = await axios.post(url, payload, {
+    //   headers: {
+    //     Authorization: `Bearer ${accessToken}`,
+    //     "Content-Type": "application/json",
+    //   },
+    // });
+    const response = await axios.post(
+      url,
+      {
+        name: payload.name,
+        category: payload.category,
+        language: payload.language,
+        parameter_format: payload.parameter_format,
+        components: metaComponents,
       },
-    });
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
     console.log("Meta API response:", response.data);
 
 
@@ -399,6 +495,43 @@ exports.createTemplate = async (req, res) => {
   }
 };
 
+function mergeComponents(metaComponents, dbComponents = []) {
+  return metaComponents.map((metaComp) => {
+    const oldComp = dbComponents.find(c => c.type === metaComp.type);
+
+    // HEADER
+    if (metaComp.type === "HEADER") {
+      if (metaComp.format !== "TEXT" && oldComp?.media?.s3Url) {
+        return {
+          ...metaComp,
+          media: oldComp.media, // ✅ ALWAYS keep S3
+        };
+      }
+      return metaComp;
+    }
+
+    // BODY
+    if (metaComp.type === "BODY") {
+      return {
+        ...metaComp,
+        example: metaComp.example || oldComp?.example,
+      };
+    }
+
+    // FOOTER
+    if (metaComp.type === "FOOTER") {
+      return metaComp;
+    }
+
+    // BUTTONS
+    if (metaComp.type === "BUTTONS") {
+      return metaComp;
+    }
+
+    return metaComp;
+  });
+}
+
 exports.getWabaTemplates = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -427,6 +560,36 @@ exports.getWabaTemplates = async (req, res) => {
 
     const syncedTemplates = [];
     for (const t of metaTemplates) {
+      // const updated = await WabaTemplate.findOneAndUpdate(
+      //   { metaTemplateId: t.id },
+      //   {
+      //     user: userId,
+      //     wabaId,
+      //     name: t.name,
+      //     category: t.category,
+      //     language: t.language,
+      //     components: t.components,
+      //     status: t.status,
+      //     syncedAt: new Date(),
+      //   },
+      //   { upsert: true, new: true }
+      // );
+
+      const existingTemplate = await WabaTemplate.findOne({
+        metaTemplateId: t.id,
+      });
+
+      let mergedComponents;
+
+      if (existingTemplate) {
+        mergedComponents = mergeComponents(
+          t.components,
+          existingTemplate.components
+        );
+      } else {
+        mergedComponents = t.components;
+      }
+
       const updated = await WabaTemplate.findOneAndUpdate(
         { metaTemplateId: t.id },
         {
@@ -435,13 +598,57 @@ exports.getWabaTemplates = async (req, res) => {
           name: t.name,
           category: t.category,
           language: t.language,
-          components: t.components,
+          // components: mergedComponents,
           status: t.status,
           syncedAt: new Date(),
         },
         { upsert: true, new: true }
       );
+
       syncedTemplates.push(updated);
+
+      console.log("Processing template components for media download:", updated._id);
+
+      // For each component, check if media needs to be downloaded
+      console.log("Updated template:", updated);
+      console.log("Components to process:", updated.components.length);
+      console.log("Updated components:", updated.components);
+      console.log("Access Token available:", !!accessToken);
+      console.log("User ID:", userId);
+      console.log("WABA ID:", wabaId);
+      console.log("Template ID:", updated.metaTemplateId);
+      console.log("Template Name:", updated.name);
+      console.log("Template Status:", updated.status);
+      console.log("Template Language:", updated.language);
+      console.log("Template Category:", updated.category);
+      console.log("Template Synced At:", updated.syncedAt);
+      // console.log("Starting media download and upload to S3 if needed...");
+      // for (const comp of updated.components) {
+      //   if (comp.media?.needsDownload) {
+      //     const { buffer, mimeType } = await downloadMetaMedia({
+      //       mediaId: comp.media.metaHandle,
+      //       accessToken,
+      //     });
+
+      //     console.log("Downloaded media for component:", comp.type);
+      //     console.log("Buffer length:", buffer.length);
+      //     console.log("MIME type:", mimeType);
+      //     console.log("Uploading media to S3...");
+
+      //     const s3Url = await uploadWhatsAppMediaTemplateToS3({
+      //       userId,
+      //       messageType: comp.format.toLowerCase(),
+      //       buffer,
+      //       mimeType,
+      //     });
+
+      //     comp.media.s3Url = s3Url;
+      //     comp.media.mimeType = mimeType;
+      //     delete comp.media.needsDownload;
+      //   }
+      // }
+
+      // await updated.save();
     }
 
     return res.status(200).json({

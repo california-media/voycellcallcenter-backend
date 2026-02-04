@@ -10,6 +10,15 @@ const MEDIA_FOLDER_MAP = {
   sticker: "stickers"
 };
 
+const Template_MEDIA_FOLDER_MAP = {
+  image: "image",
+  video: "video",
+  document: "document",
+};
+
+//image | video | document
+// format === "IMAGE" || format === "VIDEO" || format === "DOCUMENT"
+
 async function uploadWhatsAppMediaToS3({
   userId,
   messageType,
@@ -20,7 +29,7 @@ async function uploadWhatsAppMediaToS3({
   const ext = mimeType.split("/")[1] || "bin";
   const folder = MEDIA_FOLDER_MAP[messageType] || "others";
 
-  const key = `users/${userId}/whatsapp/${folder}/${originalName}_${Date.now()}.${ext}`;
+  const key = `users/${userId}/whatsapp/chats/${folder}/${originalName}_${Date.now()}.${ext}`;
 
   await s3.send(
     new PutObjectCommand({
@@ -34,4 +43,31 @@ async function uploadWhatsAppMediaToS3({
   return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
-module.exports = { uploadWhatsAppMediaToS3 };
+async function uploadWhatsAppMediaTemplateToS3({
+  userId,
+  messageType,
+  buffer,
+  mimeType,
+  originalName = "file"
+}) {
+  const ext = mimeType.split("/")[1] || "bin";
+  console.log("messageType in uploadWhatsAppMediaTemplateToS3", messageType);
+  const folder = Template_MEDIA_FOLDER_MAP[messageType] || "others";
+
+  console.log("folder in uploadWhatsAppMediaTemplateToS3", folder);
+
+  const key = `users/${userId}/whatsapp/template/${folder}/${originalName}_${Date.now()}.${ext}`;
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME_WABA,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType
+    })
+  );
+
+  return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+}
+
+module.exports = { uploadWhatsAppMediaToS3, uploadWhatsAppMediaTemplateToS3 };
