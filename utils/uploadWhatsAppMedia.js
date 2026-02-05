@@ -70,4 +70,27 @@ async function uploadWhatsAppMediaTemplateToS3({
   return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
-module.exports = { uploadWhatsAppMediaToS3, uploadWhatsAppMediaTemplateToS3 };
+async function uploadWhatsAppMediaProfileToS3({
+  userId,
+  buffer,
+  mimeType,
+  originalName = "profile"
+}) {
+  const ext = mimeType.split("/")[1] || "bin";
+
+  const key = `users/${userId}/whatsapp/profile/${originalName}_${Date.now()}.${ext}`;
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME_WABA,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType
+    })
+  );
+
+  return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+}
+
+
+module.exports = { uploadWhatsAppMediaToS3, uploadWhatsAppMediaTemplateToS3, uploadWhatsAppMediaProfileToS3 };

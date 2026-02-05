@@ -175,6 +175,11 @@ const whatsappMessageSchema = new mongoose.Schema(
       index: true,
     },
 
+    messageStatusTimestamp: {
+      type: Date, // WhatsApp timestamp
+      index: true,
+    },
+
     // 🧠 Raw Meta payload (for debugging)
     raw: {
       type: Object,

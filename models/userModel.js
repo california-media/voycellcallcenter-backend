@@ -368,24 +368,56 @@ const userSchema = new Schema(
       tokenExpiresAt: Date,
     },
 
+    // whatsappWaba: {
+    //   isConnected: { type: Boolean, default: false },
+    //   wabaId: String,
+    //   phoneNumberId: String,
+    //   businessAccountId: String,
+    //   accessToken: String,
+    //   phoneNumber: String,
+
+    //   templates: [
+    //     {
+    //       templateId: String,        // Meta template ID
+    //       name: String,
+    //       category: String,          // MARKETING, UTILITY
+    //       language: String,          // en_US
+    //       status: String,            // APPROVED, PENDING
+    //       components: Array
+    //     }
+    //   ]
+    // },
+
     whatsappWaba: {
       isConnected: { type: Boolean, default: false },
+
       wabaId: String,
       phoneNumberId: String,
       businessAccountId: String,
-      accessToken: String,
-      phoneNumber: String,
 
-      templates: [
-        {
-          templateId: String,        // Meta template ID
-          name: String,
-          category: String,          // MARKETING, UTILITY
-          language: String,          // en_US
-          status: String,            // APPROVED, PENDING
-          components: Array
-        }
-      ]
+      accessToken: String,
+      tokenExpiresAt: Date,
+
+      phoneNumber: String,
+      displayName: String,
+      qualityRating: String,
+      messagingLimit: String,
+
+      profile: {
+        about: String,
+        address: String,
+        description: String,
+        email: String,
+        vertical: String,
+        websites: [String],
+        profilePictureUrl: String,
+        profilePictureS3Url: String
+      },
+
+      webhook: {
+        callbackUrl: String,
+        verifyToken: String
+      }
     },
 
     microsoftId: { type: String }, // ✅ Store Microsoft ID as String (not ObjectId)

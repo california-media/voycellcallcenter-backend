@@ -6,9 +6,11 @@ const WsConnection = require("../models/wsConnection");
 const WhatsAppMessage = require("../models/whatsappMessage");
 const WabaTemplate = require("../models/wabaTemplateModel");
 const Contact = require("../models/contactModel");
+const fs = require("fs");
+const FormData = require("form-data");
 const Lead = require("../models/leadModel");
 const { downloadMetaMedia } = require("../services/metaMedia");
-const { uploadWhatsAppMediaToS3 } = require("../utils/uploadWhatsAppMedia");
+const { uploadWhatsAppMediaToS3, uploadWhatsAppMediaProfileToS3 } = require("../utils/uploadWhatsAppMedia");
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -174,6 +176,337 @@ exports.whatsappCallback = async (req, res) => {
     }
 };
 
+// controllers/whatsapp/getWabaProfile.js
+exports.getWabaProfile = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        const user = await User.findById(userId);
+
+        if (!user?.whatsappWaba?.phoneNumberId) {
+            return res.status(400).json({
+                success: false,
+                message: "WABA not connected",
+            });
+        }
+
+        const { phoneNumberId, accessToken } = user.whatsappWaba;
+
+        /* ---------------- META API CALL ---------------- */
+
+        const url = `${META_GRAPH_URL}/${phoneNumberId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`;
+
+        const { data } = await axios.get(url, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        });
+
+        console.log("META PROFILE RESPONSE:", data);
+
+        const profile = data.data?.[0] || {};
+
+        /* ---------------- SAVE IN DB ---------------- */
+
+        user.whatsappWaba.profile = {
+            about: profile.about || "",
+            address: profile.address || "",
+            description: profile.description || "",
+            email: profile.email || "",
+            vertical: profile.vertical || "",
+            websites: profile.websites || [],
+            profilePictureUrl: profile.profile_picture_url || "",
+        };
+
+        await user.save();
+
+        return res.json({
+            status: "success",
+            message: "waba details fetched",
+            data: user.whatsappWaba,
+        });
+
+    } catch (error) {
+        console.error(
+            "Get WABA Profile Error:",
+            error.response?.data || error
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch WABA profile",
+        });
+    }
+};
+
+
+const uploadProfilePictureHandleToMeta = async ({
+    accessToken,
+    fileBuffer,
+    fileName,
+    mimeType,
+    appId,
+}) => {
+    try {
+        /* ───────── START SESSION ───────── */
+
+        const startRes = await axios.post(
+            `${META_GRAPH_URL}/${appId}/uploads`,
+            null,
+            {
+                params: {
+                    file_name: fileName,
+                    file_length: fileBuffer.length,
+                    file_type: mimeType,
+                    access_token: accessToken,
+                },
+            }
+        );
+
+        if (!startRes.data?.id) {
+            throw new Error("Upload session start failed");
+        }
+
+        const sessionId = startRes.data.id.replace(
+            "upload:",
+            ""
+        );
+
+        /* ───────── UPLOAD BYTES ───────── */
+
+        const uploadRes = await axios.post(
+            `${META_GRAPH_URL}/upload:${sessionId}`,
+            fileBuffer,
+            {
+                headers: {
+                    Authorization: `OAuth ${accessToken}`,
+                    file_offset: "0",
+                    "Content-Type": "application/octet-stream",
+                },
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity,
+            }
+        );
+
+        if (!uploadRes.data?.h) {
+            throw new Error("Handle not returned");
+        }
+
+        return uploadRes.data.h; // 🔥 4::aW...
+    } catch (err) {
+        console.error(
+            "Handle Upload Error:",
+            err.response?.data || err.message
+        );
+        throw err;
+    }
+};
+
+exports.updateWabaProfile = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        const {
+            about,
+            address,
+            description,
+            email,
+            vertical,
+            websites,
+            webhookUrl,
+            verifyToken,
+        } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        const { phoneNumberId, accessToken } =
+            user.whatsappWaba;
+
+        /* ─────────────────────────────
+           1️⃣ UPDATE TEXT PROFILE
+        ───────────────────────────── */
+
+        await axios.post(
+            `${META_GRAPH_URL}/${phoneNumberId}/whatsapp_business_profile`,
+            {
+                messaging_product: "whatsapp",
+                about,
+                address,
+                description,
+                email,
+                vertical,
+                websites,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        /* ─────────────────────────────
+           2️⃣ PROFILE PICTURE HANDLE FLOW
+        ───────────────────────────── */
+
+        if (req.file) {
+            /* Get buffer from multer */
+
+            let fileBuffer;
+            if (req.file.buffer) {
+                fileBuffer = req.file.buffer;
+            } else {
+                fileBuffer = fs.readFileSync(
+                    req.file.path
+                );
+            }
+
+            /* Upload → Get HANDLE */
+
+            const handle =
+                await uploadProfilePictureHandleToMeta({
+                    accessToken,
+                    fileBuffer,
+                    fileName: req.file.originalname,
+                    mimeType: req.file.mimetype,
+                    appId: process.env.META_APP_ID,
+                });
+
+            console.log("Profile Handle:", handle);
+
+            /* Set DP in Meta */
+
+            await axios.post(
+                `${META_GRAPH_URL}/${phoneNumberId}/whatsapp_business_profile`,
+                {
+                    messaging_product: "whatsapp",
+                    profile_picture_handle: handle,
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+
+            /* Upload same image to S3 */
+
+            const s3Url =
+                await uploadWhatsAppMediaProfileToS3({
+                    userId,
+                    buffer: fileBuffer,
+                    mimeType: req.file.mimetype,
+                    originalName: "profile",
+                });
+
+            /* Save in DB */
+
+            user.whatsappWaba.profilePictureUrl =
+                handle;
+
+            user.whatsappWaba.profilePictureS3Url =
+                s3Url;
+        }
+
+        /* ─────────────────────────────
+           3️⃣ SAVE OTHER DATA
+        ───────────────────────────── */
+
+        user.whatsappWaba.profile = {
+            ...user.whatsappWaba.profile,
+            about,
+            address,
+            description,
+            email,
+            vertical,
+            websites,
+        };
+
+        if (webhookUrl)
+            user.whatsappWaba.webhook.callbackUrl =
+                webhookUrl;
+
+        if (verifyToken)
+            user.whatsappWaba.webhook.verifyToken =
+                verifyToken;
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message:
+                "WABA profile + picture updated successfully",
+            data: user.whatsappWaba,
+        });
+    } catch (error) {
+        console.error(
+            "Update Profile Error:",
+            error.response?.data || error
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to update profile",
+        });
+    }
+};
+
+// controllers/whatsapp/refreshToken.js
+exports.refreshWabaToken = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        const user = await User.findById(userId);
+
+        const currentToken = user.whatsappWaba.accessToken;
+
+        /* -------- TOKEN EXCHANGE -------- */
+
+        const url = `${META_GRAPH_URL}/oauth/access_token`;
+
+        const { data } = await axios.get(url, {
+            params: {
+                grant_type: "fb_exchange_token",
+                client_id: process.env.META_APP_ID,
+                client_secret: process.env.META_APP_SECRET,
+                fb_exchange_token: currentToken,
+            },
+        });
+
+        /* -------- SAVE NEW TOKEN -------- */
+
+        user.whatsappWaba.accessToken = data.access_token;
+
+        // expires in seconds
+        user.whatsappWaba.tokenExpiresAt = new Date(
+            Date.now() + data.expires_in * 1000
+        );
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: "Access token refreshed",
+            accessToken: data.access_token,
+            expiresIn: data.expires_in,
+        });
+
+    } catch (error) {
+        console.error("Token Refresh Error:", error.response?.data || error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to refresh token",
+        });
+    }
+};
+
 /**
  * STEP 3: Webhook verification
  */
@@ -189,6 +522,7 @@ exports.webhookVerify = (req, res) => {
     console.log("Invalid webhook verification");
     return res.sendStatus(403);
 };
+
 
 let isConnected = false;
 async function connectDB() {
@@ -371,6 +705,9 @@ function parseWhatsAppMessage(msg) {
     return { messageType, content };
 }
 
+
+/** STEP 4: Webhook to receive messages
+ */
 function getAttachmentName(msg, mimeType) {
     const ext = mimeType?.split("/")[1] || "bin";
 
@@ -398,8 +735,6 @@ function getAttachmentName(msg, mimeType) {
     }
 }
 
-/** STEP 4: Webhook to receive messages
- */
 exports.webhookReceive = async (req, res) => {
     console.log("🔥🔥 WHATSAPP WEBHOOK HIT 🔥🔥");
 
@@ -437,6 +772,103 @@ exports.webhookReceive = async (req, res) => {
         const phoneNumberId = value?.metadata?.phone_number_id?.toString();
         console.log("phoneNumberId:", phoneNumberId);
         console.log("Webhook keys:", Object.keys(value));
+
+        /* ─────────────────────────────────────────────
+📌 MESSAGE STATUS UPDATES (sent/delivered/read)
+───────────────────────────────────────────── */
+        if (Array.isArray(value.statuses) && value.statuses.length > 0) {
+
+            console.log("📊 STATUS WEBHOOK RECEIVED");
+
+            for (const statusObj of value.statuses) {
+
+                const {
+                    id: metaMessageId,
+                    status,
+                    timestamp,
+                    recipient_id,
+                    conversation,
+                    pricing,
+                    errors
+                } = statusObj;
+
+                console.log(
+                    `📌 ${metaMessageId} → ${status}`
+                );
+
+                console.log("all the message from webhook of status", status,
+                    timestamp,
+                    recipient_id,
+                    conversation,
+                    pricing,
+                    errors);
+
+                /* 🔹 UPDATE MESSAGE STATUS */
+                const updated = await WhatsAppMessage.findOneAndUpdate(
+                    { metaMessageId },
+                    {
+                        status,
+                        messageStatusTimestamp: new Date(timestamp * 1000),
+
+                        ...(errors && {
+                            error: {
+                                code: errors?.[0]?.code,
+                                message: errors?.[0]?.title
+                            }
+                        })
+                    },
+                    { new: true }
+                ).lean();
+
+                console.log("updated", updated)
+
+                if (!updated) {
+                    console.warn(
+                        "⚠️ Message not found for status:",
+                        metaMessageId
+                    );
+                    continue;
+                }
+
+                const fullMessage = updated;
+
+                /* 🔹 REAL-TIME PUSH (Socket/Lambda) */
+                const connections = await WsConnection.find({
+                    userId: updated.userId
+                });
+
+
+                console.log("connections", connections)
+
+                if (connections.length > 0) {
+
+                    const eventPayload = {
+                        type: "message_status_update",
+                        metaMessageId,
+                        status,
+                        recipient_id,
+                        conversationId: updated.conversationId,
+                        timestamp,
+                        message: fullMessage,
+                        connections: connections.map(c => ({
+                            connectionId: c.connectionId
+                        }))
+                    };
+
+                    console.log(eventPayload, "eventPayload")
+
+                    await lambdaClient.send(new InvokeCommand({
+                        FunctionName: "waba-webhook",
+                        InvocationType: "RequestResponse",
+                        Payload: JSON.stringify(eventPayload)
+                    }));
+
+                    console.log("🚀 Status pushed to realtime layer");
+                }
+            }
+
+            return res.status(200).send("STATUS_UPDATED");
+        }
 
         if (!Array.isArray(value.messages) || value.messages.length === 0) {
             console.log("ℹ️ No incoming messages");
@@ -776,9 +1208,6 @@ function buildWhatsAppPayload({ to, type, text, mediaId, caption, filename }) {
             throw new Error("Unsupported message type");
     }
 }
-
-const fs = require("fs");
-const FormData = require("form-data");
 
 exports.sendMessage = async (req, res) => {
     try {
@@ -1215,36 +1644,90 @@ exports.sendTemplateMessage = async (req, res) => {
     }
 };
 
-/**
- * STEP 7: Get WhatsApp Conversations
+/** STEP 7: Get WhatsApp Conversations
  */
 exports.getWhatsappConversations = async (req, res) => {
     try {
         const userId = req.user._id;
-        const type = req.body.type || "history"; // chats | history
+        const type = req.body.type || "history"; // default chats
 
         const now = new Date();
         const before24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+
+        // const conversations = await WhatsAppMessage.aggregate([
+        //     {
+        //         $match: {
+        //             userId: new mongoose.Types.ObjectId(userId),
+        //         },
+        //     },
+
+        //     // 1️⃣ latest message first
+        //     {
+        //         $sort: { messageTimestamp: -1 },
+        //     },
+
+        //     // 2️⃣ group by conversation
+        //     {
+        //         $group: {
+        //             _id: "$conversationId",
+        //             from: { $first: "$conversationId" },
+        //             lastMessageTime: { $first: "$messageTimestamp" },
+        //             messages: {
+        //                 $push: {
+        //                     _id: "$_id",
+        //                     direction: "$direction",
+        //                     from: "$from",
+        //                     to: "$to",
+        //                     senderName: "$senderName",
+        //                     senderWabaId: "$senderWabaId",
+        //                     s3dataurl: "$s3dataurl",
+        //                     messageType: "$messageType",
+        //                     content: "$content",
+        //                     status: "$status",
+        //                     messageTimestamp: "$messageTimestamp",
+        //                 },
+        //             },
+        //         },
+        //     },
+
+        //     // 3️⃣ oldest → newest inside chat
+        //     {
+        //         $addFields: {
+        //             messages: { $reverseArray: "$messages" },
+        //         },
+        //     },
+
+        //     // 4️⃣ response shape
+        //     {
+        //         $project: {
+        //             _id: 0,
+        //             from: 1,
+        //             lastMessageTime: 1,
+        //             messages: 1,
+        //         },
+        //     },
+
+        //     // 5️⃣ latest chat on top
+        //     {
+        //         $sort: { lastMessageTime: -1 },
+        //     },
+        // ]);
+
         const conversations = await WhatsAppMessage.aggregate([
-            /* 1️⃣ Only current user */
             {
                 $match: {
                     userId: new mongoose.Types.ObjectId(userId),
                 },
             },
 
-            /* 2️⃣ Latest messages first */
-            {
-                $sort: { messageTimestamp: -1 },
-            },
+            { $sort: { messageTimestamp: -1 } },
 
-            /* 3️⃣ Group by conversation */
             {
                 $group: {
                     _id: "$conversationId",
                     from: { $first: "$conversationId" },
-
+                    lastMessageTime: { $first: "$messageTimestamp" },
                     messages: {
                         $push: {
                             _id: "$_id",
@@ -1256,100 +1739,42 @@ exports.getWhatsappConversations = async (req, res) => {
                             s3dataurl: "$s3dataurl",
                             messageType: "$messageType",
                             content: "$content",
+                            metaMessageId: "$metaMessageId",
                             status: "$status",
                             messageTimestamp: "$messageTimestamp",
                         },
                     },
-
-                    /* collect only incoming timestamps */
-                    incomingTimestamps: {
-                        $push: {
-                            $cond: [
-                                { $eq: ["$direction", "incoming"] },
-                                "$messageTimestamp",
-                                null,
-                            ],
-                        },
-                    },
                 },
             },
 
-            /* 4️⃣ Get last incoming message time */
-            {
-                $addFields: {
-                    lastIncomingMessageTime: {
-                        $max: {
-                            $filter: {
-                                input: "$incomingTimestamps",
-                                as: "ts",
-                                cond: { $ne: ["$$ts", null] },
-                            },
-                        },
-                    },
-                },
-            },
-
-            /* 5️⃣ FINAL lastMessageTime (incoming → fallback outgoing) */
-            {
-                $addFields: {
-                    lastMessageTime: {
-                        $ifNull: [
-                            "$lastIncomingMessageTime",
-                            { $max: "$messages.messageTimestamp" },
-                        ],
-                    },
-
-                    hasIncoming: {
-                        $gt: [
-                            {
-                                $size: {
-                                    $filter: {
-                                        input: "$incomingTimestamps",
-                                        as: "ts",
-                                        cond: { $ne: ["$$ts", null] },
-                                    },
-                                },
-                            },
-                            0,
-                        ],
-                    },
-                },
-            },
-
-            /* 6️⃣ Oldest → newest inside chat */
             {
                 $addFields: {
                     messages: { $reverseArray: "$messages" },
                 },
             },
 
-            /* 7️⃣ Shape response */
             {
                 $project: {
                     _id: 0,
                     from: 1,
                     lastMessageTime: 1,
-                    hasIncoming: 1,
                     messages: 1,
                 },
             },
 
-            /* 8️⃣ Chats / History filter */
+            // 🔥 ONLY FILTERING LOGIC (NEW)
             ...(type === "chats"
                 ? [{ $match: { lastMessageTime: { $gte: before24Hours } } }]
                 : type === "history"
                     ? [{ $match: { lastMessageTime: { $lt: before24Hours } } }]
                     : []),
 
-            /* 9️⃣ Latest conversation on top */
-            {
-                $sort: { lastMessageTime: -1 },
-            },
+            { $sort: { lastMessageTime: -1 } },
         ]);
 
         res.json({
-            success: true,
-            message: "Chats received successfully",
+            status: "success",
+            message: "chats received",
             data: conversations,
         });
     } catch (error) {

@@ -13,14 +13,22 @@ const {
     sendTemplateMessage,
     getWhatsappConversations,
     sendMessage,
+    getWabaProfile,
+    updateWabaProfile,
+    refreshWabaToken
 } = require("../controllers/whatsapp.controller");
 const { createTemplate, getWabaTemplates, deleteWabaTemplate } = require("../controllers/whatsappTemplateController");
 const upload = multer();
 
 router.get("/connect", checkForAuthentication(), connectWhatsApp);
-
-
 router.get("/callback", whatsappCallback);
+
+router.get("/profile", checkForAuthentication(), getWabaProfile);
+
+router.put("/profile/edit", checkForAuthentication(), upload.single("profile"), updateWabaProfile);
+
+router.post("/refresh-token", checkForAuthentication(), refreshWabaToken);
+
 router.get("/webhook", webhookVerify);
 router.post("/webhook", webhookReceive);
 
