@@ -180,7 +180,6 @@ exports.whatsappCallback = async (req, res) => {
 exports.getWabaProfile = async (req, res) => {
     try {
         const userId = req.user._id;
-
         const user = await User.findById(userId);
 
         if (!user?.whatsappWaba?.phoneNumberId) {
@@ -192,23 +191,92 @@ exports.getWabaProfile = async (req, res) => {
 
         const { phoneNumberId, accessToken } = user.whatsappWaba;
 
-        /* ---------------- META API CALL ---------------- */
+        /* -------------------------------------------------- */
+        /* 0️⃣ GET WABA ID (if not saved) */
+        /* -------------------------------------------------- */
 
-        const url = `${META_GRAPH_URL}/${phoneNumberId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`;
+        let wabaId = user.whatsappWaba.wabaId;
 
-        const { data } = await axios.get(url, {
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-            },
+        if (!wabaId) {
+            const wabaRes = await axios.get(
+                `${META_GRAPH_URL}/${phoneNumberId}?fields=whatsapp_business_account`,
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+
+            wabaId =
+                wabaRes.data?.whatsapp_business_account?.id || null;
+
+            user.whatsappWaba.wabaId = wabaId;
+        }
+
+        /* -------------------------------------------------- */
+        /* 1️⃣ BUSINESS PROFILE */
+        /* -------------------------------------------------- */
+
+        const profileUrl =
+            `${META_GRAPH_URL}/${phoneNumberId}` +
+            `/whatsapp_business_profile` +
+            `?fields=about,address,description,email,profile_picture_url,websites,vertical`;
+
+        const { data: profileRes } = await axios.get(profileUrl, {
+            headers: { Authorization: `Bearer ${accessToken}` },
         });
 
-        console.log("META PROFILE RESPONSE:", data);
+        const profile = profileRes.data?.[0] || {};
 
-        const profile = data.data?.[0] || {};
+        /* -------------------------------------------------- */
+        /* 2️⃣ DISPLAY NAME */
+        /* -------------------------------------------------- */
 
-        /* ---------------- SAVE IN DB ---------------- */
+        const displayNameUrl =
+            `${META_GRAPH_URL}/${phoneNumberId}` +
+            `?fields=verified_name,name_status`;
+
+        const { data: displayNameRes } = await axios.get(
+            displayNameUrl,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+
+        /* -------------------------------------------------- */
+        /* 3️⃣ QUALITY + LIMIT */
+        /* -------------------------------------------------- */
+
+        const qualityUrl =
+            `${META_GRAPH_URL}/${phoneNumberId}` +
+            `?fields=messaging_limit_tier,quality_score`;
+
+        const { data: qualityRes } = await axios.get(qualityUrl, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        console.log("qualityRes", qualityRes);
+        /* -------------------------------------------------- */
+        /* 4️⃣ ACCOUNT STATUS (WABA LEVEL) */
+        /* -------------------------------------------------- */
+
+        let accountStatus = {};
+
+        if (wabaId) {
+            const accountUrl =
+                `${META_GRAPH_URL}/${wabaId}` +
+                `?fields=account_review_status,business_verification_status,status`;
+
+            const { data: accountRes } = await axios.get(
+                accountUrl,
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+
+            console.log("accountRes.business_verification_status", accountRes.business_verification_status);
+
+            accountStatus = accountRes;
+        }
+
+        /* -------------------------------------------------- */
+        /* SAVE IN DB */
+        /* -------------------------------------------------- */
 
         user.whatsappWaba.profile = {
+            displayName: displayNameRes.verified_name || "",
             about: profile.about || "",
             address: profile.address || "",
             description: profile.description || "",
@@ -218,11 +286,32 @@ exports.getWabaProfile = async (req, res) => {
             profilePictureUrl: profile.profile_picture_url || "",
         };
 
+        user.whatsappWaba.displayName =
+            displayNameRes.verified_name || "";
+
+        user.whatsappWaba.qualityRating =
+            qualityRes.quality_score || "UNKNOWN";
+
+        user.whatsappWaba.messagingLimit =
+            qualityRes.messaging_limit_tier || "TIER_1";
+
+        /* 🆕 SAVE ACCOUNT STATUS */
+
+        user.whatsappWaba.accountReviewStatus =
+            accountStatus.account_review_status || "UNKNOWN";
+
+        user.whatsappWaba.businessVerificationStatus =
+            accountStatus.business_verification_status || "UNKNOWN";
+
+        user.whatsappWaba.status = accountStatus.status || "UNKNOWN";
+
         await user.save();
 
+        /* -------------------------------------------------- */
+
         return res.json({
-            status: "success",
-            message: "waba details fetched",
+            success: true,
+            message: "WABA profile fetched",
             data: user.whatsappWaba,
         });
 
@@ -238,7 +327,6 @@ exports.getWabaProfile = async (req, res) => {
         });
     }
 };
-
 
 const uploadProfilePictureHandleToMeta = async ({
     accessToken,
@@ -307,6 +395,7 @@ exports.updateWabaProfile = async (req, res) => {
         const userId = req.user._id;
 
         const {
+            displayName,
             about,
             address,
             description,
@@ -325,8 +414,15 @@ exports.updateWabaProfile = async (req, res) => {
             });
         }
 
-        const { phoneNumberId, accessToken } =
+        const { phoneNumberId, accessToken, wabaId } =
             user.whatsappWaba;
+
+        if (!wabaId) {
+            return res.status(400).json({
+                success: false,
+                message: "WABA ID missing",
+            });
+        }
 
         /* ─────────────────────────────
            1️⃣ UPDATE TEXT PROFILE
@@ -350,6 +446,38 @@ exports.updateWabaProfile = async (req, res) => {
                 },
             }
         );
+
+        /* ─────────────────────────────
+   4️⃣ DISPLAY NAME UPDATE REQUEST
+───────────────────────────── */
+
+        if (displayName) {
+            const displayNameRes = await axios.post(
+                `${META_GRAPH_URL}/${phoneNumberId}`,
+                {
+                    // messaging_product: "whatsapp",
+                    new_display_name: displayName,
+                    // phone_number_id: phoneNumberId,
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+
+            console.log("Display Name Update Response:", displayNameRes.data);
+            console.log(
+                "Display name update requested:",
+                displayName
+            );
+
+            /* Save requested name locally */
+
+            user.whatsappWaba.displayNameRequested =
+                displayName;
+        }
 
         /* ─────────────────────────────
            2️⃣ PROFILE PICTURE HANDLE FLOW
@@ -749,30 +877,6 @@ exports.webhookReceive = async (req, res) => {
         const change = entry?.changes?.[0];
         const value = change?.value;
 
-        console.log("change", value.contacts);
-
-        const contact = value.contacts?.[0];
-        let senderName = "";
-        let senderWabaID = "";
-
-        if (contact) {
-            senderName = contact.profile?.name || "";
-            senderWabaID = contact.wa_id || "";
-        }
-
-        console.log("Sender Name:", senderName);
-        console.log("Sender WA ID:", senderWabaID);
-
-        if (!value) {
-            console.log("No value in webhook");
-            return { statusCode: 200 };
-        }
-
-        console.log("value.metadata", value.metadata);
-        const phoneNumberId = value?.metadata?.phone_number_id?.toString();
-        console.log("phoneNumberId:", phoneNumberId);
-        console.log("Webhook keys:", Object.keys(value));
-
         /* ─────────────────────────────────────────────
 📌 MESSAGE STATUS UPDATES (sent/delivered/read)
 ───────────────────────────────────────────── */
@@ -869,6 +973,33 @@ exports.webhookReceive = async (req, res) => {
 
             return res.status(200).send("STATUS_UPDATED");
         }
+
+        console.log("change", value.contacts);
+
+        const contact = value.contacts?.[0];
+        let senderName = "";
+        let originalName = "";
+        let senderWabaID = "";
+
+        if (contact) {
+            senderName = contact.profile?.name || "";
+            originalName = contact.profile?.name || "";
+            senderWabaID = contact.wa_id || "";
+        }
+
+        console.log("Sender Name:", senderName);
+        console.log("Original Name:", originalName);
+        console.log("Sender WA ID:", senderWabaID);
+
+        if (!value) {
+            console.log("No value in webhook");
+            return { statusCode: 200 };
+        }
+
+        console.log("value.metadata", value.metadata);
+        const phoneNumberId = value?.metadata?.phone_number_id?.toString();
+        console.log("phoneNumberId:", phoneNumberId);
+        console.log("Webhook keys:", Object.keys(value));
 
         if (!Array.isArray(value.messages) || value.messages.length === 0) {
             console.log("ℹ️ No incoming messages");
@@ -975,6 +1106,7 @@ exports.webhookReceive = async (req, res) => {
                 phoneNumberId,
                 conversationId: msg.from,
                 senderName: finalSenderName,
+                originalName: originalName,
                 senderWabaId: senderWabaID,
                 direction: "incoming",
                 from: msg.from,
@@ -1347,49 +1479,6 @@ exports.sendMessage = async (req, res) => {
     }
 };
 
-function resolveTemplate(template, params) {
-    let headerText = "";
-    let bodyText = "";
-    let buttons = [];
-
-    for (const component of template.components) {
-
-        // HEADER
-        if (component.type === "HEADER" && component.text) {
-            headerText = component.text;
-            if (params.header?.length) {
-                params.header.forEach((val, i) => {
-                    headerText = headerText.replace(`{{${i + 1}}}`, val);
-                });
-            }
-        }
-
-        // BODY (NAMED PARAMS)
-        if (component.type === "BODY" && component.text) {
-            bodyText = component.text;
-
-            if (component.example?.body_text_named_params?.length) {
-                component.example.body_text_named_params.forEach(p => {
-                    bodyText = bodyText.replace(
-                        `{{${p.param_name}}}`,
-                        params.body?.[p.param_name] ?? ""
-                    );
-                });
-            }
-        }
-
-        // BUTTONS
-        if (component.type === "BUTTONS") {
-            buttons = component.buttons || [];
-        }
-    }
-
-    return {
-        header: headerText,
-        body: bodyText,
-        buttons,
-    };
-}
 /**
  * SEND WHATSAPP TEMPLATE MESSAGE (FINAL & SAFE)
  */
@@ -1397,252 +1486,587 @@ exports.sendTemplateMessage = async (req, res) => {
     console.log("\n========== SEND TEMPLATE MESSAGE START ==========");
 
     try {
-        const { to, templateId, name, params = {} } = req.body;
+        const {
+            to,
+            templateId,
+            params = {},
+            name: messageName // 👈 your custom identity name
+        } = req.body;
+
         const userId = req.user._id;
 
-        /* ───────── BASIC VALIDATION ───────── */
         if (!to || !templateId) {
             return res.status(400).json({
                 success: false,
-                message: "`to` and `templateId` are required",
+                message: "`to` and `templateId` required"
             });
         }
 
         /* ───────── USER / WABA ───────── */
         const user = await User.findById(userId);
+
         if (!user?.whatsappWaba) {
             return res.status(400).json({
                 success: false,
-                message: "WhatsApp WABA not connected",
+                message: "WABA not connected"
             });
         }
 
-        const { phoneNumberId, accessToken, wabaId, phoneNumber } = user.whatsappWaba;
+        const { phoneNumberId, accessToken } = user.whatsappWaba;
 
-        console.log("🔑 WABA DETAILS", {
-            phoneNumberId,
-            wabaId,
-            hasToken: !!accessToken,
-        });
-
-        /* ───────── TEMPLATE FETCH ───────── */
-        const template = await WabaTemplate.findOne({
-            _id: templateId,
-            user: userId,
-            status: "APPROVED",
-        });
+        /* ───────── TEMPLATE ───────── */
+        const template = await WabaTemplate.findById(templateId);
 
         if (!template) {
             return res.status(404).json({
                 success: false,
-                message: "Approved template not found",
+                message: "Template not found"
             });
-        }
-
-        console.log("📄 TEMPLATE FOUND", {
-            name: template.name,
-            language: template.language,
-            templateWabaId: template.wabaId,
-        });
-
-        /* 🔥 CRITICAL SAFETY CHECK */
-        if (String(template.wabaId) !== String(wabaId)) {
-            throw new Error(
-                "Template WABA ID does not match sender WABA ID"
-            );
         }
 
         /* ───────── BUILD COMPONENTS ───────── */
         const components = [];
 
-        for (const component of template.components) {
+        /* ===== HEADER ===== */
+        const header = template.components.find(c => c.type === "HEADER");
 
-            /* ───── BODY COMPONENT ───── */
-            if (component.type === "BODY") {
+        if (header) {
+            const hasVars = /{{.*?}}/.test(header.text || "");
 
-                const namedParams =
-                    component.example?.body_text_named_params || [];
-
-                const positionalParams =
-                    component.example?.body_text || [];
-
-                // 🔹 Named params (your template case)
-                if (namedParams.length) {
-
-                    if (!Array.isArray(params.body)) {
-                        throw new Error("params.body must be ARRAY");
-                    }
-
-                    if (params.body.length !== namedParams.length) {
-                        throw new Error(
-                            `Expected ${namedParams.length} body params, got ${params.body.length}`
-                        );
-                    }
-
-                    components.push({
-                        type: "body",
-                        parameters: namedParams.map((metaParam, index) => ({
-                            type: "text",
-                            parameter_name: metaParam.param_name, // 🔥 REQUIRED
-                            text: String(params.body[index]),
-                        })),
-                    });
-                }
-
-                // 🔹 Positional params
-                else if (positionalParams.length) {
-
-                    if (!Array.isArray(params.body)) {
-                        throw new Error("params.body must be ARRAY");
-                    }
-
-                    components.push({
-                        type: "body",
-                        parameters: params.body.map(val => ({
-                            type: "text",
-                            text: String(val),
-                        })),
-                    });
-                }
+            if (header.format === "TEXT" && hasVars && params.header) {
+                components.push({
+                    type: "header",
+                    parameters: [{ type: "text", text: params.header }]
+                });
             }
 
-            /* ───── HEADER (TEXT ONLY) ───── */
-            if (component.type === "HEADER" && component.format === "TEXT") {
-
-                const headerVars =
-                    (component.text?.match(/{{\d+}}/g) || []).length;
-
-                if (headerVars > 0) {
-                    if (!Array.isArray(params.header)) {
-                        throw new Error("params.header must be ARRAY");
-                    }
-
-                    if (params.header.length !== headerVars) {
-                        throw new Error(
-                            `Expected ${headerVars} header params, got ${params.header.length}`
-                        );
-                    }
-
-                    components.push({
-                        type: "header",
-                        parameters: params.header.map(val => ({
-                            type: "text",
-                            text: String(val),
-                        })),
-                    });
-                }
+            if (header.format === "IMAGE" && header.media?.s3Url) {
+                components.push({
+                    type: "header",
+                    parameters: [{
+                        type: "image",
+                        image: { link: header.media.s3Url }
+                    }]
+                });
             }
 
-            /* ───── BUTTONS ───── */
-            if (component.type === "BUTTONS" && params.buttons?.length) {
-                params.buttons.forEach((btn, index) => {
-                    components.push({
-                        type: "button",
-                        sub_type: btn.type || "quick_reply",
-                        index: String(index),
-                        parameters:
-                            btn.type === "url"
-                                ? [{ type: "text", text: btn.value }]
-                                : [{ type: "payload", payload: btn.payload }],
-                    });
+            if (header.format === "VIDEO" && header.media?.s3Url) {
+                components.push({
+                    type: "header",
+                    parameters: [{
+                        type: "video",
+                        video: { link: header.media.s3Url }
+                    }]
+                });
+            }
+
+            if (header.format === "DOCUMENT" && header.media?.s3Url) {
+                components.push({
+                    type: "header",
+                    parameters: [{
+                        type: "document",
+                        document: {
+                            link: header.media.s3Url,
+                            filename: header.media.fileName || "file"
+                        }
+                    }]
                 });
             }
         }
 
-        /* ───────── META PAYLOAD ───────── */
+        /* ===== BODY ===== */
+        // const body = template.components.find(c => c.type === "BODY");
+
+        // if (body) {
+        //     const hasVars = /{{.*?}}/.test(body.text || "");
+
+        //     if (hasVars && Array.isArray(params.body)) {
+        //         const abc = components.push({
+        //             type: "body",
+        //             parameters: params.body.map(t => ({
+        //                 type: "text",
+        //                 text: t
+        //             }))
+        //         });
+        //         console.log(abc, "body params added");
+        //     }
+        // }
+
+        const body = template.components.find(c => c.type === "BODY");
+
+        if (body) {
+            const hasVars = /{{.*?}}/.test(body.text || "");
+
+            if (hasVars) {
+
+                /* ===== NAMED PARAMS ===== */
+                if (template.parameter_format === "named") {
+
+                    const namedExamples =
+                        body.example?.body_text_named_params || [];
+
+                    components.push({
+                        type: "body",
+                        parameters: namedExamples.map((ex, i) => ({
+                            type: "text",
+                            parameter_name: ex.param_name,
+                            text: params.body?.[i] || ""
+                        }))
+                    });
+                }
+
+                /* ===== POSITIONAL PARAMS ===== */
+                else {
+                    components.push({
+                        type: "body",
+                        parameters: (params.body || []).map(t => ({
+                            type: "text",
+                            text: t
+                        }))
+                    });
+                }
+            }
+        }
+
+        /* ===== BUTTONS ===== */
+        const buttons = template.components.find(c => c.type === "BUTTONS");
+
+        if (buttons?.buttons?.length) {
+            buttons.buttons.forEach((btn, index) => {
+
+                // QUICK REPLY
+                if (btn.type === "QUICK_REPLY") {
+                    components.push({
+                        type: "button",
+                        sub_type: "quick_reply",
+                        index,
+                        parameters: [{
+                            type: "payload",
+                            payload: btn.text
+                        }]
+                    });
+                }
+
+                // URL
+                if (btn.type === "URL") {
+                    const hasVars = /{{.*?}}/.test(btn.url || "");
+
+                    if (hasVars && params.buttons?.[index]) {
+                        components.push({
+                            type: "button",
+                            sub_type: "url",
+                            index,
+                            parameters: [{
+                                type: "text",
+                                text: params.buttons[index]
+                            }]
+                        });
+                    }
+                }
+
+                // COPY CODE
+                // COPY CODE (dynamic)
+                if (btn.type === "COPY_CODE") {
+                    const code = params.buttons?.[index];
+
+                    if (!code) {
+                        throw new Error(
+                            `COPY_CODE button at index ${index} requires coupon_code`
+                        );
+                    }
+
+                    components.push({
+                        type: "button",
+                        sub_type: "copy_code",
+                        index,
+                        parameters: [{
+                            type: "coupon_code",
+                            coupon_code: code
+                        }]
+                    });
+                }
+
+                // PHONE NUMBER (Meta = voice_call)
+                if (btn.type === "PHONE_NUMBER") {
+                    components.push({
+                        type: "button",
+                        sub_type: "voice_call",
+                        index
+                    });
+                }
+            });
+        }
+
+        /* ───────── PAYLOAD ───────── */
         const payload = {
             messaging_product: "whatsapp",
             to,
             type: "template",
             template: {
                 name: template.name,
-                language: { code: template.language },
-                components,
-            },
+                language: { code: template.language || "en_US" },
+                ...(components.length && { components })
+            }
         };
 
-        console.log("📤 META PAYLOAD");
         console.dir(payload, { depth: null });
 
-        /* ───────── SEND TO META ───────── */
-        const response = await axios.post(
+        /* ───────── SEND ───────── */
+        const { data } = await axios.post(
             `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
             payload,
             {
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
-                    "Content-Type": "application/json",
-                },
+                    "Content-Type": "application/json"
+                }
             }
         );
 
-        console.log("✅ META RESPONSE", response.data);
-
-
-        const resolvedTemplate = resolveTemplate(template, params);
-        console.log("Resolved template preview:", resolvedTemplate);
-
-        const metaMessageId = response.data?.messages?.[0]?.id;
-        const message = response.data?.messages?.[0] || {};
-
-        /* ───────────── SAVE MESSAGE ───────────── */
+        /* ───────── STORE MESSAGE ───────── */
         await WhatsAppMessage.create({
             userId,
-            phoneNumberId,
-            conversationId: to,
-            senderName: name || to,
-            senderWabaId: wabaId,
-            direction: "outgoing",
-            from: phoneNumber,
             to,
+            from: phoneNumberId,
+            phoneNumberId,
+            senderName: messageName, // 👈 STORED HERE
+            direction: "outgoing",
             messageType: "template",
-
+            conversationId: to,
+            metaMessageId: data.messages?.[0]?.id,
             content: {
                 template: {
                     name: template.name,
                     language: template.language,
 
-                    // FULL TEMPLATE FROM DB
+                    // full template structure
                     components: template.components,
 
-                    // VALUES USED
+                    // params used while sending
                     params,
 
-                    // FINAL USER-VISIBLE MESSAGE
-                    resolved: resolvedTemplate,
-                },
+                    // optional resolved preview
+                    resolved: {
+                        header: params.header || null,
+                        body: Array.isArray(params.body)
+                            ? params.body.join(" ")
+                            : null,
+                        buttons: []
+                    }
+                }
             },
-
-            metaMessageId,
             status: "sent",
-            messageTimestamp: new Date(),
-            raw: response.data,
+            raw: data
         });
 
+        return res.json({ success: true, data });
 
+    } catch (error) {
+        console.error(error.response?.data || error);
+        return res.status(500).json({
+            success: false,
+            error: error.response?.data || error.message
+        });
+    }
+};
+
+exports.sendTemplateBulkMessage = async (req, res) => {
+    console.log("\n========== SEND TEMPLATE MESSAGE START ==========");
+
+    try {
+        const {
+            to,
+            templateId,
+            params = {},
+            name: messageName
+        } = req.body;
+
+        const userId = req.user._id;
+
+        /* ───────── VALIDATION ───────── */
+        if (!to || !templateId) {
+            return res.status(400).json({
+                success: false,
+                message: "`to` and `templateId` required"
+            });
+        }
+
+        // Normalize numbers to array
+        const numbers = Array.isArray(to) ? to : [to];
+
+        /* ───────── USER / WABA ───────── */
+        const user = await User.findById(userId);
+
+        if (!user?.whatsappWaba) {
+            return res.status(400).json({
+                success: false,
+                message: "WABA not connected"
+            });
+        }
+
+        const { phoneNumberId, accessToken } = user.whatsappWaba;
+
+        /* ───────── TEMPLATE ───────── */
+        const template = await WabaTemplate.findById(templateId);
+
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: "Template not found"
+            });
+        }
+
+        /* ───────── BUILD COMPONENTS ───────── */
+        const components = [];
+
+        /* ===== HEADER ===== */
+        const header = template.components.find(c => c.type === "HEADER");
+
+        if (header) {
+            const hasVars = /{{.*?}}/.test(header.text || "");
+
+            if (header.format === "TEXT" && hasVars && params.header) {
+                components.push({
+                    type: "header",
+                    parameters: [{ type: "text", text: params.header }]
+                });
+            }
+
+            if (header.format === "IMAGE" && header.media?.s3Url) {
+                components.push({
+                    type: "header",
+                    parameters: [{
+                        type: "image",
+                        image: { link: header.media.s3Url }
+                    }]
+                });
+            }
+
+            if (header.format === "VIDEO" && header.media?.s3Url) {
+                components.push({
+                    type: "header",
+                    parameters: [{
+                        type: "video",
+                        video: { link: header.media.s3Url }
+                    }]
+                });
+            }
+
+            if (header.format === "DOCUMENT" && header.media?.s3Url) {
+                components.push({
+                    type: "header",
+                    parameters: [{
+                        type: "document",
+                        document: {
+                            link: header.media.s3Url,
+                            filename: header.media.fileName || "file"
+                        }
+                    }]
+                });
+            }
+        }
+
+        /* ===== BODY ===== */
+        const body = template.components.find(c => c.type === "BODY");
+
+        if (body) {
+            const hasVars = /{{.*?}}/.test(body.text || "");
+
+            if (hasVars) {
+
+                // Named params
+                if (template.parameter_format === "named") {
+
+                    const namedExamples =
+                        body.example?.body_text_named_params || [];
+
+                    components.push({
+                        type: "body",
+                        parameters: namedExamples.map((ex, i) => ({
+                            type: "text",
+                            parameter_name: ex.param_name,
+                            text: params.body?.[i] || ""
+                        }))
+                    });
+                }
+
+                // Positional params
+                else {
+                    components.push({
+                        type: "body",
+                        parameters: (params.body || []).map(t => ({
+                            type: "text",
+                            text: t
+                        }))
+                    });
+                }
+            }
+        }
+
+        /* ===== BUTTONS ===== */
+        const buttons = template.components.find(c => c.type === "BUTTONS");
+
+        if (buttons?.buttons?.length) {
+            buttons.buttons.forEach((btn, index) => {
+
+                // QUICK REPLY
+                if (btn.type === "QUICK_REPLY") {
+                    components.push({
+                        type: "button",
+                        sub_type: "quick_reply",
+                        index,
+                        parameters: [{
+                            type: "payload",
+                            payload: btn.text
+                        }]
+                    });
+                }
+
+                // URL
+                if (btn.type === "URL") {
+                    const hasVars = /{{.*?}}/.test(btn.url || "");
+
+                    if (hasVars && params.buttons?.[index]) {
+                        components.push({
+                            type: "button",
+                            sub_type: "url",
+                            index,
+                            parameters: [{
+                                type: "text",
+                                text: params.buttons[index]
+                            }]
+                        });
+                    }
+                }
+
+                // COPY CODE
+                if (btn.type === "COPY_CODE") {
+                    const code = params.buttons?.[index];
+
+                    if (!code) {
+                        throw new Error(
+                            `COPY_CODE button at index ${index} requires coupon_code`
+                        );
+                    }
+
+                    components.push({
+                        type: "button",
+                        sub_type: "copy_code",
+                        index,
+                        parameters: [{
+                            type: "coupon_code",
+                            coupon_code: code
+                        }]
+                    });
+                }
+
+                // PHONE NUMBER
+                if (btn.type === "PHONE_NUMBER") {
+                    components.push({
+                        type: "button",
+                        sub_type: "voice_call",
+                        index
+                    });
+                }
+            });
+        }
+
+        /* ───────── BULK SEND ───────── */
+        const results = [];
+
+        for (const number of numbers) {
+
+            const payload = {
+                messaging_product: "whatsapp",
+                to: number,
+                type: "template",
+                template: {
+                    name: template.name,
+                    language: { code: template.language || "en_US" },
+                    ...(components.length && { components })
+                }
+            };
+
+            try {
+                /* ───────── SEND ───────── */
+                const { data } = await axios.post(
+                    `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+                    payload,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${accessToken}`,
+                            "Content-Type": "application/json"
+                        }
+                    }
+                );
+
+                /* ───────── STORE ───────── */
+                await WhatsAppMessage.create({
+                    userId,
+                    to: number,
+                    from: phoneNumberId,
+                    phoneNumberId,
+                    senderName: messageName,
+                    direction: "outgoing",
+                    messageType: "template",
+                    conversationId: number,
+                    metaMessageId: data.messages?.[0]?.id,
+                    content: {
+                        template: {
+                            name: template.name,
+                            language: template.language,
+                            components: template.components,
+                            params,
+                            resolved: {
+                                header: params.header || null,
+                                body: Array.isArray(params.body)
+                                    ? params.body.join(" ")
+                                    : null,
+                                buttons: []
+                            }
+                        }
+                    },
+                    status: "sent",
+                    raw: data
+                });
+
+                results.push({
+                    to: number,
+                    success: true,
+                    messageId: data.messages?.[0]?.id
+                });
+
+            } catch (err) {
+
+                console.error(`Failed for ${number}`, err.response?.data);
+
+                results.push({
+                    to: number,
+                    success: false,
+                    error: err.response?.data || err.message
+                });
+            }
+        }
+
+        /* ───────── RESPONSE ───────── */
         return res.json({
             success: true,
-            message: "Template message sent successfully",
-            metaMessageId: response.data?.messages?.[0]?.id,
-            payload,
-            data: response.data,
+            total: numbers.length,
+            sent: results.filter(r => r.success).length,
+            failed: results.filter(r => !r.success).length,
+            results
         });
 
     } catch (error) {
-        console.error("❌ SEND TEMPLATE ERROR");
-        console.dir(error.response?.data || error.message, { depth: null });
+        console.error(error.response?.data || error);
 
-        return res.status(400).json({
+        return res.status(500).json({
             success: false,
-            message:
-                error.response?.data?.error?.message ||
-                error.message ||
-                "Failed to send template",
+            error: error.response?.data || error.message
         });
-    } finally {
-        console.log("========== SEND TEMPLATE MESSAGE END ==========\n");
     }
 };
+
 
 /** STEP 7: Get WhatsApp Conversations
  */
@@ -1654,80 +2078,63 @@ exports.getWhatsappConversations = async (req, res) => {
         const now = new Date();
         const before24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-
-        // const conversations = await WhatsAppMessage.aggregate([
-        //     {
-        //         $match: {
-        //             userId: new mongoose.Types.ObjectId(userId),
-        //         },
-        //     },
-
-        //     // 1️⃣ latest message first
-        //     {
-        //         $sort: { messageTimestamp: -1 },
-        //     },
-
-        //     // 2️⃣ group by conversation
-        //     {
-        //         $group: {
-        //             _id: "$conversationId",
-        //             from: { $first: "$conversationId" },
-        //             lastMessageTime: { $first: "$messageTimestamp" },
-        //             messages: {
-        //                 $push: {
-        //                     _id: "$_id",
-        //                     direction: "$direction",
-        //                     from: "$from",
-        //                     to: "$to",
-        //                     senderName: "$senderName",
-        //                     senderWabaId: "$senderWabaId",
-        //                     s3dataurl: "$s3dataurl",
-        //                     messageType: "$messageType",
-        //                     content: "$content",
-        //                     status: "$status",
-        //                     messageTimestamp: "$messageTimestamp",
-        //                 },
-        //             },
-        //         },
-        //     },
-
-        //     // 3️⃣ oldest → newest inside chat
-        //     {
-        //         $addFields: {
-        //             messages: { $reverseArray: "$messages" },
-        //         },
-        //     },
-
-        //     // 4️⃣ response shape
-        //     {
-        //         $project: {
-        //             _id: 0,
-        //             from: 1,
-        //             lastMessageTime: 1,
-        //             messages: 1,
-        //         },
-        //     },
-
-        //     // 5️⃣ latest chat on top
-        //     {
-        //         $sort: { lastMessageTime: -1 },
-        //     },
-        // ]);
-
         const conversations = await WhatsAppMessage.aggregate([
+
             {
                 $match: {
                     userId: new mongoose.Types.ObjectId(userId),
                 },
             },
 
-            { $sort: { messageTimestamp: -1 } },
+            // ✅ Ensure timestamp exists
+            {
+                $addFields: {
+                    sortTime: {
+                        $ifNull: ["$messageTimestamp", "$createdAt"]
+                    }
+                }
+            },
+
+            // ✅ OLDEST → NEWEST (correct chat order)
+            {
+                $sort: { sortTime: 1 }
+            },
 
             {
                 $group: {
                     _id: "$conversationId",
+
                     from: { $first: "$conversationId" },
-                    lastMessageTime: { $first: "$messageTimestamp" },
+
+                    originalName: {
+                        $max: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ["$direction", "incoming"] },
+                                        { $ne: ["$originalName", null] }
+                                    ]
+                                },
+                                "$originalName",
+                                null
+                            ]
+                        }
+                    },
+
+                    // last message = newest
+                    lastMessageTime: { $last: "$sortTime" },
+
+                    // last incoming
+                    lastIncomingTime: {
+                        $max: {
+                            $cond: [
+                                { $eq: ["$direction", "incoming"] },
+                                "$sortTime",
+                                null
+                            ]
+                        }
+                    },
+
                     messages: {
                         $push: {
                             _id: "$_id",
@@ -1735,41 +2142,50 @@ exports.getWhatsappConversations = async (req, res) => {
                             from: "$from",
                             to: "$to",
                             senderName: "$senderName",
+                            originalName: "$originalName",
                             senderWabaId: "$senderWabaId",
                             s3dataurl: "$s3dataurl",
                             messageType: "$messageType",
                             content: "$content",
                             metaMessageId: "$metaMessageId",
                             status: "$status",
-                            messageTimestamp: "$messageTimestamp",
-                        },
-                    },
-                },
-            },
-
-            {
-                $addFields: {
-                    messages: { $reverseArray: "$messages" },
-                },
+                            messageTimestamp: "$sortTime",
+                        }
+                    }
+                }
             },
 
             {
                 $project: {
                     _id: 0,
                     from: 1,
+                    originalName: 1,
                     lastMessageTime: 1,
+                    lastIncomingTime: 1,
                     messages: 1,
-                },
+                }
             },
 
-            // 🔥 ONLY FILTERING LOGIC (NEW)
+            // chats vs history filter
             ...(type === "chats"
-                ? [{ $match: { lastMessageTime: { $gte: before24Hours } } }]
+                ? [{
+                    $match: {
+                        lastIncomingTime: { $gte: before24Hours }
+                    }
+                }]
                 : type === "history"
-                    ? [{ $match: { lastMessageTime: { $lt: before24Hours } } }]
+                    ? [{
+                        $match: {
+                            $or: [
+                                { lastIncomingTime: { $lt: before24Hours } },
+                                { lastIncomingTime: null }
+                            ]
+                        }
+                    }]
                     : []),
 
-            { $sort: { lastMessageTime: -1 } },
+            { $sort: { lastMessageTime: -1 } }
+
         ]);
 
         res.json({

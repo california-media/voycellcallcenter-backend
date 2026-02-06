@@ -4,7 +4,7 @@ const User = require("../models/userModel");
 const crypto = require("crypto");
 const { randomBytes, createHmac } = require("crypto");
 // const { randomBytes } = require("crypto");
-const { sendVerificationEmail, sendMagicLinkEmail } = require("../utils/emailUtils");
+const { sendVerificationEmail, sendMagicLinkEmail, sendPostVerificationDemoEmail } = require("../utils/emailUtils");
 const googleClient = new OAuth2Client(
   "401067515093-9j7faengj216m6uc9csubrmo3men1m7p.apps.googleusercontent.com"
 );
@@ -24,22 +24,22 @@ const oauth2Client = new google.auth.OAuth2(
 
 const disallowedEmailDomains = [
   // "gmail.com",
-  "outlook.com",
-  "hotmail.com",
-  "live.com",
-  "yahoo.com",
-  "icloud.com",
-  "aol.com",
-  "mail.com",
-  "gmx.com",
-  "protonmail.com",
-  "zoho.com",
-  "yandex.com",
-  "tutanota.com",
-  "fastmail.com",
-  "hushmail.com",
-  "inbox.com",
-  "lycos.com",
+  // "outlook.com",
+  // "hotmail.com",
+  // "live.com",
+  // "yahoo.com",
+  // "icloud.com",
+  // "aol.com",
+  // "mail.com",
+  // "gmx.com",
+  // "protonmail.com",
+  // "zoho.com",
+  // "yandex.com",
+  // "tutanota.com",
+  // "fastmail.com",
+  // "hushmail.com",
+  // "inbox.com",
+  // "lycos.com",
 ];
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
@@ -197,7 +197,7 @@ const signupWithEmail = async (req, res) => {
         user.signupMethod = "email";
       }
 
-      // === PART 3: Yeastar Extension Creation ===
+      // // === PART 3: Yeastar Extension Creation ===
       try {
         // Start extension creation after user is verified
         const startExt = parseInt(process.env.EXTENSION_START || "1001", 10);
@@ -225,6 +225,9 @@ const signupWithEmail = async (req, res) => {
         user.yeastarExtensionId = result?.data?.id || result?.id || null;
         user.sipSecret = secret;
         await user.save();
+
+        // ✅ Send post-verification demo email
+
 
         console.log("✅ Yeastar extension created:", extensionNumber);
       } catch (err) {
@@ -273,6 +276,13 @@ const signupWithEmail = async (req, res) => {
 
       // ✅ Optional: Update scannedMe for other users
       await user.save();
+
+      try {
+        await sendPostVerificationDemoEmail(user);
+        console.log("📧 Post-verification demo email sent");
+      } catch (emailErr) {
+        console.error("Failed to send demo email:", emailErr.message);
+      }
 
       const token = createTokenforUser(user);
 
@@ -1063,6 +1073,7 @@ const generateMagicLink = async (req, res) => {
     });
   }
 };
+
 const loginWithMagicLink = async (req, res) => {
   try {
     let { token, magicLink } = req.body; // ✅ USE let (NOT const)
@@ -1147,7 +1158,6 @@ const loginWithMagicLink = async (req, res) => {
     });
   }
 };
-
 
 const logoutUser = async (req, res) => {
   try {

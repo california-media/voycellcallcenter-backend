@@ -265,6 +265,49 @@ const userSchema = new Schema(
       default: false,
     },
 
+    // SUPER ADMIN → Device Level
+    // 🔹 Multiple PBX Devices — Super Admin Only
+    yeastarDevices: [
+      {
+        deviceId: {
+          type: mongoose.Schema.Types.ObjectId,
+          default: () => new mongoose.Types.ObjectId(),
+        },
+
+        deviceName: String, // e.g. Head Office PBX
+
+        YEASTAR_BASE_URL: String,
+        YEASTAR_USERNAME: String,
+        YEASTAR_PASSWORD: String,
+        YEASTAR_SDK_ACCESS_ID: String,
+        YEASTAR_SDK_ACCESS_KEY: String,
+        YEASTAR_USER_AGENT: String,
+
+        isActive: {
+          type: Boolean,
+          default: true,
+        },
+
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+
+    yeastarDetails: {
+      YEASTAR_BASE_URL: String,
+      YEASTAR_USERNAME: String,
+      YEASTAR_PASSWORD: String,
+      YEASTAR_SDK_ACCESS_ID: String,
+      YEASTAR_SDK_ACCESS_KEY: String,
+      YEASTAR_USER_AGENT: String,
+      YEASTER_EXTENSION_NUMBER: String,
+      YEASTER_EXTENSION_ID: String,
+      YEASTER_SIP_SECRET: String,
+      YEASTER_TELEPHONE: String,
+    },
+
     userInfo: {
       helps: {
         type: [String],
@@ -400,10 +443,15 @@ const userSchema = new Schema(
 
       phoneNumber: String,
       displayName: String,
-      qualityRating: String,
+      qualityRating: Object,
       messagingLimit: String,
+      businessVerificationStatus: String,
+      accountReviewStatus: String,
+      status: String,
 
       profile: {
+        displayName: String,
+        messageLimit: String,
         about: String,
         address: String,
         description: String,

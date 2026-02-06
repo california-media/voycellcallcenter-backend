@@ -7,6 +7,11 @@ const {
   getAgentsOfCompanyAdmin,
   getAllCompanyAdmins,
   editCompanyAdminAndAgent,
+  updateMultipleYeastarUsersBySuperAdmin,
+  addYeastarDeviceBySuperAdmin,
+  updateYeastarDeviceBySuperAdmin,
+  deleteYeastarDeviceBySuperAdmin,
+  getAllYeastarDevicesBySuperAdmin,
 } = require("../../controllers/admin/superAdminController");
 
 // Super Admin only
@@ -20,5 +25,14 @@ router.post("/agentDetailsById", getAgentDetails);
 
 router.put("/editCompanyAdminAndAgent", editCompanyAdminAndAgent);
 
+router.post("/updateMultipleYeastarUsers", updateMultipleYeastarUsersBySuperAdmin);
+
+router.post("/addPBXDevice", addYeastarDeviceBySuperAdmin);
+
+router.put("/updatePBXDevice", updateYeastarDeviceBySuperAdmin);
+
+router.delete("/deletePBXDevice", deleteYeastarDeviceBySuperAdmin);
+
+router.get("/getAllPBXDevices", getAllYeastarDevicesBySuperAdmin);
 
 module.exports = router;

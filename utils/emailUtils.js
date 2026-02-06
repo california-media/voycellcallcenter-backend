@@ -176,6 +176,113 @@ const sendVerificationEmail = async (email, link) => {
     await transporter.sendMail(mailOptions);
 };
 
+const sendPostVerificationDemoEmail = async (user) => {
+    const clientName =
+        `${user.firstname || ""} ${user.lastname || ""}`.trim() || "Client";
+
+    const meetingLink = "https://calendly.com/your-link"; // 🔁 replace with real link
+
+    const mailOptions = {
+        from: '"VOYCELL" <noreply@voycell.com>',
+        to: user.email,
+        subject: "Welcome to VOYCELL – Let’s Help You Get Started",
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Welcome to VOYCELL</title>
+</head>
+
+<body style="margin:0; padding:0; background:#f4f6f8; font-family:Arial, sans-serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8; padding:20px;">
+    <tr>
+      <td align="center">
+
+        <table width="600" cellpadding="0" cellspacing="0" 
+          style="background:#ffffff; border-radius:10px; padding:30px;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center">
+              <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
+                   width="180" style="margin-bottom:20px;" />
+            </td>
+          </tr>
+
+          <!-- Greeting -->
+          <tr>
+            <td style="font-size:16px; color:#2d313a;">
+              <p>Hi <strong>${clientName}</strong>,</p>
+
+              <p>
+                I noticed that you signed up for the free trial on 
+                <strong>VOYCELL</strong> — a solution built to help modern teams 
+                connect faster, respond better, and close more conversations with confidence.
+              </p>
+
+              <p>
+                Is the solution useful for you, or is there anything you feel is missing?
+              </p>
+
+              <p>
+                I’d be happy to walk you through a short personalized demo and help you 
+                get the most out of VOYCELL.
+              </p>
+            </td>
+          </tr>
+
+          <!-- CTA Button -->
+          <tr>
+            <td align="center" style="padding:25px 0;">
+              <a href="${meetingLink}"
+                 style="
+                   background:#007bff;
+                   color:#ffffff;
+                   text-decoration:none;
+                   padding:14px 28px;
+                   border-radius:6px;
+                   font-weight:bold;
+                   display:inline-block;
+                 ">
+                 Book 30-Min Demo
+              </a>
+            </td>
+          </tr>
+
+          <!-- Signature -->
+          <tr>
+            <td style="font-size:16px; color:#2d313a;">
+              <p>
+                Kind regards,<br/>
+                <strong>Vipul</strong><br/>
+                VOYCELL Team
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="font-size:13px; color:#6c757d; padding-top:20px;">
+              © ${new Date().getFullYear()} VOYCELL. All rights reserved.
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
+`,
+    };
+
+    await transporter.sendMail(mailOptions);
+};
+
 // const sendHelpSupportReply = async (
 //   userEmail,
 //   userName,
@@ -668,6 +775,7 @@ module.exports = {
     sendVerificationEmail,
     //   sendHelpSupportReply,
     sendHelpSupportReplyNotification,
+    sendPostVerificationDemoEmail,
     sendEmailChangeVerification,
     sendMagicLinkEmail,
     transporter,

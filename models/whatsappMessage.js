@@ -25,6 +25,11 @@ const whatsappMessageSchema = new mongoose.Schema(
       type: String, // Display name of the sender
     },
 
+
+    originalName: {
+      type: String, // Original display name from WhatsApp (for debugging)
+    },
+
     senderWabaId: {
       type: String, // WABA ID of the sender
       index: true,

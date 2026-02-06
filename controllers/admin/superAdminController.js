@@ -13,15 +13,15 @@ exports.getAllCompanyAdmins = async (req, res) => {
 
     const searchQuery = search
       ? {
-          $or: [
-            { firstname: { $regex: search, $options: "i" } },
-            { lastname: { $regex: search, $options: "i" } },
-            { email: { $regex: search, $options: "i" } },
-            { extensionNumber: { $regex: search, $options: "i" } },
-            { telephone: { $regex: search, $options: "i" } },
-            { "phonenumbers.number": { $regex: search, $options: "i" } },
-          ],
-        }
+        $or: [
+          { firstname: { $regex: search, $options: "i" } },
+          { lastname: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { extensionNumber: { $regex: search, $options: "i" } },
+          { telephone: { $regex: search, $options: "i" } },
+          { "phonenumbers.number": { $regex: search, $options: "i" } },
+        ],
+      }
       : {};
 
     const companyAdmins = await User.find({
@@ -70,15 +70,15 @@ exports.getAgentsOfCompanyAdmin = async (req, res) => {
 
     const searchQuery = search
       ? {
-          $or: [
-            { firstname: { $regex: search, $options: "i" } },
-            { lastname: { $regex: search, $options: "i" } },
-            { email: { $regex: search, $options: "i" } },
-            { extensionNumber: { $regex: search, $options: "i" } },
-            { telephone: { $regex: search, $options: "i" } },
-            { "phonenumbers.number": { $regex: search, $options: "i" } },
-          ],
-        }
+        $or: [
+          { firstname: { $regex: search, $options: "i" } },
+          { lastname: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { extensionNumber: { $regex: search, $options: "i" } },
+          { telephone: { $regex: search, $options: "i" } },
+          { "phonenumbers.number": { $regex: search, $options: "i" } },
+        ],
+      }
       : {};
 
     const agents = await User.find({
@@ -370,3 +370,404 @@ exports.verifyEmailChange = async (req, res) => {
     });
   }
 };
+
+exports.updateMultipleYeastarUsersBySuperAdmin = async (req, res) => {
+  try {
+    const superAdminId = req.user._id;
+
+    const {
+      users = [],
+
+      YEASTAR_BASE_URL,
+      YEASTAR_USERNAME,
+      YEASTAR_PASSWORD,
+      YEASTAR_SDK_ACCESS_ID,
+      YEASTAR_SDK_ACCESS_KEY,
+      YEASTAR_USER_AGENT,
+    } = req.body;
+
+    // 1️⃣ Super Admin Check
+    const superAdmin = await User.findById(superAdminId);
+    if (!superAdmin || superAdmin.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only Super Admin can perform this action.",
+      });
+    }
+
+    if (!users.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Users array is required.",
+      });
+    }
+
+    const updatedUsers = [];
+
+    // 2️⃣ Loop All Users
+    for (const u of users) {
+      const {
+        userId,
+        YEASTER_EXTENSION_NUMBER,
+        YEASTER_EXTENSION_ID,
+        YEASTER_SIP_SECRET,
+        YEASTER_TELEPHONE,
+      } = u;
+
+      const targetUser = await User.findById(userId);
+      if (!targetUser) continue;
+
+      if (!targetUser.yeastarDetails) {
+        targetUser.yeastarDetails = {};
+      }
+
+      // 3️⃣ Common PBX Details (Same)
+      if (YEASTAR_BASE_URL !== undefined)
+        targetUser.yeastarDetails.YEASTAR_BASE_URL =
+          YEASTAR_BASE_URL;
+
+      if (YEASTAR_USERNAME !== undefined)
+        targetUser.yeastarDetails.YEASTAR_USERNAME =
+          YEASTAR_USERNAME;
+
+      if (YEASTAR_PASSWORD !== undefined)
+        targetUser.yeastarDetails.YEASTAR_PASSWORD =
+          YEASTAR_PASSWORD;
+
+      if (YEASTAR_SDK_ACCESS_ID !== undefined)
+        targetUser.yeastarDetails.YEASTAR_SDK_ACCESS_ID =
+          YEASTAR_SDK_ACCESS_ID;
+
+      if (YEASTAR_SDK_ACCESS_KEY !== undefined)
+        targetUser.yeastarDetails.YEASTAR_SDK_ACCESS_KEY =
+          YEASTAR_SDK_ACCESS_KEY;
+
+      if (YEASTAR_USER_AGENT !== undefined)
+        targetUser.yeastarDetails.YEASTAR_USER_AGENT =
+          YEASTAR_USER_AGENT;
+
+      // 4️⃣ Unique Extension Details
+      if (YEASTER_EXTENSION_NUMBER !== undefined)
+        targetUser.yeastarDetails.YEASTER_EXTENSION_NUMBER =
+          YEASTER_EXTENSION_NUMBER;
+
+      if (YEASTER_EXTENSION_ID !== undefined)
+        targetUser.yeastarDetails.YEASTER_EXTENSION_ID =
+          YEASTER_EXTENSION_ID;
+
+      if (YEASTER_SIP_SECRET !== undefined)
+        targetUser.yeastarDetails.YEASTER_SIP_SECRET =
+          YEASTER_SIP_SECRET;
+
+      if (YEASTER_TELEPHONE !== undefined)
+        targetUser.yeastarDetails.YEASTER_TELEPHONE =
+          YEASTER_TELEPHONE;
+
+      await targetUser.save();
+
+      updatedUsers.push({
+        userId: targetUser._id,
+        extension: YEASTER_EXTENSION_NUMBER,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Multiple users Yeastar details updated.",
+      totalUpdated: updatedUsers.length,
+      data: updatedUsers,
+    });
+  } catch (error) {
+    console.error("❌ Multi Yeastar Update Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.addYeastarDeviceBySuperAdmin = async (req, res) => {
+  try {
+    const superAdminId = req.user._id;
+
+    const {
+      deviceName,
+
+      YEASTAR_BASE_URL,
+      YEASTAR_USERNAME,
+      YEASTAR_PASSWORD,
+      YEASTAR_SDK_ACCESS_ID,
+      YEASTAR_SDK_ACCESS_KEY,
+      YEASTAR_USER_AGENT,
+    } = req.body;
+
+    // 1️⃣ Check Super Admin
+    const superAdmin = await User.findById(superAdminId);
+
+    if (!superAdmin || superAdmin.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only Super Admin can add devices.",
+      });
+    }
+
+    // 2️⃣ Create Device Object
+    const newDevice = {
+      deviceName,
+
+      YEASTAR_BASE_URL,
+      YEASTAR_USERNAME,
+      YEASTAR_PASSWORD,
+      YEASTAR_SDK_ACCESS_ID,
+      YEASTAR_SDK_ACCESS_KEY,
+      YEASTAR_USER_AGENT,
+    };
+
+    // 3️⃣ Push into array
+    superAdmin.yeastarDevices.push(newDevice);
+
+    await superAdmin.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Yeastar device added successfully.",
+      data: newDevice,
+    });
+  } catch (error) {
+    console.error("❌ Add Device Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.getAllYeastarDevicesBySuperAdmin = async (req, res) => {
+  try {
+    const superAdminId = req.user._id;
+
+    const superAdmin = await User.findById(superAdminId);
+
+    if (!superAdmin || superAdmin.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only Super Admin can view devices.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      totalDevices: superAdmin.yeastarDevices.length,
+      data: superAdmin.yeastarDevices,
+    });
+  } catch (error) {
+    console.error("❌ Get Devices Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.updateYeastarDeviceBySuperAdmin = async (req, res) => {
+  try {
+    const superAdminId = req.user._id;
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: "deviceId is required.",
+      });
+    }
+
+    // SuperAdmin Check
+    const superAdmin = await User.findById(superAdminId);
+
+    if (!superAdmin || superAdmin.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only Super Admin can update devices.",
+      });
+    }
+
+    // 🔥 FIX → ObjectId compare
+    const device = superAdmin.yeastarDevices.find(
+      (d) => d.deviceId.toString() === deviceId.toString()
+    );
+
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: "Device not found.",
+      });
+    }
+
+    // Allowed fields
+    const allowedUpdates = [
+      "deviceName",
+      "YEASTAR_BASE_URL",
+      "YEASTAR_USERNAME",
+      "YEASTAR_PASSWORD",
+      "YEASTAR_SDK_ACCESS_ID",
+      "YEASTAR_SDK_ACCESS_KEY",
+      "YEASTAR_USER_AGENT",
+      "isActive",
+    ];
+
+    allowedUpdates.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        device[field] = req.body[field];
+      }
+    });
+
+    await superAdmin.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Device updated successfully.",
+      data: device,
+    });
+  } catch (error) {
+    console.error("❌ Update Device Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+
+
+exports.deleteYeastarDeviceBySuperAdmin = async (req, res) => {
+  try {
+    const superAdminId = req.user._id;
+    const { deviceId } = req.body;
+
+    const superAdmin = await User.findById(superAdminId);
+
+    if (!superAdmin || superAdmin.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only Super Admin can delete devices.",
+      });
+    }
+
+    superAdmin.yeastarDevices =
+      superAdmin.yeastarDevices.filter(
+        (d) => d._id.toString() !== deviceId
+      );
+
+    await superAdmin.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Device deleted successfully.",
+    });
+  } catch (error) {
+    console.error("❌ Delete Device Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+
+// exports.updateFullYeastarBySuperAdmin = async (req, res) => {
+//   try {
+//     const superAdminId = req.user._id;
+
+//     const {
+//       userId,
+
+//       YEASTAR_BASE_URL,
+//       YEASTAR_USERNAME,
+//       YEASTAR_PASSWORD,
+//       YEASTAR_SDK_ACCESS_ID,
+//       YEASTAR_SDK_ACCESS_KEY,
+//       YEASTAR_USER_AGENT,
+
+//       YEASTER_EXTENSION_NUMBER,
+//       YEASTER_EXTENSION_ID,
+//       YEASTER_SIP_SECRET,
+//       YEASTER_TELEPHONE,
+//     } = req.body;
+
+//     // 1️⃣ Check super admin
+//     const superAdmin = await User.findById(superAdminId);
+//     if (!superAdmin || superAdmin.role !== "superadmin") {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Only Super Admin can perform this action.",
+//       });
+//     }
+
+//     // 2️⃣ Validate target user
+//     const targetUser = await User.findById(userId);
+//     if (!targetUser) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Target user not found.",
+//       });
+//     }
+
+//     // 3️⃣ Ensure object exists
+//     if (!targetUser.yeastarDetails) {
+//       targetUser.yeastarDetails = {};
+//     }
+
+//     // 4️⃣ Update Yeastar Details (Nested Object)
+
+//     if (YEASTAR_BASE_URL !== undefined)
+//       targetUser.yeastarDetails.YEASTAR_BASE_URL = YEASTAR_BASE_URL;
+
+//     if (YEASTAR_USERNAME !== undefined)
+//       targetUser.yeastarDetails.YEASTAR_USERNAME = YEASTAR_USERNAME;
+
+//     if (YEASTAR_PASSWORD !== undefined)
+//       targetUser.yeastarDetails.YEASTAR_PASSWORD = YEASTAR_PASSWORD;
+
+//     if (YEASTAR_SDK_ACCESS_ID !== undefined)
+//       targetUser.yeastarDetails.YEASTAR_SDK_ACCESS_ID =
+//         YEASTAR_SDK_ACCESS_ID;
+
+//     if (YEASTAR_SDK_ACCESS_KEY !== undefined)
+//       targetUser.yeastarDetails.YEASTAR_SDK_ACCESS_KEY =
+//         YEASTAR_SDK_ACCESS_KEY;
+
+//     if (YEASTAR_USER_AGENT !== undefined)
+//       targetUser.yeastarDetails.YEASTAR_USER_AGENT =
+//         YEASTAR_USER_AGENT;
+
+//     if (YEASTER_EXTENSION_NUMBER !== undefined)
+//       targetUser.yeastarDetails.YEASTER_EXTENSION_NUMBER =
+//         YEASTER_EXTENSION_NUMBER;
+
+//     if (YEASTER_EXTENSION_ID !== undefined)
+//       targetUser.yeastarDetails.YEASTER_EXTENSION_ID =
+//         YEASTER_EXTENSION_ID;
+
+//     if (YEASTER_SIP_SECRET !== undefined)
+//       targetUser.yeastarDetails.YEASTER_SIP_SECRET =
+//         YEASTER_SIP_SECRET;
+
+//     if (YEASTER_TELEPHONE !== undefined)
+//       targetUser.yeastarDetails.YEASTER_TELEPHONE =
+//         YEASTER_TELEPHONE;
+
+//     await targetUser.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Yeastar details updated successfully.",
+//       data: targetUser.yeastarDetails,
+//     });
+//   } catch (error) {
+//     console.error("❌ Yeastar Full Update Error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
