@@ -276,12 +276,12 @@ const userSchema = new Schema(
 
         deviceName: String, // e.g. Head Office PBX
 
-        YEASTAR_BASE_URL: String,
-        YEASTAR_USERNAME: String,
-        YEASTAR_PASSWORD: String,
-        YEASTAR_SDK_ACCESS_ID: String,
-        YEASTAR_SDK_ACCESS_KEY: String,
-        YEASTAR_USER_AGENT: String,
+        PBX_BASE_URL: String,
+        PBX_USERNAME: String,
+        PBX_PASSWORD: String,
+        PBX_SDK_ACCESS_ID: String,
+        PBX_SDK_ACCESS_KEY: String,
+        PBX_USER_AGENT: String,
 
         isActive: {
           type: Boolean,
@@ -296,16 +296,20 @@ const userSchema = new Schema(
     ],
 
     yeastarDetails: {
-      YEASTAR_BASE_URL: String,
-      YEASTAR_USERNAME: String,
-      YEASTAR_PASSWORD: String,
-      YEASTAR_SDK_ACCESS_ID: String,
-      YEASTAR_SDK_ACCESS_KEY: String,
-      YEASTAR_USER_AGENT: String,
-      YEASTER_EXTENSION_NUMBER: String,
-      YEASTER_EXTENSION_ID: String,
-      YEASTER_SIP_SECRET: String,
-      YEASTER_TELEPHONE: String,
+      PBX_BASE_URL: String,
+      PBX_USERNAME: String,
+      PBX_PASSWORD: String,
+      PBX_SDK_ACCESS_ID: String,
+      PBX_SDK_ACCESS_KEY: String,
+      PBX_USER_AGENT: String,
+      PBX_EXTENSION_NUMBER: String,
+      PBX_EXTENSION_ID: String,
+      PBX_SIP_SECRET: String,
+      PBX_TELEPHONE: String,
+      assignedDeviceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null,
+      },
     },
 
     userInfo: {

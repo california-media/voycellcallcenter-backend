@@ -12,6 +12,7 @@ const {
   updateYeastarDeviceBySuperAdmin,
   deleteYeastarDeviceBySuperAdmin,
   getAllYeastarDevicesBySuperAdmin,
+  getYeastarDeviceById,
 } = require("../../controllers/admin/superAdminController");
 
 // Super Admin only
@@ -34,5 +35,7 @@ router.put("/updatePBXDevice", updateYeastarDeviceBySuperAdmin);
 router.delete("/deletePBXDevice", deleteYeastarDeviceBySuperAdmin);
 
 router.get("/getAllPBXDevices", getAllYeastarDevicesBySuperAdmin);
+
+router.get("/getPBXDeviceById", getYeastarDeviceById);
 
 module.exports = router;

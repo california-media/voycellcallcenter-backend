@@ -374,20 +374,11 @@ exports.verifyEmailChange = async (req, res) => {
 exports.updateMultipleYeastarUsersBySuperAdmin = async (req, res) => {
   try {
     const superAdminId = req.user._id;
-
-    const {
-      users = [],
-
-      YEASTAR_BASE_URL,
-      YEASTAR_USERNAME,
-      YEASTAR_PASSWORD,
-      YEASTAR_SDK_ACCESS_ID,
-      YEASTAR_SDK_ACCESS_KEY,
-      YEASTAR_USER_AGENT,
-    } = req.body;
+    const { users = [] } = req.body;
 
     // 1️⃣ Super Admin Check
     const superAdmin = await User.findById(superAdminId);
+
     if (!superAdmin || superAdmin.role !== "superadmin") {
       return res.status(403).json({
         success: false,
@@ -404,81 +395,99 @@ exports.updateMultipleYeastarUsersBySuperAdmin = async (req, res) => {
 
     const updatedUsers = [];
 
-    // 2️⃣ Loop All Users
+    // 2️⃣ Loop Users
     for (const u of users) {
       const {
         userId,
+        deviceId,
         YEASTER_EXTENSION_NUMBER,
         YEASTER_EXTENSION_ID,
         YEASTER_SIP_SECRET,
         YEASTER_TELEPHONE,
       } = u;
 
+      if (!userId || !deviceId) continue;
+
+      // 3️⃣ Find Target User
       const targetUser = await User.findById(userId);
       if (!targetUser) continue;
 
+      // 4️⃣ Find Device From SuperAdmin
+      const device = superAdmin.yeastarDevices.find(
+        (d) => d.deviceId.toString() === deviceId.toString()
+      );
+
+      if (!device) {
+        updatedUsers.push({
+          userId,
+          status: "failed",
+          reason: "Device not found",
+        });
+        continue;
+      }
+
+      // 5️⃣ Ensure yeastarDetails object
       if (!targetUser.yeastarDetails) {
         targetUser.yeastarDetails = {};
       }
 
-      // 3️⃣ Common PBX Details (Same)
-      if (YEASTAR_BASE_URL !== undefined)
-        targetUser.yeastarDetails.YEASTAR_BASE_URL =
-          YEASTAR_BASE_URL;
+      // 6️⃣ Assign PBX Device Creds
+      targetUser.yeastarDetails.PBX_BASE_URL =
+        device.PBX_BASE_URL;
 
-      if (YEASTAR_USERNAME !== undefined)
-        targetUser.yeastarDetails.YEASTAR_USERNAME =
-          YEASTAR_USERNAME;
+      targetUser.yeastarDetails.PBX_USERNAME =
+        device.PBX_USERNAME;
 
-      if (YEASTAR_PASSWORD !== undefined)
-        targetUser.yeastarDetails.YEASTAR_PASSWORD =
-          YEASTAR_PASSWORD;
+      targetUser.yeastarDetails.PBX_PASSWORD =
+        device.PBX_PASSWORD;
 
-      if (YEASTAR_SDK_ACCESS_ID !== undefined)
-        targetUser.yeastarDetails.YEASTAR_SDK_ACCESS_ID =
-          YEASTAR_SDK_ACCESS_ID;
+      targetUser.yeastarDetails.PBX_SDK_ACCESS_ID =
+        device.PBX_SDK_ACCESS_ID;
 
-      if (YEASTAR_SDK_ACCESS_KEY !== undefined)
-        targetUser.yeastarDetails.YEASTAR_SDK_ACCESS_KEY =
-          YEASTAR_SDK_ACCESS_KEY;
+      targetUser.yeastarDetails.PBX_SDK_ACCESS_KEY =
+        device.PBX_SDK_ACCESS_KEY;
 
-      if (YEASTAR_USER_AGENT !== undefined)
-        targetUser.yeastarDetails.YEASTAR_USER_AGENT =
-          YEASTAR_USER_AGENT;
+      targetUser.yeastarDetails.PBX_USER_AGENT =
+        device.PBX_USER_AGENT;
 
-      // 4️⃣ Unique Extension Details
-      if (YEASTER_EXTENSION_NUMBER !== undefined)
-        targetUser.yeastarDetails.YEASTER_EXTENSION_NUMBER =
-          YEASTER_EXTENSION_NUMBER;
+      // 7️⃣ Assign Extension (Unique Per User)
+      targetUser.yeastarDetails.PBX_EXTENSION_NUMBER =
+        YEASTER_EXTENSION_NUMBER;
 
-      if (YEASTER_EXTENSION_ID !== undefined)
-        targetUser.yeastarDetails.YEASTER_EXTENSION_ID =
-          YEASTER_EXTENSION_ID;
+      targetUser.yeastarDetails.PBX_EXTENSION_ID =
+        YEASTER_EXTENSION_ID;
 
-      if (YEASTER_SIP_SECRET !== undefined)
-        targetUser.yeastarDetails.YEASTER_SIP_SECRET =
-          YEASTER_SIP_SECRET;
+      targetUser.yeastarDetails.PBX_SIP_SECRET =
+        YEASTER_SIP_SECRET;
 
-      if (YEASTER_TELEPHONE !== undefined)
-        targetUser.yeastarDetails.YEASTER_TELEPHONE =
-          YEASTER_TELEPHONE;
+      targetUser.yeastarDetails.PBX_TELEPHONE =
+        YEASTER_TELEPHONE;
+
+      targetUser.yeastarDetails.assignedDeviceId =
+        deviceId;
+
+      // 8️⃣ Optional — mark provisioned
+      targetUser.extensionStatus = true;
+      targetUser.yeastarProvisionStatus = "done";
 
       await targetUser.save();
 
       updatedUsers.push({
-        userId: targetUser._id,
+        userId,
+        deviceId,
         extension: YEASTER_EXTENSION_NUMBER,
+        status: "success",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Multiple users Yeastar details updated.",
+      message: "PBX assigned to multiple users successfully.",
       totalUpdated: updatedUsers.length,
       data: updatedUsers,
     });
   } catch (error) {
-    console.error("❌ Multi Yeastar Update Error:", error);
+    console.error("❌ Multi PBX Assign Error:", error);
     res.status(500).json({
       success: false,
       message: "Internal Server Error",
@@ -493,12 +502,12 @@ exports.addYeastarDeviceBySuperAdmin = async (req, res) => {
     const {
       deviceName,
 
-      YEASTAR_BASE_URL,
-      YEASTAR_USERNAME,
-      YEASTAR_PASSWORD,
-      YEASTAR_SDK_ACCESS_ID,
-      YEASTAR_SDK_ACCESS_KEY,
-      YEASTAR_USER_AGENT,
+      PBX_BASE_URL,
+      PBX_USERNAME,
+      PBX_PASSWORD,
+      PBX_SDK_ACCESS_ID,
+      PBX_SDK_ACCESS_KEY,
+      PBX_USER_AGENT,
     } = req.body;
 
     // 1️⃣ Check Super Admin
@@ -515,12 +524,12 @@ exports.addYeastarDeviceBySuperAdmin = async (req, res) => {
     const newDevice = {
       deviceName,
 
-      YEASTAR_BASE_URL,
-      YEASTAR_USERNAME,
-      YEASTAR_PASSWORD,
-      YEASTAR_SDK_ACCESS_ID,
-      YEASTAR_SDK_ACCESS_KEY,
-      YEASTAR_USER_AGENT,
+      PBX_BASE_URL,
+      PBX_USERNAME,
+      PBX_PASSWORD,
+      PBX_SDK_ACCESS_ID,
+      PBX_SDK_ACCESS_KEY,
+      PBX_USER_AGENT,
     };
 
     // 3️⃣ Push into array
@@ -555,10 +564,27 @@ exports.getAllYeastarDevicesBySuperAdmin = async (req, res) => {
       });
     }
 
+    // ✅ Get all devices
+    const devices = superAdmin.yeastarDevices || [];
+
+    // ✅ Map devices with assigned user count
+    const devicesWithCounts = await Promise.all(
+      devices.map(async (device) => {
+        const assignedCount = await User.countDocuments({
+          "yeastarDetails.assignedDeviceId": device.deviceId,
+        });
+
+        return {
+          ...device.toObject(),
+          assignedUsersCount: assignedCount,
+        };
+      })
+    );
+
     return res.status(200).json({
       success: true,
-      totalDevices: superAdmin.yeastarDevices.length,
-      data: superAdmin.yeastarDevices,
+      totalDevices: devices.length,
+      data: devicesWithCounts,
     });
   } catch (error) {
     console.error("❌ Get Devices Error:", error);
@@ -568,6 +594,7 @@ exports.getAllYeastarDevicesBySuperAdmin = async (req, res) => {
     });
   }
 };
+
 
 exports.updateYeastarDeviceBySuperAdmin = async (req, res) => {
   try {
@@ -606,12 +633,12 @@ exports.updateYeastarDeviceBySuperAdmin = async (req, res) => {
     // Allowed fields
     const allowedUpdates = [
       "deviceName",
-      "YEASTAR_BASE_URL",
-      "YEASTAR_USERNAME",
-      "YEASTAR_PASSWORD",
-      "YEASTAR_SDK_ACCESS_ID",
-      "YEASTAR_SDK_ACCESS_KEY",
-      "YEASTAR_USER_AGENT",
+      "PBX_BASE_URL",
+      "PBX_USERNAME",
+      "PBX_PASSWORD",
+      "PBX_SDK_ACCESS_ID",
+      "PBX_SDK_ACCESS_KEY",
+      "PBX_USER_AGENT",
       "isActive",
     ];
 
@@ -636,8 +663,6 @@ exports.updateYeastarDeviceBySuperAdmin = async (req, res) => {
     });
   }
 };
-
-
 
 exports.deleteYeastarDeviceBySuperAdmin = async (req, res) => {
   try {
@@ -673,101 +698,59 @@ exports.deleteYeastarDeviceBySuperAdmin = async (req, res) => {
   }
 };
 
+exports.getYeastarDeviceById = async (req, res) => {
+  try {
+    const superAdminId = req.user._id;
+    const { deviceId } = req.body;
 
-// exports.updateFullYeastarBySuperAdmin = async (req, res) => {
-//   try {
-//     const superAdminId = req.user._id;
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: "deviceId is required.",
+      });
+    }
 
-//     const {
-//       userId,
+    // ✅ Check Super Admin
+    const superAdmin = await User.findById(superAdminId);
 
-//       YEASTAR_BASE_URL,
-//       YEASTAR_USERNAME,
-//       YEASTAR_PASSWORD,
-//       YEASTAR_SDK_ACCESS_ID,
-//       YEASTAR_SDK_ACCESS_KEY,
-//       YEASTAR_USER_AGENT,
+    if (!superAdmin || superAdmin.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only Super Admin can view devices.",
+      });
+    }
 
-//       YEASTER_EXTENSION_NUMBER,
-//       YEASTER_EXTENSION_ID,
-//       YEASTER_SIP_SECRET,
-//       YEASTER_TELEPHONE,
-//     } = req.body;
+    // ✅ Find Device
+    const device = superAdmin.yeastarDevices.find(
+      (d) => d.deviceId.toString() === deviceId
+    );
 
-//     // 1️⃣ Check super admin
-//     const superAdmin = await User.findById(superAdminId);
-//     if (!superAdmin || superAdmin.role !== "superadmin") {
-//       return res.status(403).json({
-//         success: false,
-//         message: "Only Super Admin can perform this action.",
-//       });
-//     }
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: "Device not found.",
+      });
+    }
 
-//     // 2️⃣ Validate target user
-//     const targetUser = await User.findById(userId);
-//     if (!targetUser) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Target user not found.",
-//       });
-//     }
+    // ✅ Count Assigned Users
+    const assignedUsersCount = await User.countDocuments({
+      "yeastarDetails.assignedDeviceId": deviceId,
+    });
 
-//     // 3️⃣ Ensure object exists
-//     if (!targetUser.yeastarDetails) {
-//       targetUser.yeastarDetails = {};
-//     }
+    // ✅ Response
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...device.toObject(),
+        assignedUsersCount, // 👈 Added count
+      },
+    });
 
-//     // 4️⃣ Update Yeastar Details (Nested Object)
-
-//     if (YEASTAR_BASE_URL !== undefined)
-//       targetUser.yeastarDetails.YEASTAR_BASE_URL = YEASTAR_BASE_URL;
-
-//     if (YEASTAR_USERNAME !== undefined)
-//       targetUser.yeastarDetails.YEASTAR_USERNAME = YEASTAR_USERNAME;
-
-//     if (YEASTAR_PASSWORD !== undefined)
-//       targetUser.yeastarDetails.YEASTAR_PASSWORD = YEASTAR_PASSWORD;
-
-//     if (YEASTAR_SDK_ACCESS_ID !== undefined)
-//       targetUser.yeastarDetails.YEASTAR_SDK_ACCESS_ID =
-//         YEASTAR_SDK_ACCESS_ID;
-
-//     if (YEASTAR_SDK_ACCESS_KEY !== undefined)
-//       targetUser.yeastarDetails.YEASTAR_SDK_ACCESS_KEY =
-//         YEASTAR_SDK_ACCESS_KEY;
-
-//     if (YEASTAR_USER_AGENT !== undefined)
-//       targetUser.yeastarDetails.YEASTAR_USER_AGENT =
-//         YEASTAR_USER_AGENT;
-
-//     if (YEASTER_EXTENSION_NUMBER !== undefined)
-//       targetUser.yeastarDetails.YEASTER_EXTENSION_NUMBER =
-//         YEASTER_EXTENSION_NUMBER;
-
-//     if (YEASTER_EXTENSION_ID !== undefined)
-//       targetUser.yeastarDetails.YEASTER_EXTENSION_ID =
-//         YEASTER_EXTENSION_ID;
-
-//     if (YEASTER_SIP_SECRET !== undefined)
-//       targetUser.yeastarDetails.YEASTER_SIP_SECRET =
-//         YEASTER_SIP_SECRET;
-
-//     if (YEASTER_TELEPHONE !== undefined)
-//       targetUser.yeastarDetails.YEASTER_TELEPHONE =
-//         YEASTER_TELEPHONE;
-
-//     await targetUser.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Yeastar details updated successfully.",
-//       data: targetUser.yeastarDetails,
-//     });
-//   } catch (error) {
-//     console.error("❌ Yeastar Full Update Error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal Server Error",
-//     });
-//   }
-// };
+  } catch (error) {
+    console.error("❌ Get Device By ID Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
