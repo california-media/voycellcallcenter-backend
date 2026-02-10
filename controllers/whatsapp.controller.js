@@ -1775,24 +1775,33 @@ exports.sendTemplateBulkMessage = async (req, res) => {
 
     try {
         const {
-            to,
+            // to,
             templateId,
+            campaignName,
             params = {},
+            groupName = [],
             name: messageName
         } = req.body;
+
+        if (!campaignName) {
+            return res.status(400).json({
+                success: false,
+                message: "campaignName is required",
+            });
+        }
 
         const userId = req.user._id;
 
         /* ───────── VALIDATION ───────── */
-        if (!to || !templateId) {
+        if (!templateId) {
             return res.status(400).json({
                 success: false,
-                message: "`to` and `templateId` required"
+                message: "`templateId` required"
             });
         }
 
         // Normalize numbers to array
-        const numbers = Array.isArray(to) ? to : [to];
+        // const numbers = Array.isArray(to) ? to : [to];
 
         /* ───────── USER / WABA ───────── */
         const user = await User.findById(userId);
@@ -1815,6 +1824,84 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 message: "Template not found"
             });
         }
+
+        /* ───────── BUILD NUMBERS FROM GROUP / TAG ───────── */
+
+        let numbers = [];
+
+        /* ===== CASE 1: Direct numbers ===== */
+        // if (to) {
+        //     numbers = Array.isArray(to) ? to : [to];
+        // }
+
+        /* ===== CASE 2: Group / Tag based ===== */
+        if (groupName?.length) {
+
+            // Normalize tags
+            const tagsArray = Array.isArray(groupName)
+                ? groupName
+                : [groupName];
+
+            /* --- FIND CONTACTS --- */
+            const contacts = await Contact.find({
+                createdBy: userId,
+                "tags.tag": { $in: tagsArray }
+            });
+
+            /* --- FIND LEADS --- */
+            const leads = await Lead.find({
+                createdBy: userId,
+                "tags.tag": { $in: tagsArray }
+            });
+
+            /* --- EXTRACT NUMBERS --- */
+            const extractNumbers = (records) => {
+                const nums = [];
+
+                records.forEach(r => {
+                    r.phoneNumbers?.forEach(p => {
+                        if (p.number) {
+                            nums.push(
+                                `${p.countryCode || ""}${p.number}`
+                            );
+                        }
+                    });
+                });
+
+                return nums;
+            };
+
+            numbers = [
+                ...numbers,
+                ...extractNumbers(contacts),
+                ...extractNumbers(leads)
+            ];
+        }
+
+        /* ===== REMOVE DUPLICATES ===== */
+        numbers = [...new Set(numbers)];
+
+        /* ===== FINAL VALIDATION ===== */
+        if (!numbers.length) {
+            return res.status(400).json({
+                success: false,
+                message: "No phone numbers found for provided input"
+            });
+        }
+
+        const campaignId = new mongoose.Types.ObjectId();
+
+        const campaignData = {
+            campaignId,
+            campaignName,
+            templateId: template._id,
+            templateName: template.name,
+            templateLanguage: template.language,
+            groups: groupName,
+            numbers,
+            total: numbers.length,
+            messageRefs: [],
+        };
 
         /* ───────── BUILD COMPONENTS ───────── */
         const components = [];
@@ -2000,6 +2087,13 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                     }
                 );
 
+                const metaId = data.messages?.[0]?.id;
+
+                campaignData.messageRefs.push({
+                    metaMessageId: metaId,
+                    chatNumber: number,
+                });
+
                 /* ───────── STORE ───────── */
                 await WhatsAppMessage.create({
                     userId,
@@ -2048,6 +2142,15 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             }
         }
 
+        await User.updateOne(
+            { _id: userId },
+            {
+                $push: {
+                    campaigns: campaignData,
+                },
+            }
+        );
+
         /* ───────── RESPONSE ───────── */
         return res.json({
             success: true,
@@ -2067,6 +2170,197 @@ exports.sendTemplateBulkMessage = async (req, res) => {
     }
 };
 
+/*
+GET /api/campaigns
+Campaign List (from User.campaigns)
+*/
+exports.getAllCampaigns = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        /* 1️⃣ Get User Campaigns */
+        const user = await User.findById(userId).lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        const campaigns = user.campaigns || [];
+
+        const results = [];
+
+        /* 2️⃣ Loop Campaigns */
+        for (const camp of campaigns) {
+
+            const messageIds = camp.messageRefs.map(
+                m => m.metaMessageId
+            );
+
+            /* 3️⃣ Get Messages From WhatsAppMessage */
+            const messages = await WhatsAppMessage.find({
+                metaMessageId: { $in: messageIds },
+            }).lean();
+
+            const total = messageIds.length;
+
+            /* 4️⃣ Counts */
+            const delivered = messages.filter(
+                m => m.status === "delivered"
+            ).length;
+
+            const read = messages.filter(
+                m => m.status === "read"
+            ).length;
+
+            /* 5️⃣ Rates */
+            const deliveryRate = total
+                ? ((delivered / total) * 100).toFixed(0)
+                : 0;
+
+            const readRate = total
+                ? ((read / total) * 100).toFixed(0)
+                : 0;
+
+            /* 6️⃣ Push Result */
+            results.push({
+                campaignId: camp.campaignId,
+                campaignName: camp.campaignName,
+                templateName: camp.templateName,
+                totalMessages: total,
+                deliveryRate: `${deliveryRate}%`,
+                readRate: `${readRate}%`,
+                createdAt: camp.createdAt,
+            });
+        }
+
+        /* 7️⃣ Sort Latest First */
+        results.sort(
+            (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        );
+
+        return res.json({
+            success: true,
+            count: results.length,
+            campaigns: results,
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+/*
+GET /api/campaigns/:campaignId
+Campaign Details
+*/
+exports.getCampaignDetails = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { campaignId } = req.body;
+
+        /* 1️⃣ Find Campaign */
+        const user = await User.findOne(
+            {
+                _id: userId,
+                "campaigns.campaignId": campaignId,
+            },
+            {
+                "campaigns.$": 1,
+            }
+        ).lean();
+
+        if (!user || !user.campaigns.length) {
+            return res.status(404).json({
+                success: false,
+                message: "Campaign not found",
+            });
+        }
+
+        const campaign = user.campaigns[0];
+
+        /* 2️⃣ Get Message IDs */
+        const messageIds = campaign.messageRefs.map(
+            m => m.metaMessageId
+        );
+
+        /* 3️⃣ Fetch Messages */
+        const messages = await WhatsAppMessage.find({
+            metaMessageId: { $in: messageIds },
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        /* 4️⃣ Counts */
+        const total = messageIds.length;
+
+        const sent = messages.filter(
+            m => m.status === "sent"
+        ).length;
+
+        const delivered = messages.filter(
+            m => m.status === "delivered"
+        ).length;
+
+        const read = messages.filter(
+            m => m.status === "read"
+        ).length;
+
+        const failed = messages.filter(
+            m => m.status === "failed"
+        ).length;
+
+        /* 5️⃣ Format List */
+        const list = campaign.messageRefs.map(ref => {
+            const msg = messages.find(
+                m => m.metaMessageId === ref.metaMessageId
+            );
+
+            return {
+                metaMessageId: ref.metaMessageId,
+                chatNumber: ref.chatNumber,
+                status: msg?.status || "sent",
+                sentAt: msg?.createdAt || null,
+                deliveredAt: msg?.messageStatusTimestamp || null,
+            };
+        });
+
+        /* 6️⃣ Response */
+        return res.json({
+            success: true,
+
+            campaign: {
+                campaignId: campaign.campaignId,
+                campaignName: campaign.campaignName,
+                templateName: campaign.templateName,
+                createdAt: campaign.createdAt,
+            },
+
+            stats: {
+                total,
+                sent,
+                delivered,
+                read,
+                failed,
+            },
+
+            messages: list,
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
 
 /** STEP 7: Get WhatsApp Conversations
  */

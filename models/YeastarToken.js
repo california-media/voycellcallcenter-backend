@@ -1,33 +1,24 @@
-// // models/YeastarToken.js
-// const mongoose = require("mongoose");
-
-// const yeastarTokenSchema = new mongoose.Schema({
-//   access_token: { type: String, required: true },
-//   refresh_token: { type: String, required: true },
-//   expires_in: { type: Number, required: true }, // seconds
-//   expires_at: { type: Date, default: Date.now },
-//   created_at: { type: Date, default: Date.now },
-// });
-
-// yeastarTokenSchema.virtual("isExpired").get(function () {
-//   const expiryTime = new Date(this.created_at).getTime() + this.expires_in * 1000;
-//   return Date.now() > expiryTime;
-// });
-
-// module.exports = mongoose.model("YeastarToken", yeastarTokenSchema);
-
 const mongoose = require("mongoose");
 
 const yeastarTokenSchema = new mongoose.Schema(
   {
+    deviceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      index: true,
+    },
+
     access_token: { type: String, required: true },
-    refresh_token: { type: String, required: true },
-    expires_in: { type: Number, required: true, default: 7200 }, // lifespan in seconds
-    expires_at: { type: Date, required: false }, // exact expiry timestamp
+    refresh_token: { type: String },
+
+    expires_in: { type: Number, default: 7200 },
+    expires_at: { type: Date },
+
     created_at: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
+
 
 // Virtual field to check if token expired
 yeastarTokenSchema.virtual("isExpired").get(function () {

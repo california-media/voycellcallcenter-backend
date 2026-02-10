@@ -11,7 +11,7 @@ exports.generateScriptTag = async (req, res) => {
     const userId = req.user._id;
     const user = await User.findById(userId);
 
-    if (!user || !user.extensionNumber) {
+    if (!user || !user.yeastarDetails.PBX_EXTENSION_NUMBER) {
       return res.status(400).json({ error: "User or extension not found" });
     }
 
@@ -105,7 +105,7 @@ exports.generateScriptTag = async (req, res) => {
 
       // ✅ Always sync extension number
       const updatePayload = {
-        extensionNumber: user.extensionNumber,
+        extensionNumber: user.yeastarDetails.PBX_EXTENSION_NUMBER,
         updatedAt: new Date(),
       };
 
@@ -145,7 +145,7 @@ exports.generateScriptTag = async (req, res) => {
       await ScriptToken.create({
         token,
         userId,
-        extensionNumber: user.extensionNumber,
+        extensionNumber: user.yeastarDetails.PBX_EXTENSION_NUMBER,
         allowedOriginPopup: allowedOriginPopup, // ✅ array
         allowedOriginContactForm: allowedOriginContactForm, // ✅ array
         restrictedUrls: restrictedUrls,  // 🆕 array

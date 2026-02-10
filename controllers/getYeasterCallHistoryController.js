@@ -2,7 +2,8 @@ const axios = require("axios");
 // const moment = require("moment");
 const mongoose = require("mongoose");
 const https = require("https");
-const { getValidToken } = require("../utils/yeastarClient");
+// const { getValidToken } = require("../utils/yeastarClient");
+const { getDeviceToken } = require("../services/yeastarTokenService");
 const User = require("../models/userModel"); // make sure to import
 const CallHistory = require("../models/CallHistory");
 const moment = require("moment-timezone");
@@ -45,9 +46,9 @@ function normalizeNumber(number) {
 exports.fetchAndStoreCallHistory = async (req, res) => {
   try {
     const userId = req.user._id;
-    const token = await getValidToken();
+
     console.log(userId);
-    console.log(token);
+    // console.log(token);
 
     const user = await User.findById(userId);
     if (!user || !user.extensionNumber) {
@@ -57,8 +58,10 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
       });
     }
 
-    const ext = user.extensionNumber;
-
+    const ext = user.PBXDetails.PBX_EXTENSION_NUMBER;
+    const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL;
+    const deviceId = user.PBXDetails.assignedDeviceId;
+    const token = await getDeviceToken(deviceId, "pbx");
     // Always use Yeastar PBX timezone
     const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
 
@@ -77,13 +80,13 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     console.log("startTime:", startTime, "endTime:", endTime);
 
     // -------- OUTBOUND --------
-    const urlFrom = `${YEASTAR_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+    const urlFrom = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
     const respFrom = await axios.get(urlFrom, {
       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
     });
 
     // -------- INBOUND --------
-    const urlTo = `${YEASTAR_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+    const urlTo = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
     const respTo = await axios.get(urlTo, {
       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
     });

@@ -42,7 +42,7 @@ async function makeCallHandler(req, res) {
     // ── START: find owner (user) by extensionNumber
     let ownerUser = null;
     try {
-      ownerUser = await User.findOne({ extensionNumber: caller_extension }).select("_id");
+      ownerUser = await User.findOne({ "yeastarDetails.PBX_EXTENSION_NUMBER": caller_extension }).select("_id");
     } catch (dbErr) {
       console.warn("Warning: error looking up owner by extension:", dbErr);
       ownerUser = null;
@@ -59,6 +59,14 @@ async function makeCallHandler(req, res) {
 
     if (ownerUser) {
       const ownerId = ownerUser._id;
+      let PBX_BASE_URL = ownerUser.yeastarDetails.PBX_BASE_URL || "";
+      let PBX_USERNAME = ownerUser.yeastarDetails.PBX_USERNAME || "";
+      let PBX_PASSWORD = ownerUser.yeastarDetails.PBX_PASSWORD || "";
+      let PBX_SDK_ACCESS_ID = ownerUser.yeastarDetails.PBX_SDK_ACCESS_ID || "";
+      let PBX_SDK_ACCESS_KEY = ownerUser.yeastarDetails.PBX_SDK_ACCESS_KEY || "";
+      let PBX_USER_AGENT = ownerUser.yeastarDetails.PBX_USER_AGENT || "";
+      let PBX_EXTENSION_NUMBER = ownerUser.yeastarDetails.PBX_EXTENSION_NUMBER || "";
+      let PBX_TELEPHONE = ownerUser.yeastarDetails.PBX_TELEPHONE || "";
 
       // look in Contact
       existingContact = await Contact.findOne({

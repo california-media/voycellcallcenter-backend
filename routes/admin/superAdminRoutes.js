@@ -13,6 +13,8 @@ const {
   deleteYeastarDeviceBySuperAdmin,
   getAllYeastarDevicesBySuperAdmin,
   getYeastarDeviceById,
+  getAllCompanyAdminsByDevice,
+  getAgentsOfCompanyAdminByDevice,
 } = require("../../controllers/admin/superAdminController");
 
 // Super Admin only
@@ -21,6 +23,10 @@ router.post("/allCompanyAdmin", getAllCompanyAdmins);
 router.post("/companyAdminDetailsById", getCompanyAdminDetails);
 
 router.post("/allAgentsOfCompanyAdmin", getAgentsOfCompanyAdmin);
+
+router.post("/getAllCompanyAdminsByPBXDevice", getAllCompanyAdminsByDevice);
+
+router.post("/getAgentsOfCompanyAdminByPBXDevice", getAgentsOfCompanyAdminByDevice);
 
 router.post("/agentDetailsById", getAgentDetails);
 

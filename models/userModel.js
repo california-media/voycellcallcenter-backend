@@ -267,7 +267,7 @@ const userSchema = new Schema(
 
     // SUPER ADMIN → Device Level
     // 🔹 Multiple PBX Devices — Super Admin Only
-    yeastarDevices: [
+    PBXDevices: [
       {
         deviceId: {
           type: mongoose.Schema.Types.ObjectId,
@@ -295,7 +295,7 @@ const userSchema = new Schema(
       },
     ],
 
-    yeastarDetails: {
+    PBXDetails: {
       PBX_BASE_URL: String,
       PBX_USERNAME: String,
       PBX_PASSWORD: String,
@@ -471,6 +471,51 @@ const userSchema = new Schema(
         verifyToken: String
       }
     },
+
+    campaigns: [
+      {
+        campaignId: {
+          type: mongoose.Schema.Types.ObjectId,
+          default: () => new mongoose.Types.ObjectId(),
+        },
+
+        campaignName: String,
+
+        templateId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "WabaTemplate",
+        },
+
+        templateName: String,
+        templateLanguage: String,
+
+        groups: [String],
+
+        numbers: [String],
+
+        messageRefs: [
+          {
+            metaMessageId: String,
+            chatNumber: String,
+          },
+        ],
+
+        total: Number,
+
+        status: {
+          type: String,
+          enum: ["active", "paused", "completed"],
+          default: "active",
+        },
+
+        scheduledAt: Date,
+
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
 
     microsoftId: { type: String }, // ✅ Store Microsoft ID as String (not ObjectId)
     microsoftEmail: String,
