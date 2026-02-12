@@ -171,6 +171,11 @@ const leadSchema = new Schema(
       },
     ],
 
+    isWabaChat: {
+      type: Boolean,
+      default: false,
+    },
+
     linkedin: {
       type: String,
       // default: "Dummy firstname",

@@ -747,7 +747,7 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
 
     // Fetch contacts
     const contacts = await Contact.find(baseQuery)
-      .select("_id emailAddresses firstname lastname phoneNumbers")
+      .select("_id emailAddresses firstname lastname phoneNumbers isWabaChat")
       .limit(50) // Limit results for better performance
       .lean();
 
@@ -759,11 +759,12 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
       emailAddresses: c.emailAddresses || [],
       phoneNumbers: c.phoneNumbers || [],
       category: "contact",
+      isWabaChat: c.isWabaChat || false,
     }));
 
     // Fetch leads
     const leads = await Lead.find(baseQuery)
-      .select("_id emailAddresses firstname lastname phoneNumbers")
+      .select("_id emailAddresses firstname lastname phoneNumbers isWabaChat")
       .limit(50) // Limit results for better performance
       .lean();
 
@@ -775,6 +776,7 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
       emailAddresses: l.emailAddresses || [],
       phoneNumbers: l.phoneNumbers || [],
       category: "lead",
+      isWabaChat: l.isWabaChat || false,
     }));
 
     // Combine both

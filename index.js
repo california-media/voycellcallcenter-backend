@@ -348,21 +348,88 @@ const http = require("http");
 })();
 
 // ------------------- SERVERLESS EXPORT (HTTP) -------------------
-module.exports.handler = serverless(async (event, context) => {
-  // CRITICAL: Prevent Lambda from waiting for connections to close
+// module.exports.handler = serverless(async (event, context) => {
+//   // CRITICAL: Prevent Lambda from waiting for connections to close
+//   context.callbackWaitsForEmptyEventLoop = false;
+
+//   try {
+//     await connectToDatabase();
+//     return app(event, context);
+//   } catch (error) {
+//     console.error("Lambda handler error:", error);
+//     return {
+//       statusCode: 500,
+//       body: JSON.stringify({ error: "Internal server error" }),
+//     };
+//   }
+// });
+
+const serverlessHandler = serverless(app);
+
+module.exports.handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
+
+  console.log("Incoming Event:", JSON.stringify(event));
 
   try {
     await connectToDatabase();
-    return app(event, context);
+
+    /* ================================
+       1️⃣ HANDLE SCHEDULER EVENT
+    ================================= */
+
+    if (event?.type === "SEND_SCHEDULED_CAMPAIGN") {
+
+      console.log("⏰ Scheduled Campaign Triggered");
+
+      const {
+        campaignId,
+        userId,
+        templateId,
+        params,
+        groupName,
+      } = event;
+
+      // Call send logic
+      const { sendScheduledCampaignService } =
+        require("./services/sendScheduledCampaignService");
+
+      await sendScheduledCampaignService({
+        campaignId,
+        userId,
+        templateId,
+        params,
+        groupName,
+      });
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          message: "Scheduled campaign sent",
+        }),
+      };
+    }
+
+    /* ================================
+       2️⃣ NORMAL API REQUEST
+    ================================= */
+
+    return serverlessHandler(event, context);
+
   } catch (error) {
     console.error("Lambda handler error:", error);
+
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Internal server error" }),
+      body: JSON.stringify({
+        success: false,
+        error: error.message,
+      }),
     };
   }
-});
+};
+
 
 const t = {
   status: "success",

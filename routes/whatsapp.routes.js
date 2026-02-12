@@ -47,7 +47,7 @@ router.get("/templateById", checkForAuthentication(), getTemplateById);
 
 
 router.post("/send-campaign", checkForAuthentication(), sendTemplateBulkMessage);
-router.get("/campaigns", checkForAuthentication(), getAllCampaigns);
+router.post("/campaigns", checkForAuthentication(), getAllCampaigns);
 router.post("/campaignsById", checkForAuthentication(), getCampaignDetails);
 router.delete("/delete/campaigns", checkForAuthentication(), deleteCampaign);
 

@@ -11,6 +11,7 @@ const FormData = require("form-data");
 const Lead = require("../models/leadModel");
 const { downloadMetaMedia } = require("../services/metaMedia");
 const { uploadWhatsAppMediaToS3, uploadWhatsAppMediaProfileToS3 } = require("../utils/uploadWhatsAppMedia");
+const { createCampaignSchedule } = require("../services/awsScheduler");
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -1917,6 +1918,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             campaignName,
             params = {},
             groupName = [],
+            schedule = "",
             name: messageName
         } = req.body;
 
@@ -2047,12 +2049,13 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             campaignName,
             templateId: template._id,
             templateName: template.name,
-            status: "completed",
+            status: schedule ? "scheduled" : "completed",
             templateLanguage: template.language,
             groups: groupName,
             numbers: recipients,
             total: recipients.length,
             messageRefs: [],
+            scheduledAt: schedule ? new Date(schedule) : null,
         };
 
         /* ───────── BUILD COMPONENTS ───────── */
@@ -2209,6 +2212,48 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 }
             });
         }
+
+        /* ───────── SCHEDULE MODE ───────── */
+
+        /* ───────── SCHEDULE MODE ───────── */
+        if (schedule) {
+
+            // 1️⃣ Save campaign
+            await User.updateOne(
+                { _id: userId },
+                { $push: { campaigns: campaignData } }
+            );
+
+            // 2️⃣ Remove milliseconds
+            const isoTime =
+                schedule.replace(/\.\d{3}Z$/, "Z");
+
+            console.log("UTC Time:", isoTime);
+            console.log("Expression:", `at(${isoTime})`);
+
+            // 3️⃣ Create AWS schedule
+            await createCampaignSchedule({
+                campaignId: campaignId.toString(),
+                scheduleTime: isoTime,
+                payload: {
+                    type: "SEND_SCHEDULED_CAMPAIGN",
+                    campaignId: campaignId.toString(),
+                    userId: userId.toString(),
+                    templateId: templateId.toString(),
+                    params,
+                    groupName,
+                    scheduledAt: new Date(schedule), // ⭐ ADD THIS
+                },
+            });
+
+            return res.json({
+                success: true,
+                message: "Campaign scheduled successfully",
+                campaignId,
+                scheduledAt: isoTime,
+            });
+        }
+
 
         /* ───────── BULK SEND ───────── */
         const results = [];
@@ -2472,11 +2517,151 @@ exports.sendTemplateBulkMessage = async (req, res) => {
 GET /api/campaigns
 Campaign List (from User.campaigns)
 */
+// exports.getAllCampaigns = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+
+//         const { page = 1, limit = 10, search = "" } = req.body;
+
+//         const pageNumber = parseInt(page);
+//         const limitNumber = parseInt(limit);
+//         const skip = (pageNumber - 1) * limitNumber;
+
+//         /* 1️⃣ Get User Campaigns */
+//         const user = await User.findById(userId).lean();
+
+//         if (!user) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "User not found",
+//             });
+//         }
+
+//         // const campaigns = user.campaigns || [];
+//         let campaigns = user.campaigns || [];
+
+//         /* 🔹 FULL COUNT (no search, no pagination) */
+//         const fullCount = campaigns.length;
+
+//         /* 🔽 SEARCH FILTER ADD */
+//         if (search) {
+//             const searchLower = search.toLowerCase();
+
+//             campaigns = campaigns.filter(c =>
+//                 (c.campaignName || "")
+//                     .toLowerCase()
+//                     .includes(searchLower) ||
+//                 (c.templateName || "")
+//                     .toLowerCase()
+//                     .includes(searchLower)
+//             );
+//         }
+
+//         const totalRecords = campaigns.length;
+
+//         campaigns = campaigns.slice(skip, skip + limitNumber);
+
+//         const results = [];
+
+//         /* 2️⃣ Loop Campaigns */
+//         for (const camp of campaigns) {
+
+//             const messageIds = camp.messageRefs.map(
+//                 m => m.metaMessageId
+//             );
+
+//             /* 3️⃣ Get Messages From WhatsAppMessage */
+//             const messages = await WhatsAppMessage.find({
+//                 metaMessageId: { $in: messageIds },
+//             }).lean();
+
+//             const total = messageIds.length;
+
+//             /* 4️⃣ Counts */
+//             // const delivered = messages.filter(
+//             //     m => m.status === "delivered"
+//             // ).length;
+
+//             // const read = messages.filter(
+//             //     m => m.status === "read"
+//             // ).length;
+
+//             /* 4️⃣ Counts (CUMULATIVE) */
+//             let delivered = 0;
+//             let read = 0;
+
+//             messages.forEach(m => {
+
+//                 // Delivered includes delivered + read
+//                 if (m.status === "delivered" || m.status === "read") {
+//                     delivered++;
+//                 }
+
+//                 // Read only read
+//                 if (m.status === "read") {
+//                     read++;
+//                 }
+
+//             });
+
+//             /* 5️⃣ Rates */
+//             const deliveryRate = total
+//                 ? ((delivered / total) * 100).toFixed(0)
+//                 : 0;
+
+//             const readRate = total
+//                 ? ((read / total) * 100).toFixed(0)
+//                 : 0;
+
+//             /* 6️⃣ Push Result */
+//             results.push({
+//                 campaignId: camp.campaignId,
+//                 campaignName: camp.campaignName,
+//                 templateName: camp.templateName,
+//                 status: camp.status || "unknown",
+//                 templateId: camp.templateId,
+//                 totalMessages: total,
+//                 deliveryRate: `${deliveryRate}%`,
+//                 readRate: `${readRate}%`,
+//                 createdAt: camp.createdAt,
+//             });
+//         }
+
+//         /* 7️⃣ Sort Latest First */
+//         results.sort(
+//             (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+//         );
+
+//         return res.json({
+//             success: true,
+//             count: fullCount,
+//             campaigns: totalRecords,//results,
+//             totalPages: Math.ceil(totalRecords / limitNumber),
+//             currentPage: pageNumber,
+//             campaigns: results,
+//         });
+
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({
+//             success: false,
+//             message: error.message,
+//         });
+//     }
+// };
+
 exports.getAllCampaigns = async (req, res) => {
     try {
         const userId = req.user._id;
 
-        /* 1️⃣ Get User Campaigns */
+        /* 📥 Request Params */
+        const { page = 1, limit = 10, search = "" } = req.body;
+
+        const pageNumber = parseInt(page) || 1;
+        const limitNumber = parseInt(limit) || 10;
+        const skip = (pageNumber - 1) * limitNumber;
+
+        /* 1️⃣ Get User */
         const user = await User.findById(userId).lean();
 
         if (!user) {
@@ -2486,52 +2671,87 @@ exports.getAllCampaigns = async (req, res) => {
             });
         }
 
-        const campaigns = user.campaigns || [];
+        let campaigns = user.campaigns || [];
+
+        /* 🔹 TOTAL COUNT (before search) */
+        const fullCount = campaigns.length;
+
+        /* 🔍 SEARCH FILTER */
+        if (search) {
+            const searchLower = search.toLowerCase();
+
+            campaigns = campaigns.filter(c =>
+                (c.campaignName || "")
+                    .toLowerCase()
+                    .includes(searchLower) ||
+                (c.templateName || "")
+                    .toLowerCase()
+                    .includes(searchLower)
+            );
+        }
+
+        /* 🔹 COUNT AFTER SEARCH */
+        const filteredCount = campaigns.length;
+
+        /* =======================================================
+           ✅ SORT LATEST FIRST (TIME-WISE PROPER ORDER)
+           Handles null / string / missing dates safely
+        ======================================================= */
+        campaigns.sort((a, b) => {
+
+            const dateA = a.createdAt
+                ? new Date(a.createdAt).getTime()
+                : 0;
+
+            const dateB = b.createdAt
+                ? new Date(b.createdAt).getTime()
+                : 0;
+
+            return dateB - dateA; // Latest first
+        });
+
+        /* =======================================================
+           ✅ PAGINATION AFTER SORT
+        ======================================================= */
+        const paginatedCampaigns =
+            campaigns.slice(skip, skip + limitNumber);
 
         const results = [];
 
-        /* 2️⃣ Loop Campaigns */
-        for (const camp of campaigns) {
+        /* =======================================================
+           2️⃣ LOOP CAMPAIGNS
+        ======================================================= */
+        for (const camp of paginatedCampaigns) {
 
-            const messageIds = camp.messageRefs.map(
-                m => m.metaMessageId
-            );
+            const messageIds =
+                camp.messageRefs?.map(m => m.metaMessageId) || [];
 
-            /* 3️⃣ Get Messages From WhatsAppMessage */
+            /* 3️⃣ FETCH MESSAGE STATUS */
             const messages = await WhatsAppMessage.find({
                 metaMessageId: { $in: messageIds },
             }).lean();
 
             const total = messageIds.length;
 
-            /* 4️⃣ Counts */
-            // const delivered = messages.filter(
-            //     m => m.status === "delivered"
-            // ).length;
-
-            // const read = messages.filter(
-            //     m => m.status === "read"
-            // ).length;
-
-            /* 4️⃣ Counts (CUMULATIVE) */
+            /* 📊 STATUS COUNTS */
             let delivered = 0;
             let read = 0;
 
             messages.forEach(m => {
 
-                // Delivered includes delivered + read
-                if (m.status === "delivered" || m.status === "read") {
+                if (
+                    m.status === "delivered" ||
+                    m.status === "read"
+                ) {
                     delivered++;
                 }
 
-                // Read only read
                 if (m.status === "read") {
                     read++;
                 }
-
             });
 
-            /* 5️⃣ Rates */
+            /* 📈 RATES */
             const deliveryRate = total
                 ? ((delivered / total) * 100).toFixed(0)
                 : 0;
@@ -2540,34 +2760,47 @@ exports.getAllCampaigns = async (req, res) => {
                 ? ((read / total) * 100).toFixed(0)
                 : 0;
 
-            /* 6️⃣ Push Result */
+            /* 📦 PUSH RESULT */
             results.push({
                 campaignId: camp.campaignId,
                 campaignName: camp.campaignName,
                 templateName: camp.templateName,
-                status: camp.status || "unknown",
                 templateId: camp.templateId,
+                status: camp.status || "unknown",
                 totalMessages: total,
                 deliveryRate: `${deliveryRate}%`,
                 readRate: `${readRate}%`,
+                scheduledAt: camp.scheduledAt,
+                sentAt: camp.sentAt,
                 createdAt: camp.createdAt,
             });
         }
 
-        /* 7️⃣ Sort Latest First */
-        results.sort(
-            (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-        );
-
+        /* =======================================================
+           ✅ FINAL RESPONSE
+        ======================================================= */
         return res.json({
-            success: true,
-            count: results.length,
+            status: "success",
+            message: "Campaigns retrieved successfully",
+            /* Counts */
+            count: fullCount,     // before search
+            filteredCampaigns: filteredCount, // after search
+
+            /* Pagination */
+            totalPages: Math.ceil(
+                filteredCount / limitNumber
+            ),
+            currentPage: pageNumber,
+            limit: limitNumber,
+
+            /* Data */
             campaigns: results,
         });
 
     } catch (error) {
-        console.error(error);
-        res.status(500).json({
+        console.error("Get Campaigns Error:", error);
+
+        return res.status(500).json({
             success: false,
             message: error.message,
         });
@@ -2689,6 +2922,7 @@ exports.getCampaignDetails = async (req, res) => {
                 templateName: campaign.templateName,
                 templateId: campaign.templateId,
                 createdAt: campaign.createdAt,
+                scheduledAt: campaign.scheduledAt,
             },
 
             stats: {
@@ -2860,6 +3094,121 @@ exports.getWhatsappConversations = async (req, res) => {
             { $sort: { lastMessageTime: -1 } }
 
         ]);
+
+        /* -------------------------------------------------- */
+        /* STEP 🔥 Sync isWabaChat with Contact & Lead        */
+        /* -------------------------------------------------- */
+
+        // Arrays for numbers
+        const activeNumbers = [];
+        const inactiveNumbers = [];
+
+        // Loop conversations
+        conversations.forEach(conv => {
+
+            // If chats API → all are active
+            if (type === "chats") {
+                activeNumbers.push(conv.from);
+            }
+
+            // If history API → all inactive
+            else if (type === "history") {
+                inactiveNumbers.push(conv.from);
+            }
+
+            // If no filter → decide via lastIncomingTime
+            else {
+                if (conv.lastIncomingTime && conv.lastIncomingTime >= before24Hours) {
+                    activeNumbers.push(conv.from);
+                } else {
+                    inactiveNumbers.push(conv.from);
+                }
+            }
+        });
+
+        /* ---------------- CONTACT UPDATE ---------------- */
+
+        // TRUE → Active Chats
+        if (activeNumbers.length > 0) {
+            await Contact.updateMany(
+                {
+                    $expr: {
+                        $in: [
+                            {
+                                $concat: [
+                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.countryCode", 0] }, ""] },
+                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.number", 0] }, ""] }
+                                ]
+                            },
+                            activeNumbers
+                        ]
+                    }
+                },
+                { $set: { isWabaChat: true } }
+            );
+        }
+
+        // FALSE → History
+        if (inactiveNumbers.length > 0) {
+            await Contact.updateMany(
+                {
+                    $expr: {
+                        $in: [
+                            {
+                                $concat: [
+                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.countryCode", 0] }, ""] },
+                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.number", 0] }, ""] }
+                                ]
+                            },
+                            inactiveNumbers
+                        ]
+                    }
+                },
+                { $set: { isWabaChat: false } }
+            );
+        }
+
+        /* ---------------- LEAD UPDATE ---------------- */
+
+        // TRUE → Active Chats
+        if (activeNumbers.length > 0) {
+            await Lead.updateMany(
+                {
+                    $expr: {
+                        $in: [
+                            {
+                                $concat: [
+                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.countryCode", 0] }, ""] },
+                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.number", 0] }, ""] }
+                                ]
+                            },
+                            activeNumbers
+                        ]
+                    }
+                },
+                { $set: { isWabaChat: true } }
+            );
+        }
+
+        // FALSE → History
+        if (inactiveNumbers.length > 0) {
+            await Lead.updateMany(
+                {
+                    $expr: {
+                        $in: [
+                            {
+                                $concat: [
+                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.countryCode", 0] }, ""] },
+                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.number", 0] }, ""] }
+                                ]
+                            },
+                            inactiveNumbers
+                        ]
+                    }
+                },
+                { $set: { isWabaChat: false } }
+            );
+        }
 
         res.json({
             status: "success",
