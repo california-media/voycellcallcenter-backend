@@ -185,6 +185,26 @@ const whatsappMessageSchema = new mongoose.Schema(
       index: true,
     },
 
+    messageDeliveredTimestamp: {
+      type: Date, // WhatsApp timestamp
+      index: true,
+    },
+
+    messageReadTimestamp: {
+      type: Date, // WhatsApp timestamp
+      index: true,
+    },
+
+    messageSentTimestamp: {
+      type: Date, // WhatsApp timestamp
+      index: true,
+    },
+
+    messageFailedTimestamp: {
+      type: Date, // WhatsApp timestamp
+      index: true,
+    },
+
     // 🧠 Raw Meta payload (for debugging)
     raw: {
       type: Object,

@@ -19,8 +19,9 @@ const {
     refreshWabaToken,
     getAllCampaigns,
     getCampaignDetails,
+    deleteCampaign,
 } = require("../controllers/whatsapp.controller");
-const { createTemplate, getWabaTemplates, deleteWabaTemplate } = require("../controllers/whatsappTemplateController");
+const { createTemplate, getWabaTemplates, deleteWabaTemplate, getApprovedTemplates, getTemplateById } = require("../controllers/whatsappTemplateController");
 const upload = multer();
 
 router.get("/connect", checkForAuthentication(), connectWhatsApp);
@@ -41,12 +42,14 @@ router.post("/create-template", upload.single("media_url"), checkForAuthenticati
 router.get("/get-waba-templates", checkForAuthentication(), getWabaTemplates);
 router.post("/send-text", checkForAuthentication(), sendTextMessage);
 router.post("/send-template", checkForAuthentication(), sendTemplateMessage);//sendTemplateMessage
+router.get("/approved-templates", checkForAuthentication(), getApprovedTemplates);
+router.get("/templateById", checkForAuthentication(), getTemplateById);
 
 
 router.post("/send-campaign", checkForAuthentication(), sendTemplateBulkMessage);
 router.get("/campaigns", checkForAuthentication(), getAllCampaigns);
-router.get("/campaignsById", checkForAuthentication(), getCampaignDetails);
-
+router.post("/campaignsById", checkForAuthentication(), getCampaignDetails);
+router.delete("/delete/campaigns", checkForAuthentication(), deleteCampaign);
 
 router.post("/conversations", checkForAuthentication(), getWhatsappConversations);
 router.post("/send-message", checkForAuthentication(), upload.single("file"), sendMessage);

@@ -6,6 +6,7 @@ const { uploadWhatsAppMediaTemplateToS3 } = require("../utils/uploadWhatsAppMedi
 const { downloadMetaMedia } = require("../services/metaMedia");
 const FormData = require("form-data");
 const { META_APP_ID } = process.env;
+const mongoose = require("mongoose");
 
 //test template payload
 // {
@@ -665,6 +666,69 @@ exports.getWabaTemplates = async (req, res) => {
     });
   }
 };
+
+// controllers/wabaTemplateController.js
+// 📌 Get all APPROVED templates of logged-in user
+exports.getApprovedTemplates = async (req, res) => {
+  try {
+    const userId = req.user._id; // from auth middleware
+
+    const templates = await WabaTemplate.find({
+      user: userId,
+      status: "APPROVED",
+    })
+      .sort({ createdAt: -1 }) // latest first
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: templates.length,
+      data: templates,
+    });
+  } catch (error) {
+    console.error("Get Approved Templates Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch approved templates",
+    });
+  }
+};
+
+// controllers/wabaTemplateController.js
+// 📌 Get single template by ID (only approved + owned by user)
+exports.getTemplateById = async (req, res) => {
+  try {
+    const userId = req.user._id; // from auth middleware
+    const templateId = req.body.templateId;
+
+    if (!mongoose.Types.ObjectId.isValid(templateId)) {
+      return res.status(400).json({ success: false, message: "Invalid template ID" });
+    }
+
+    const template = await WabaTemplate.findOne({
+      _id: templateId,
+      user: userId,
+      status: "APPROVED",
+    }).lean();
+
+    if (!template) {
+      return res.status(404).json({ success: false, message: "Template not found" });
+    }
+    return res.status(200).json({
+      success: true,
+      data: template,
+    });
+  }
+  catch (error) {
+    console.error("Get Template By ID Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch template",
+    });
+  }
+};
+
+
 
 exports.deleteWabaTemplate = async (req, res) => {
   try {

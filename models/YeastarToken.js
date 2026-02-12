@@ -14,6 +14,8 @@ const yeastarTokenSchema = new mongoose.Schema(
     expires_in: { type: Number, default: 7200 },
     expires_at: { type: Date },
 
+    base_url: { type: String, required: true },
+
     created_at: { type: Date, default: Date.now },
   },
   { timestamps: true }

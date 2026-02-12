@@ -1,6 +1,8 @@
 // controllers/scriptController.js (or your existing file)
 const crypto = require("crypto");
 const ScriptToken = require("../models/ScriptToken");
+const YeasterToken = require("../models/YeastarToken");
+const YeasterSdkToken = require("../models/YeastarSDKToken");
 const User = require("../models/userModel");
 
 const FRONTEND_BASE =
@@ -21,6 +23,8 @@ exports.generateScriptTag = async (req, res) => {
         message: "Not Activated Calling Facility.",
       });
     }
+
+    const pbxDeviceId = user.yeastarDetails.PBX_DEVICE_ID || null;
 
     // === 1️⃣ Normalize allowedOrigin (remove trailing slash + lowercase) ===
     // const allowedOrigin = (req.body.allowedOrigin || "")

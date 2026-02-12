@@ -22,7 +22,6 @@ function getOriginFromUrl(url) {
   }
 }
 
-
 exports.serveCallmeJS = async (req, res) => {
   const { token, fieldName } = req.params;
   console.log(fieldName);
@@ -49,7 +48,6 @@ exports.serveCallmeJS = async (req, res) => {
   }
 
 };
-
 
 async function getPopupJS(req, tokenDoc, user) {
 
@@ -508,7 +506,6 @@ async function servePopupScript(req, res, tokenDoc, user) {
     ${popupJs}
   `);
 }
-
 
 async function getFormJS(req, tokenDoc, fieldName, user) {
   if (!tokenDoc) {

@@ -491,24 +491,31 @@ const userSchema = new Schema(
 
         groups: [String],
 
-        numbers: [String],
+        numbers: {},
 
         messageRefs: [
           {
             metaMessageId: String,
             chatNumber: String,
+            chatName: String,
           },
         ],
 
         total: Number,
-
         status: {
           type: String,
-          enum: ["active", "paused", "completed"],
-          default: "active",
+          // default: "completed",
         },
 
-        scheduledAt: Date,
+        scheduledAt: {
+          type: Date,
+          default: null,
+        },
+
+        sentAt: {
+          type: Date,
+          default: null,
+        },
 
         createdAt: {
           type: Date,

@@ -833,7 +833,6 @@ function parseWhatsAppMessage(msg) {
     return { messageType, content };
 }
 
-
 /** STEP 4: Webhook to receive messages
  */
 function getAttachmentName(msg, mimeType) {
@@ -908,11 +907,51 @@ exports.webhookReceive = async (req, res) => {
                     errors);
 
                 /* 🔹 UPDATE MESSAGE STATUS */
+                // const updated = await WhatsAppMessage.findOneAndUpdate(
+                //     { metaMessageId },
+                //     {
+                //         status,
+                //         messageStatusTimestamp: new Date(timestamp * 1000),
+
+                //         ...(errors && {
+                //             error: {
+                //                 code: errors?.[0]?.code,
+                //                 message: errors?.[0]?.title
+                //             }
+                //         })
+                //     },
+                //     { new: true }
+                // ).lean();
+
+
+                const statusDate = new Date(timestamp * 1000);
+
+                // Dynamic timestamp fields
+                const statusTimestampUpdate = {
+                    messageStatusTimestamp: statusDate
+                };
+
+                if (status === "sent") {
+                    statusTimestampUpdate.messageSentTimestamp = statusDate;
+                }
+
+                if (status === "delivered") {
+                    statusTimestampUpdate.messageDeliveredTimestamp = statusDate;
+                }
+
+                if (status === "read") {
+                    statusTimestampUpdate.messageReadTimestamp = statusDate;
+                }
+
+                if (status === "failed") {
+                    statusTimestampUpdate.messageFailedTimestamp = statusDate;
+                }
+
                 const updated = await WhatsAppMessage.findOneAndUpdate(
                     { metaMessageId },
                     {
                         status,
-                        messageStatusTimestamp: new Date(timestamp * 1000),
+                        ...statusTimestampUpdate,
 
                         ...(errors && {
                             error: {
@@ -1770,6 +1809,104 @@ exports.sendTemplateMessage = async (req, res) => {
     }
 };
 
+// const extractNumbersWithNames = (records, type = "contact") => {
+//     const data = [];
+
+//     records.forEach(r => {
+
+//         // Build display name
+//         let name = "";
+
+//         if (type === "contact") {
+//             name = `${r.firstname || ""} ${r.lastname || ""}`.trim();
+//         }
+
+//         if (type === "lead") {
+//             name = `${r.firstname || ""} ${r.lastname || ""}`.trim();
+//         }
+
+//         // Fallbacks
+//         if (!name) {
+//             name = r.company || "Unknown";
+//         }
+
+//         r.phoneNumbers?.forEach(p => {
+//             if (p.number) {
+//                 data.push({
+//                     number: `${p.countryCode || ""}${p.number}`,
+//                     name
+//                 });
+//             }
+//         });
+
+//     });
+
+//     return data;
+// };
+
+
+const extractNumbersWithNames = (records, type = "contact") => {
+    const data = [];
+
+    records.forEach(r => {
+
+        const firstName = r.firstname || "";
+        const lastName = r.lastname || "";
+
+        let name = `${firstName} ${lastName}`.trim();
+
+        if (!name) {
+            name = r.company || "Unknown";
+        }
+
+        r.phoneNumbers?.forEach(p => {
+            if (p.number) {
+                data.push({
+                    number: `${p.countryCode || ""}${p.number}`,
+                    name,
+                    firstName,
+                    lastName,
+                    company: r.company || ""
+                });
+            }
+        });
+
+    });
+
+    return data;
+};
+
+const resolveDynamicParams = (params = {}, recipient) => {
+
+    const resolved = { ...params };
+
+    /* ===== BODY PARAMS ===== */
+    if (Array.isArray(params.body)) {
+        resolved.body = params.body.map(p => {
+
+            if (p === "{{first_name}}") {
+                return recipient.firstName || "Customer";
+            }
+
+            if (p === "{{last_name}}") {
+                return recipient.lastName || "";
+            }
+
+            if (p === "{{full_name}}") {
+                return recipient.name || "Customer";
+            }
+
+            if (p === "{{company}}") {
+                return recipient.company || "";
+            }
+
+            return p; // static value
+        });
+    }
+
+    return resolved;
+};
+
 exports.sendTemplateBulkMessage = async (req, res) => {
     console.log("\n========== SEND TEMPLATE MESSAGE START ==========");
 
@@ -1835,6 +1972,10 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         // }
 
         /* ===== CASE 2: Group / Tag based ===== */
+
+        let contacts = [];
+        let leads = [];
+
         if (groupName?.length) {
 
             // Normalize tags
@@ -1843,13 +1984,13 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 : [groupName];
 
             /* --- FIND CONTACTS --- */
-            const contacts = await Contact.find({
+            contacts = await Contact.find({
                 createdBy: userId,
                 "tags.tag": { $in: tagsArray }
             });
 
             /* --- FIND LEADS --- */
-            const leads = await Lead.find({
+            leads = await Lead.find({
                 createdBy: userId,
                 "tags.tag": { $in: tagsArray }
             });
@@ -1871,18 +2012,26 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 return nums;
             };
 
-            numbers = [
-                ...numbers,
-                ...extractNumbers(contacts),
-                ...extractNumbers(leads)
-            ];
+            // numbers = [
+            //     ...numbers,
+            //     ...extractNumbers(contacts),
+            //     ...extractNumbers(leads)
+            // ];
+
+
+
         }
 
+        let recipients = [
+            ...extractNumbersWithNames(contacts, "contact"),
+            ...extractNumbersWithNames(leads, "lead")
+        ];
+
         /* ===== REMOVE DUPLICATES ===== */
-        numbers = [...new Set(numbers)];
+        recipients = [...new Set(recipients)];
 
         /* ===== FINAL VALIDATION ===== */
-        if (!numbers.length) {
+        if (!recipients.length) {
             return res.status(400).json({
                 success: false,
                 message: "No phone numbers found for provided input"
@@ -1891,15 +2040,18 @@ exports.sendTemplateBulkMessage = async (req, res) => {
 
         const campaignId = new mongoose.Types.ObjectId();
 
+        console.log("recipients", recipients.number);
+
         const campaignData = {
             campaignId,
             campaignName,
             templateId: template._id,
             templateName: template.name,
+            status: "completed",
             templateLanguage: template.language,
             groups: groupName,
-            numbers,
-            total: numbers.length,
+            numbers: recipients,
+            total: recipients.length,
             messageRefs: [],
         };
 
@@ -2061,21 +2213,174 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         /* ───────── BULK SEND ───────── */
         const results = [];
 
-        for (const number of numbers) {
+
+
+        // for (const r of recipients) {
+
+        //     const toNumber = r.number;
+        //     const senderName = r.name;
+
+        //     console.log(`Sending to ${toNumber} (${senderName})`);
+
+        //     // /* ───── SEND TEMPLATE ───── */
+        //     // const response = await sendWhatsAppTemplate({
+        //     //     to: toNumber,
+        //     //     template,
+        //     //     params,
+        //     //     phoneNumberId,
+        //     //     accessToken
+        //     // });
+
+        //     const payload = {
+        //         messaging_product: "whatsapp",
+        //         to: toNumber,
+        //         type: "template",
+        //         template: {
+        //             name: template.name,
+        //             language: { code: template.language || "en_US" },
+        //             ...(components.length && { components })
+        //         }
+        //     };
+
+        //     try {
+        //         /* ───────── SEND ───────── */
+        //         const { data } = await axios.post(
+        //             `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+        //             payload,
+        //             {
+        //                 headers: {
+        //                     Authorization: `Bearer ${accessToken}`,
+        //                     "Content-Type": "application/json"
+        //                 }
+        //             }
+        //         );
+
+        //         const metaId = data.messages?.[0]?.id;
+
+        //         campaignData.messageRefs.push({
+        //             metaMessageId: metaId,
+        //             chatNumber: toNumber,
+        //             chatName: senderName || toNumber
+        //         });
+
+        //         /* ───── STORE MESSAGE ───── */
+        //         await WhatsAppMessage.create({
+        //             userId,
+        //             phoneNumberId,
+
+        //             conversationId: toNumber,
+        //             direction: "outgoing",
+
+        //             from: phoneNumberId,
+        //             to: toNumber,
+
+        //             senderName, // ✅ STORE NAME HERE
+
+        //             messageType: "template",
+
+        //             content: {
+        //                 template: {
+        //                     name: template.name,
+        //                     language: template.language,
+        //                     components: template.components,
+        //                     params
+        //                 }
+        //             },
+
+        //             // metaMessageId: response?.messages?.[0]?.id,
+        //             metaMessageId: data?.messages?.[0]?.id,
+        //             status: "sent",
+        //             messageTimestamp: new Date()
+        //         });
+
+        //         results.push({
+        //             to: toNumber,
+        //             success: true,
+        //             messageId: data.messages?.[0]?.id
+        //         });
+
+        //     } catch (err) {
+
+        //         console.error(`Failed for ${toNumber}`, err.response?.data);
+
+        //         results.push({
+        //             to: toNumber,
+        //             success: false,
+        //             error: err.response?.data || err.message
+        //         });
+        //     }
+        // }
+
+        for (const r of recipients) {
+
+            const toNumber = r.number;
+            const senderName = r.name;
+
+            console.log(`Sending to ${toNumber} (${senderName})`);
+
+            /* ===== RESOLVE DYNAMIC PARAMS ===== */
+            const resolvedParams = resolveDynamicParams(params, r);
+
+            /* ===== BUILD BODY COMPONENT ===== */
+            const dynamicComponents = [...components];
+
+            const bodyIndex = dynamicComponents.findIndex(
+                c => c.type === "body"
+            );
+
+            // if (bodyIndex !== -1) {
+            //     dynamicComponents[bodyIndex].parameters =
+            //         (resolvedParams.body || []).map(text => ({
+            //             type: "text",
+            //             text
+            //         }));
+            // }
+
+            if (bodyIndex !== -1) {
+
+                /* ===== NAMED PARAMS ===== */
+                if (template.parameter_format === "named") {
+
+                    const namedExamples =
+                        template.components
+                            .find(c => c.type === "BODY")
+                            ?.example?.body_text_named_params || [];
+
+                    dynamicComponents[bodyIndex].parameters =
+                        namedExamples.map((ex, i) => ({
+
+                            type: "text",
+                            parameter_name: ex.param_name, // ✅ REQUIRED
+                            text: resolvedParams.body?.[i] || ""
+
+                        }));
+                }
+
+                /* ===== POSITIONAL PARAMS ===== */
+                else {
+
+                    dynamicComponents[bodyIndex].parameters =
+                        (resolvedParams.body || []).map(text => ({
+                            type: "text",
+                            text
+                        }));
+                }
+            }
 
             const payload = {
                 messaging_product: "whatsapp",
-                to: number,
+                to: toNumber,
                 type: "template",
                 template: {
                     name: template.name,
                     language: { code: template.language || "en_US" },
-                    ...(components.length && { components })
+                    ...(dynamicComponents.length && {
+                        components: dynamicComponents
+                    })
                 }
             };
 
             try {
-                /* ───────── SEND ───────── */
                 const { data } = await axios.post(
                     `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
                     payload,
@@ -2091,51 +2396,44 @@ exports.sendTemplateBulkMessage = async (req, res) => {
 
                 campaignData.messageRefs.push({
                     metaMessageId: metaId,
-                    chatNumber: number,
+                    chatNumber: toNumber,
+                    chatName: senderName || toNumber
                 });
 
-                /* ───────── STORE ───────── */
                 await WhatsAppMessage.create({
                     userId,
-                    to: number,
-                    from: phoneNumberId,
                     phoneNumberId,
-                    senderName: messageName,
+                    conversationId: toNumber,
                     direction: "outgoing",
+                    from: phoneNumberId,
+                    to: toNumber,
+                    senderName,
                     messageType: "template",
-                    conversationId: number,
-                    metaMessageId: data.messages?.[0]?.id,
                     content: {
                         template: {
                             name: template.name,
                             language: template.language,
                             components: template.components,
-                            params,
-                            resolved: {
-                                header: params.header || null,
-                                body: Array.isArray(params.body)
-                                    ? params.body.join(" ")
-                                    : null,
-                                buttons: []
-                            }
+                            params: resolvedParams
                         }
                     },
+                    metaMessageId: metaId,
                     status: "sent",
-                    raw: data
+                    messageTimestamp: new Date()
                 });
 
                 results.push({
-                    to: number,
+                    to: toNumber,
                     success: true,
-                    messageId: data.messages?.[0]?.id
+                    messageId: metaId
                 });
 
             } catch (err) {
 
-                console.error(`Failed for ${number}`, err.response?.data);
+                console.error(`Failed for ${toNumber}`, err.response?.data);
 
                 results.push({
-                    to: number,
+                    to: toNumber,
                     success: false,
                     error: err.response?.data || err.message
                 });
@@ -2154,7 +2452,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         /* ───────── RESPONSE ───────── */
         return res.json({
             success: true,
-            total: numbers.length,
+            total: recipients.length,
             sent: results.filter(r => r.success).length,
             failed: results.filter(r => !r.success).length,
             results
@@ -2207,13 +2505,31 @@ exports.getAllCampaigns = async (req, res) => {
             const total = messageIds.length;
 
             /* 4️⃣ Counts */
-            const delivered = messages.filter(
-                m => m.status === "delivered"
-            ).length;
+            // const delivered = messages.filter(
+            //     m => m.status === "delivered"
+            // ).length;
 
-            const read = messages.filter(
-                m => m.status === "read"
-            ).length;
+            // const read = messages.filter(
+            //     m => m.status === "read"
+            // ).length;
+
+            /* 4️⃣ Counts (CUMULATIVE) */
+            let delivered = 0;
+            let read = 0;
+
+            messages.forEach(m => {
+
+                // Delivered includes delivered + read
+                if (m.status === "delivered" || m.status === "read") {
+                    delivered++;
+                }
+
+                // Read only read
+                if (m.status === "read") {
+                    read++;
+                }
+
+            });
 
             /* 5️⃣ Rates */
             const deliveryRate = total
@@ -2229,6 +2545,8 @@ exports.getAllCampaigns = async (req, res) => {
                 campaignId: camp.campaignId,
                 campaignName: camp.campaignName,
                 templateName: camp.templateName,
+                status: camp.status || "unknown",
+                templateId: camp.templateId,
                 totalMessages: total,
                 deliveryRate: `${deliveryRate}%`,
                 readRate: `${readRate}%`,
@@ -2298,23 +2616,49 @@ exports.getCampaignDetails = async (req, res) => {
             .lean();
 
         /* 4️⃣ Counts */
+        // const total = messageIds.length;
+
+        // const sent = messages.filter(
+        //     m => m.status === "sent"
+        // ).length;
+
+        // const delivered = messages.filter(
+        //     m => m.status === "delivered"
+        // ).length;
+
+        // const read = messages.filter(
+        //     m => m.status === "read"
+        // ).length;
+
+        // const failed = messages.filter(
+        //     m => m.status === "failed"
+        // ).length;
+
+        /* 4️⃣ Counts (CUMULATIVE) */
         const total = messageIds.length;
 
-        const sent = messages.filter(
-            m => m.status === "sent"
-        ).length;
+        let sent = 0;
+        let delivered = 0;
+        let read = 0;
+        let failed = 0;
 
-        const delivered = messages.filter(
-            m => m.status === "delivered"
-        ).length;
+        messages.forEach(m => {
+            if (m.status === "failed") {
+                failed++;
+                return; // failed stops progression
+            }
 
-        const read = messages.filter(
-            m => m.status === "read"
-        ).length;
+            // If message exists → it was sent
+            sent++;
 
-        const failed = messages.filter(
-            m => m.status === "failed"
-        ).length;
+            if (m.status === "delivered" || m.status === "read") {
+                delivered++;
+            }
+
+            if (m.status === "read") {
+                read++;
+            }
+        });
 
         /* 5️⃣ Format List */
         const list = campaign.messageRefs.map(ref => {
@@ -2325,9 +2669,13 @@ exports.getCampaignDetails = async (req, res) => {
             return {
                 metaMessageId: ref.metaMessageId,
                 chatNumber: ref.chatNumber,
+                // templateId: ref.templateId,
                 status: msg?.status || "sent",
-                sentAt: msg?.createdAt || null,
-                deliveredAt: msg?.messageStatusTimestamp || null,
+                chatName: msg?.senderName || ref.chatNumber,
+                sentAt: msg?.messageSentTimestamp || null,
+                deliveredAt: msg?.messageDeliveredTimestamp || null,
+                readAt: msg?.messageReadTimestamp || null,
+                failedAt: msg?.messageFailedTimestamp || null,
             };
         });
 
@@ -2339,6 +2687,7 @@ exports.getCampaignDetails = async (req, res) => {
                 campaignId: campaign.campaignId,
                 campaignName: campaign.campaignName,
                 templateName: campaign.templateName,
+                templateId: campaign.templateId,
                 createdAt: campaign.createdAt,
             },
 
@@ -2353,6 +2702,36 @@ exports.getCampaignDetails = async (req, res) => {
             messages: list,
         });
 
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+exports.deleteCampaign = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { campaignId } = req.body;
+
+        const result = await User.updateOne(
+            { _id: userId },
+            { $pull: { campaigns: { campaignId } } }
+        );
+
+        if (result.modifiedCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Campaign not found or already deleted",
+            });
+        }
+
+        return res.json({
+            status: "success",
+            message: "Campaign deleted successfully",
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({
