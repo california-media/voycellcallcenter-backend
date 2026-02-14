@@ -2,6 +2,7 @@ const { Buffer } = require("buffer");
 // ① ADD: import your User model
 const User = require("../models/userModel");
 const ScriptToken = require("../models/ScriptToken");
+
 function normalizeUrl(url = "") {
   // Remove trailing slashes and convert to lowercase for consistent comparison
   return url.trim().toLowerCase().replace(/\/+$/, "");
@@ -67,6 +68,10 @@ async function getPopupJS(req, tokenDoc, user) {
 
 
   const decodedExt = tokenDoc.extensionNumber;
+
+  const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL || "";
+  const assignedDeviceId = user.PBXDetails.assignedDeviceId || null;
+
 
   function normalizeOrigin(origin = "") {
     return origin.toLowerCase().replace(/\/+$/, "");
@@ -154,6 +159,8 @@ async function getPopupJS(req, tokenDoc, user) {
   const js = `
 (function () {
   const CALLER_EXTENSION = ${JSON.stringify(decodedExt || "")};
+  const ASSIGNED_DEVICE_ID = ${JSON.stringify(assignedDeviceId)};
+  const PBX_BASE_URL = ${JSON.stringify(PBX_BASE_URL)};
   const THEME_COLOR = ${JSON.stringify(themeColor)};
   const POPUP_HEADING = ${JSON.stringify(popupHeading)};
   const HEADING_COLOR = ${JSON.stringify(headingColor)};
@@ -379,15 +386,17 @@ async function getPopupJS(req, tokenDoc, user) {
     }
 
     try {
-      const resp = await fetch(API_URL, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-          caller_extension: CALLER_EXTENSION,
-          countryCode: country,
-          mob_number: digits
-         })
-       });
+     const resp = await fetch(API_URL, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    caller_extension: CALLER_EXTENSION,
+    countryCode: country,
+    mob_number: digits,
+    assignedDeviceId: ASSIGNED_DEVICE_ID,
+    pbxBaseUrl: PBX_BASE_URL,
+  })
+});
 
       let data;
       try { data = await resp.json(); } catch (e) { data = { status: 'error', message: 'invalid-json-response' }; }
@@ -507,25 +516,218 @@ async function servePopupScript(req, res, tokenDoc, user) {
   `);
 }
 
+// async function getFormJS(req, tokenDoc, fieldName, user) {
+//   if (!tokenDoc) {
+//     return `// Invalid form token`;
+//   }
+
+//   // 2. GET THE ACTUAL URL (REFERER)
+//   // This is what the browser reports the current page is
+//   let rawReferer = req.get("referer") || req.get("origin") || "";
+
+//   if (!rawReferer) {
+//     console.log("⚠️ No Referer found. Browser might be blocking the header.");
+//   }
+
+//   function normalizeOrigin(origin = "") {
+//     return origin.toLowerCase().replace(/\/+$/, "");
+//   }
+
+//   function getRequestOrigin(req) {
+//     // 1️⃣ Script tags → use referer
+//     const referer = req.get("referer") || req.get("referrer");
+//     if (referer) {
+//       try {
+//         return normalizeOrigin(new URL(referer).origin);
+//       } catch (e) { }
+//     }
+
+//     // 2️⃣ Fetch/XHR → use origin
+//     const origin = req.get("origin");
+//     if (origin) {
+//       try {
+//         return normalizeOrigin(new URL(origin).origin);
+//       } catch (e) { }
+//     }
+
+//     return "";
+//   }
+
+//   const pageUrl = getPageUrl(req);
+//   const pageOrigin = getOriginFromUrl(pageUrl);
+
+//   if (
+//     Array.isArray(tokenDoc.allowedOriginContactForm) &&
+//     tokenDoc.allowedOriginContactForm.length > 0
+//   ) {
+//     const allowed = tokenDoc.allowedOriginContactForm
+//       .map(o => normalizeUrl(o))
+//       .includes(pageOrigin);
+
+//     if (!allowed) {
+//       return `// ❌ Blocked: origin not allowed (${pageOrigin})`;
+//     }
+//   }
+
+
+//   console.log("REQUEST ORIGIN:", getRequestOrigin(req));
+//   console.log("ALLOWED ORIGINS:", tokenDoc.allowedOriginContactForm);
+
+//   // Normalize: lowercase, remove spaces, and remove trailing slashes
+//   const normalizedReferer = rawReferer.toLowerCase().trim().replace(/\/+$/, "");
+
+//   console.log("DEBUG: Current Page URL ->", normalizedReferer);
+//   console.log("DEBUG: Restricted URLs ->", tokenDoc.restrictedUrls);
+
+//   if (!user) {
+//     return `// User not found for form script`;
+//   }
+
+//   const assignedDeviceId = user.PBXDetails.assignedDeviceId || null;
+//   const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL || "";
+
+//   const API_BASE =
+//     process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
+//   // Safe preparation of variables
+//   const restrictedUrlsJson = JSON.stringify(tokenDoc.restrictedUrls || []);
+//   const extensionJson = JSON.stringify(tokenDoc.extensionNumber || "");
+//   const fieldNameJson = JSON.stringify(fieldName);
+//   const assignedDeviceIdJson = JSON.stringify(assignedDeviceId);
+//   const PBX_BASE_URLJson = JSON.stringify(PBX_BASE_URL);
+//   const apiUrl = API_BASE.replace(/\/+$/, "") + "/api/yeastar/make-call";
+
+//   // We use standard 'single quotes' for the wrapper to avoid backtick conflicts
+//   const js = [
+//     "(function () {",
+//     "  var RESTRICTED_URLS = " + restrictedUrlsJson + ";",
+//     "  var EXTENSION = " + extensionJson + ";",
+//     "  var API_URL = '" + apiUrl + "';",
+//     "  var FIELD_NAME = '" + fieldName + "';",
+//     "  var ASSIGNED_DEVICE_ID = " + assignedDeviceIdJson + ";",
+//     "  var PBX_BASE_URL = " + PBX_BASE_URLJson + ";",
+//     "",
+//     "",
+//     "  var isProcessing = false;",
+//     "",
+//     "  function getNormalizedUrl() {",
+//     "    try {",
+//     "      var url = window.location.href.toLowerCase().split('#')[0].split('?')[0];",
+//     "      return url.replace(/\\/+$/, '');",
+//     "    } catch (e) { return ''; }",
+//     "  }",
+//     "",
+//     "  function isRestricted() {",
+//     "    var current = getNormalizedUrl();",
+//     "console.log();",
+//     "    for (var i = 0; i < RESTRICTED_URLS.length; i++) {",
+//     "      var r = RESTRICTED_URLS[i].toLowerCase().trim().replace(/\\/+$/, '');",
+//     "      if (current === r) return true;",
+//     "    }",
+//     "    return false;",
+//     "  }",
+//     "",
+//     "  function handleCall(num) {",
+//     "    if (isProcessing || !num || num.length < 7) return;",
+//     "    isProcessing = true;",
+//     "    console.log('[Voycell] Form trigger matched.');",
+//     "",
+//     "    fetch(API_URL, {",
+//     "      method: 'POST',",
+//     "      mode: 'cors',",
+//     "      headers: { 'Content-Type': 'application/json' },",
+//     "      body: JSON.stringify({",
+//     "        caller_extension: EXTENSION,",
+//     "        mob_number: num,",
+//     "        assignedDeviceId: ASSIGNED_DEVICE_ID,",
+//     "        pbxBaseUrl: PBX_BASE_URL",
+//     "      })",
+//     "    })",
+//     "    .then(function(res) { return res.json(); })",
+//     "    .catch(function(err) { console.error('[Voycell] Error:', err); })",
+//     "    .finally(function() {",
+//     "      setTimeout(function() { isProcessing = false; }, 3000);",
+//     "    });",
+//     "  }",
+//     "",
+//     "  document.addEventListener('submit', function (e) {",
+//     "    if (isRestricted()) return;",
+//     "    var form = e.target;",
+//     "    var selector = '[name=\"' + FIELD_NAME + '\"], #' + FIELD_NAME;",
+//     "    var input = form.querySelector(selector);",
+//     "    if (input && input.value) {",
+//     "      var digits = input.value.replace(/\\D/g, '');",
+//     "      if (digits.length >= 7) handleCall(digits);",
+//     "    }",
+//     "  }, true);",
+//     "  console.log('[Voycell] Form script active');",
+//     "})();"
+//   ].join("\n");
+
+//   return js;
+// };
+
+
 async function getFormJS(req, tokenDoc, fieldName, user) {
   if (!tokenDoc) {
     return `// Invalid form token`;
   }
 
-  // 2. GET THE ACTUAL URL (REFERER)
-  // This is what the browser reports the current page is
+  // -------------------------------
+  // 1️⃣ GET REFERER / ORIGIN
+  // -------------------------------
   let rawReferer = req.get("referer") || req.get("origin") || "";
 
   if (!rawReferer) {
     console.log("⚠️ No Referer found. Browser might be blocking the header.");
   }
 
+  // -------------------------------
+  // 2️⃣ NORMALIZE REFERER URL
+  // -------------------------------
+  const normalizedReferer = rawReferer
+    .toLowerCase()
+    .trim()
+    .split("#")[0]     // remove hash
+    .split("?")[0]     // remove query params
+    .replace(/\/+$/, ""); // remove trailing slash
+
+  // -------------------------------
+  // 3️⃣ NORMALIZE RESTRICTED URLS
+  // -------------------------------
+  const normalizedRestrictedUrls = (tokenDoc.restrictedUrls || []).map(u =>
+    u
+      .toLowerCase()
+      .trim()
+      .split("#")[0]
+      .split("?")[0]
+      .replace(/\/+$/, "")
+  );
+
+  console.log("DEBUG: Current Page URL ->", normalizedReferer);
+  console.log(
+    "DEBUG: Normalized Restricted URLs ->",
+    normalizedRestrictedUrls
+  );
+
+  // -------------------------------
+  // 🚫 4️⃣ BLOCK SCRIPT IF RESTRICTED
+  // -------------------------------
+  if (normalizedRestrictedUrls.includes(normalizedReferer)) {
+    console.log(
+      "🚫 Script blocked on restricted URL:",
+      normalizedReferer
+    );
+    return `// ❌ Restricted URL blocked`;
+  }
+
+  // -------------------------------
+  // 5️⃣ ORIGIN VALIDATION
+  // -------------------------------
   function normalizeOrigin(origin = "") {
     return origin.toLowerCase().replace(/\/+$/, "");
   }
 
   function getRequestOrigin(req) {
-    // 1️⃣ Script tags → use referer
     const referer = req.get("referer") || req.get("referrer");
     if (referer) {
       try {
@@ -533,7 +735,6 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
       } catch (e) { }
     }
 
-    // 2️⃣ Fetch/XHR → use origin
     const origin = req.get("origin");
     if (origin) {
       try {
@@ -544,66 +745,101 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     return "";
   }
 
-  const pageUrl = getPageUrl(req);
-  const pageOrigin = getOriginFromUrl(pageUrl);
+  const requestOrigin = getRequestOrigin(req);
+
+  console.log("REQUEST ORIGIN:", requestOrigin);
+  console.log(
+    "ALLOWED ORIGINS:",
+    tokenDoc.allowedOriginContactForm
+  );
 
   if (
     Array.isArray(tokenDoc.allowedOriginContactForm) &&
     tokenDoc.allowedOriginContactForm.length > 0
   ) {
     const allowed = tokenDoc.allowedOriginContactForm
-      .map(o => normalizeUrl(o))
-      .includes(pageOrigin);
+      .map(o => normalizeOrigin(o))
+      .includes(requestOrigin);
 
     if (!allowed) {
-      return `// ❌ Blocked: origin not allowed (${pageOrigin})`;
+      return `// ❌ Blocked: origin not allowed (${requestOrigin})`;
     }
   }
 
-
-  console.log("REQUEST ORIGIN:", getRequestOrigin(req));
-  console.log("ALLOWED ORIGINS:", tokenDoc.allowedOriginContactForm);
-
-  // Normalize: lowercase, remove spaces, and remove trailing slashes
-  const normalizedReferer = rawReferer.toLowerCase().trim().replace(/\/+$/, "");
-
-  console.log("DEBUG: Current Page URL ->", normalizedReferer);
-  console.log("DEBUG: Restricted URLs ->", tokenDoc.restrictedUrls);
-
+  // -------------------------------
+  // 6️⃣ USER + PBX DETAILS
+  // -------------------------------
   if (!user) {
     return `// User not found for form script`;
   }
 
-  const API_BASE =
-    process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
-  // Safe preparation of variables
-  const restrictedUrlsJson = JSON.stringify(tokenDoc.restrictedUrls || []);
-  const extensionJson = JSON.stringify(tokenDoc.extensionNumber || "");
-  const apiUrl = API_BASE.replace(/\/+$/, "") + "/api/yeastar/make-call";
+  const assignedDeviceId =
+    user.PBXDetails.assignedDeviceId || null;
 
-  // We use standard 'single quotes' for the wrapper to avoid backtick conflicts
+  const PBX_BASE_URL =
+    user.PBXDetails.PBX_BASE_URL || "";
+
+  const API_BASE =
+    process.env.API_BASE_URL ||
+    req.protocol + "://" + req.get("host");
+
+  const apiUrl =
+    API_BASE.replace(/\/+$/, "") +
+    "/api/yeastar/make-call";
+
+  // -------------------------------
+  // 7️⃣ SAFE JSON VARIABLES
+  // -------------------------------
+  const restrictedUrlsJson = JSON.stringify(
+    tokenDoc.restrictedUrls || []
+  );
+
+  const extensionJson = JSON.stringify(
+    tokenDoc.extensionNumber || ""
+  );
+
+  const fieldNameJson = JSON.stringify(fieldName);
+
+  const assignedDeviceIdJson =
+    JSON.stringify(assignedDeviceId);
+
+  const PBX_BASE_URLJson =
+    JSON.stringify(PBX_BASE_URL);
+
+  // -------------------------------
+  // 8️⃣ FRONTEND JS
+  // -------------------------------
   const js = [
     "(function () {",
     "  var RESTRICTED_URLS = " + restrictedUrlsJson + ";",
     "  var EXTENSION = " + extensionJson + ";",
     "  var API_URL = '" + apiUrl + "';",
-    "  var FIELD_NAME = '" + fieldName + "';",
+    "  var FIELD_NAME = " + fieldNameJson + ";",
+    "  var ASSIGNED_DEVICE_ID = " + assignedDeviceIdJson + ";",
+    "  var PBX_BASE_URL = " + PBX_BASE_URLJson + ";",
     "",
-    "  console.log('${restrictedUrlsJson}');",
     "  var isProcessing = false;",
     "",
     "  function getNormalizedUrl() {",
     "    try {",
-    "      var url = window.location.href.toLowerCase().split('#')[0].split('?')[0];",
-    "      return url.replace(/\\/+$/, '');",
+    "      var url = window.location.href",
+    "        .toLowerCase()",
+    "        .split('#')[0]",
+    "        .split('?')[0]",
+    "        .replace(/\\/+$/, '');",
+    "      return url;",
     "    } catch (e) { return ''; }",
     "  }",
     "",
     "  function isRestricted() {",
     "    var current = getNormalizedUrl();",
-    "console.log();",
     "    for (var i = 0; i < RESTRICTED_URLS.length; i++) {",
-    "      var r = RESTRICTED_URLS[i].toLowerCase().trim().replace(/\\/+$/, '');",
+    "      var r = RESTRICTED_URLS[i]",
+    "        .toLowerCase()",
+    "        .trim()",
+    "        .split('#')[0]",
+    "        .split('?')[0]",
+    "        .replace(/\\/+$/, '');",
     "      if (current === r) return true;",
     "    }",
     "    return false;",
@@ -611,6 +847,8 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     "",
     "  function handleCall(num) {",
     "    if (isProcessing || !num || num.length < 7) return;",
+    "    if (isRestricted()) return;",
+    "",
     "    isProcessing = true;",
     "    console.log('[Voycell] Form trigger matched.');",
     "",
@@ -620,29 +858,38 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     "      headers: { 'Content-Type': 'application/json' },",
     "      body: JSON.stringify({",
     "        caller_extension: EXTENSION,",
-    "        mob_number: num",
+    "        mob_number: num,",
+    "        assignedDeviceId: ASSIGNED_DEVICE_ID,",
+    "        pbxBaseUrl: PBX_BASE_URL",
     "      })",
     "    })",
     "    .then(function(res) { return res.json(); })",
-    "    .catch(function(err) { console.error('[Voycell] Error:', err); })",
+    "    .catch(function(err) {",
+    "      console.error('[Voycell] Error:', err);",
+    "    })",
     "    .finally(function() {",
-    "      setTimeout(function() { isProcessing = false; }, 3000);",
+    "      setTimeout(function() {",
+    "        isProcessing = false;",
+    "      }, 3000);",
     "    });",
     "  }",
     "",
     "  document.addEventListener('submit', function (e) {",
     "    if (isRestricted()) return;",
+    "",
     "    var form = e.target;",
     "    var selector = '[name=\"' + FIELD_NAME + '\"], #' + FIELD_NAME;",
     "    var input = form.querySelector(selector);",
+    "",
     "    if (input && input.value) {",
     "      var digits = input.value.replace(/\\D/g, '');",
     "      if (digits.length >= 7) handleCall(digits);",
     "    }",
     "  }, true);",
+    "",
     "  console.log('[Voycell] Form script active');",
     "})();"
   ].join("\n");
 
   return js;
-};
+}

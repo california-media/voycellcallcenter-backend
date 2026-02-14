@@ -1345,28 +1345,44 @@ exports.updateMultipleYeastarUsersBySuperAdmin = async (req, res) => {
       // =========================================================
       // 🔐 STEP 3 — Generate Token ONCE per device
       // =========================================================
+      // let token;
+
+      // try {
+      //   const tokenRes = await axios.post(
+      //     `${device.PBX_BASE_URL}/get_token`,
+      //     {
+      //       username: device.PBX_USERNAME,
+      //       password: device.PBX_PASSWORD,
+      //     },
+      //     {
+      //       headers: {
+      //         "Content-Type": "application/json",
+      //         "X-Access-ID": device.PBX_SDK_ACCESS_ID,
+      //         "X-Access-Key": device.PBX_SDK_ACCESS_KEY,
+      //         "User-Agent": device.PBX_USER_AGENT || "Voycell-App",
+      //       },
+      //     }
+      //   );
+
+      //   token = tokenRes.data.access_token;
+      //   console.log(`✅ Token generated for device ${deviceId}`);
+
+      // } catch (err) {
+      //   deviceUserMap[deviceId].forEach((u) => {
+      //     updatedUsers.push({
+      //       userId: u.userId,
+      //       status: "failed",
+      //       reason: "PBX authentication failed",
+      //     });
+      //   });
+      //   continue;
+      // }
+
       let token;
 
       try {
-        const tokenRes = await axios.post(
-          `${device.PBX_BASE_URL}/get_token`,
-          {
-            username: device.PBX_USERNAME,
-            password: device.PBX_PASSWORD,
-          },
-          {
-            headers: {
-              "Content-Type": "application/json",
-              "X-Access-ID": device.PBX_SDK_ACCESS_ID,
-              "X-Access-Key": device.PBX_SDK_ACCESS_KEY,
-              "User-Agent": device.PBX_USER_AGENT || "Voycell-App",
-            },
-          }
-        );
-
-        token = tokenRes.data.access_token;
-        console.log(`✅ Token generated for device ${deviceId}`);
-
+        token = await getDeviceToken(deviceId, "pbx");
+        console.log(`✅ Token fetched from service for device ${deviceId}`);
       } catch (err) {
         deviceUserMap[deviceId].forEach((u) => {
           updatedUsers.push({
@@ -1405,88 +1421,105 @@ exports.updateMultipleYeastarUsersBySuperAdmin = async (req, res) => {
         // =====================================================
         // 🔍 STEP 5 — Fetch Extension
         // =====================================================
-        let extRes;
+        // let extRes;
 
-        try {
-          extRes = await axios.get(
-            `${device.PBX_BASE_URL}/extension/get?extension=${PBX_EXTENSION_NUMBER}`,
-            {
-              headers: {
-                "X-Access-Token": token,
-              },
-            }
-          );
+        // try {
+        //   extRes = await axios.get(
+        //     `${device.PBX_BASE_URL}/extension/get?extension=${PBX_EXTENSION_NUMBER}`,
+        //     {
+        //       headers: {
+        //         "X-Access-Token": token,
+        //       },
+        //     }
+        //   );
 
-          // 🔁 If token expired → regenerate ONCE
-          if (extRes.data.errcode === 10004) {
+        //   // 🔁 If token expired → regenerate ONCE
+        //   // if (extRes.data.errcode === 10004) {
 
-            console.log("⚠️ Token expired → regenerating...");
+        //   //   console.log("⚠️ Token expired → regenerating...");
 
-            const tokenRes = await axios.post(
-              `${device.PBX_BASE_URL}/get_token`,
-              {
-                username: device.PBX_USERNAME,
-                password: device.PBX_PASSWORD,
-              },
-              {
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Access-ID": device.PBX_SDK_ACCESS_ID,
-                  "X-Access-Key": device.PBX_SDK_ACCESS_KEY,
-                },
-              }
-            );
+        //   //   const tokenRes = await axios.post(
+        //   //     `${device.PBX_BASE_URL}/get_token`,
+        //   //     {
+        //   //       username: device.PBX_USERNAME,
+        //   //       password: device.PBX_PASSWORD,
+        //   //     },
+        //   //     {
+        //   //       headers: {
+        //   //         "Content-Type": "application/json",
+        //   //         "X-Access-ID": device.PBX_SDK_ACCESS_ID,
+        //   //         "X-Access-Key": device.PBX_SDK_ACCESS_KEY,
+        //   //       },
+        //   //     }
+        //   //   );
 
-            token = tokenRes.data.access_token;
+        //   //   token = tokenRes.data.access_token;
 
-            // Retry extension API
-            extRes = await axios.get(
-              `${device.PBX_BASE_URL}/extension/get?extension=${PBX_EXTENSION_NUMBER}`,
-              {
-                headers: {
-                  "X-Access-Token": token,
-                },
-              }
-            );
-          }
+        //   //   // Retry extension API
+        //   //   extRes = await axios.get(
+        //   //     `${device.PBX_BASE_URL}/extension/get?extension=${PBX_EXTENSION_NUMBER}`,
+        //   //     {
+        //   //       headers: {
+        //   //         "X-Access-Token": token,
+        //   //       },
+        //   //     }
+        //   //   );
+        //   // }
 
-          // ❌ Still error
-          if (extRes.data.errcode !== 0) {
-            updatedUsers.push({
-              userId,
-              status: "failed",
-              reason: extRes.data.errmsg,
-            });
-            continue;
-          }
+        //   // 🔁 If token expired → regenerate via service
+        //   if (extRes.data.errcode === 10004) {
 
-        } catch (err) {
-          updatedUsers.push({
-            userId,
-            status: "failed",
-            reason: "Extension fetch API error",
-          });
-          continue;
-        }
+        //     console.log("⚠️ Token expired → regenerating via service...");
 
-        const extensionData = extRes.data.data;
+        //     token = await getDeviceToken(deviceId, "pbx");
+
+        //     extRes = await axios.get(
+        //       `${device.PBX_BASE_URL}/extension/get?extension=${PBX_EXTENSION_NUMBER}`,
+        //       {
+        //         headers: {
+        //           "X-Access-Token": token,
+        //         },
+        //       }
+        //     );
+        //   }
+
+        //   // ❌ Still error
+        //   if (extRes.data.errcode !== 0) {
+        //     updatedUsers.push({
+        //       userId,
+        //       status: "failed",
+        //       reason: extRes.data.errmsg,
+        //     });
+        //     continue;
+        //   }
+
+        // } catch (err) {
+        //   updatedUsers.push({
+        //     userId,
+        //     status: "failed",
+        //     reason: "Extension fetch API error",
+        //   });
+        //   continue;
+        // }
+
+        // const extensionData = extRes.data.data;
 
         // =====================================================
         // 🔐 STEP 6 — Validate Extension
         // =====================================================
-        const isValid =
-          String(extensionData.id) === String(PBX_EXTENSION_ID) &&
-          String(extensionData.sip_password) === String(PBX_SIP_SECRET) &&
-          String(extensionData.mobile_number) === String(PBX_TELEPHONE);
+        // const isValid =
+        //   String(extensionData.id) === String(PBX_EXTENSION_ID) &&
+        //   String(extensionData.sip_password) === String(PBX_SIP_SECRET) &&
+        //   String(extensionData.mobile_number) === String(PBX_TELEPHONE);
 
-        if (!isValid) {
-          updatedUsers.push({
-            userId,
-            status: "failed",
-            reason: "Extension details mismatch",
-          });
-          continue;
-        }
+        // if (!isValid) {
+        //   updatedUsers.push({
+        //     userId,
+        //     status: "failed",
+        //     reason: "Extension details mismatch",
+        //   });
+        //   continue;
+        // }
 
         // =====================================================
         // 💾 STEP 7 — Assign PBX Details

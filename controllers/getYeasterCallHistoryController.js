@@ -853,8 +853,24 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
 
 exports.callRecordingDownload = async (req, res) => {
   try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).select("PBXDetails");
+
+    const assignedDeviceId = user?.PBXDetails?.assignedDeviceId;
+
+    if (!assignedDeviceId) {
+      return res.status(400).json({
+        status: "error",
+        message: "User does not have an assigned PBX device",
+      });
+    }
+
+    const token = await getDeviceToken(assignedDeviceId, "pbx");
+
+    const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL;
+
     const { record_file } = req.body;
-    const token = await getValidToken();
+    // const token = await getValidToken();
 
     if (!record_file) {
       return res.status(400).json({
@@ -865,7 +881,7 @@ exports.callRecordingDownload = async (req, res) => {
 
     // ---- STEP 1 ----
     // Correct API URL based on your working Postman request
-    const url1 = `${YEASTAR_BASE_URL}/recording/download?access_token=${token}&file=${encodeURIComponent(
+    const url1 = `${PBX_BASE_URL}/recording/download?access_token=${token}&file=${encodeURIComponent(
       record_file
     )}`;
 
@@ -880,8 +896,24 @@ exports.callRecordingDownload = async (req, res) => {
       });
     }
 
+    function getMediaBaseUrl(pbxBaseUrl) {
+      try {
+        const url = new URL(pbxBaseUrl);
+        return `${url.protocol}//${url.host}`;
+      } catch (err) {
+        console.error(
+          "Invalid PBX base URL:",
+          pbxBaseUrl
+        );
+        return pbxBaseUrl;
+      }
+    }
+
+    const MEDIA_BASE_URL =
+      getMediaBaseUrl(PBX_BASE_URL);
+
     const downloadPath = step1.data.download_resource_url;
-    const url2 = `https://cmedia.ras.yeastar.com${downloadPath}?access_token=${token}`;
+    const url2 = `${MEDIA_BASE_URL}${downloadPath}?access_token=${token}`;
 
     return res.json({
       status: "success",
@@ -1396,32 +1428,129 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     }
 
     // ✅ 6. ADD MEETING
-    if (meeting) {
-      // targetDoc.meetings.push({
-      //   meetingTitle: meeting.meetingTitle || "Call Follow-up",
-      //   meetingDescription: meeting.meetingDescription || "",
-      //   meetingStartDate: meeting.meetingStartDate,
-      //   meetingStartTime: meeting.meetingStartTime,
-      //   meetingType: meeting.meetingType || "offline",
-      //   meetingLink: meeting.meetingLink || "",
-      //   meetingLocation: meeting.meetingLocation || "",
-      // });
+    // if (meeting) {
+    //   // targetDoc.meetings.push({
+    //   //   meetingTitle: meeting.meetingTitle || "Call Follow-up",
+    //   //   meetingDescription: meeting.meetingDescription || "",
+    //   //   meetingStartDate: meeting.meetingStartDate,
+    //   //   meetingStartTime: meeting.meetingStartTime,
+    //   //   meetingType: meeting.meetingType || "offline",
+    //   //   meetingLink: meeting.meetingLink || "",
+    //   //   meetingLocation: meeting.meetingLocation || "",
+    //   // });
 
-      targetDoc.meetings.push({
+    //   targetDoc.meetings.push({
+    //     meetingTitle: meeting.meetingTitle || "Call Follow-up",
+    //     meetingDescription: meeting.meetingDescription || "",
+    //     meetingStartDate: meeting.meetingStartDate,
+    //     meetingStartTime: meeting.meetingStartTime,
+    //     meetingType: meeting.meetingType || "offline",
+    //     meetingLink: meeting.meetingLink || "",
+    //     meetingLocation: meeting.meetingLocation || "",
+    //   });
+
+    //   targetDoc.activities.push({
+    //     action: "meeting_added",
+    //     type: "meeting",
+    //     title: meeting.meetingTitle || "Meeting Scheduled",
+    //     description: "Meeting created after call",
+    //   });
+    // }
+
+    if (meeting) {
+      const timezone = meeting.timezone || "UTC";
+
+      let meetingObj = {
+        meeting_id: new mongoose.Types.ObjectId(),
         meetingTitle: meeting.meetingTitle || "Call Follow-up",
         meetingDescription: meeting.meetingDescription || "",
         meetingStartDate: meeting.meetingStartDate,
         meetingStartTime: meeting.meetingStartTime,
         meetingType: meeting.meetingType || "offline",
-        meetingLink: meeting.meetingLink || "",
+        meetingProvider: meeting.meetingProvider || null,
         meetingLocation: meeting.meetingLocation || "",
-      });
+        meetingLink: "",
+        createdAt: new Date(),
+      };
 
+      // -------------------------------------------------
+      // ✅ ONLINE MEETING LOGIC (GOOGLE / ZOOM)
+      // -------------------------------------------------
+      if (meetingObj.meetingType === "online") {
+        if (
+          !meetingObj.meetingProvider ||
+          !["google", "zoom"].includes(meetingObj.meetingProvider)
+        ) {
+          return res.status(400).json({
+            message:
+              "meetingProvider is required for online meetings (google / zoom)",
+          });
+        }
+
+        // Date + Time required
+        if (!meetingObj.meetingStartDate || !meetingObj.meetingStartTime) {
+          return res.status(400).json({
+            message: "Meeting date & time required for online meeting",
+          });
+        }
+
+        // ---------------- GOOGLE ----------------
+        if (meetingObj.meetingProvider === "google") {
+          if (!loggedInUser?.googleAccessToken) {
+            return res.status(400).json({
+              message: "Connect Google account to create Google Meet",
+            });
+          }
+
+          const link = await createGoogleMeetEvent(
+            loggedInUser,
+            meetingObj,
+            timezone
+          );
+
+          meetingObj.meetingLink = link;
+          meetingObj.meetingLocation = undefined;
+        }
+
+        // ---------------- ZOOM ----------------
+        if (meetingObj.meetingProvider === "zoom") {
+          if (!loggedInUser?.zoom?.accessToken) {
+            return res.status(400).json({
+              message: "Connect Zoom account to create Zoom meeting",
+            });
+          }
+
+          const zoomData = await createZoomMeeting(
+            loggedInUser,
+            meetingObj,
+            timezone
+          );
+
+          meetingObj.meetingLink = zoomData.joinUrl;
+          meetingObj.meetingLocation = undefined;
+        }
+      }
+
+      // -------------------------------------------------
+      // ✅ OFFLINE MEETING
+      // -------------------------------------------------
+      if (meetingObj.meetingType === "offline") {
+        meetingObj.meetingProvider = undefined;
+        meetingObj.meetingLink = undefined;
+      }
+
+      // SAVE
+      targetDoc.meetings.push(meetingObj);
+
+      // Activity
       targetDoc.activities.push({
         action: "meeting_added",
         type: "meeting",
-        title: meeting.meetingTitle || "Meeting Scheduled",
-        description: "Meeting created after call",
+        title: meetingObj.meetingTitle || "Meeting Scheduled",
+        description:
+          meetingObj.meetingType === "online"
+            ? `Online meeting via ${meetingObj.meetingProvider}`
+            : "Offline meeting scheduled",
       });
     }
 
@@ -1524,6 +1653,9 @@ exports.findByPhoneNumber = async (req, res) => {
 
     const { countryCode, number } = phoneNumbers;
 
+    // const normalizedCountryCode = String(countryCode).trim().replace(/\D/g, "");
+    // const normalizedNumber = String(number).trim().replace(/\D/g, "");
+
     /**
      * 🔐 Decide allowed userIds
      */
@@ -1554,8 +1686,8 @@ exports.findByPhoneNumber = async (req, res) => {
     const phoneQuery = {
       phoneNumbers: {
         $elemMatch: {
-          countryCode,
-          number,
+          countryCode: String(countryCode).trim().replace(/\D/g, ""),
+          number: String(number).trim().replace(/\D/g, ""),
         },
       },
       createdBy: { $in: allowedUserIds },

@@ -2,13 +2,13 @@ const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
 const Contact = require("../models/contactModel");
 const mongoose = require("mongoose");
-const YeastarToken = require("../models/YeastarToken");
-const { getValidToken } = require("../utils/yeastarClient");
-const axios = require("axios");
+// const YeastarToken = require("../models/YeastarToken");
+// const { getValidToken } = require("../utils/yeastarClient");
+// const axios = require("axios");
 
-const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL?.trim();
-const YEASTAR_SDK_ACCESS_ID = process.env.YEASTAR_SDK_ACCESS_ID?.trim();
-const YEASTAR_SDK_ACCESS_KEY = process.env.YEASTAR_SDK_ACCESS_KEY?.trim();
+// const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL?.trim();
+// const YEASTAR_SDK_ACCESS_ID = process.env.YEASTAR_SDK_ACCESS_ID?.trim();
+// const YEASTAR_SDK_ACCESS_KEY = process.env.YEASTAR_SDK_ACCESS_KEY?.trim();
 
 const getUserData = async (req, res) => {
   try {
@@ -207,6 +207,15 @@ const getUserData = async (req, res) => {
                 refreshToken: user.zoom?.refreshToken || null,
               },
             ],
+            whatsapp:
+            {
+              isConnected: user.whatsappWaba.isConnected || false,
+              wabaId: user.whatsappWaba.wabaId || null,
+              phoneNumberId: user.whatsappWaba.phoneNumberId || null,
+              accessToken: user.whatsappWaba.accessToken || null,
+              displayName: user.whatsappWaba.displayName || null,
+              businessAccountId: user.whatsappWaba.businessAccountId || null,
+            },
           },
           isVerified: user.isVerified,
           userInfo: user.userInfo || {
@@ -216,18 +225,19 @@ const getUserData = async (req, res) => {
             employeeCount: "",
             companyName: "",
           },
-          extensionNumber: user.extensionNumber || null,
+          extensionNumber: user.PBXDetails?.PBX_EXTENSION_NUMBER || null,
           extensionStatus: user.extensionStatus || null,
-          telephone: user.telephone || "",
-          yeastarExtensionId: user.yeastarExtensionId || null,
-          sipSecret: user.sipSecret || null,
-          yeastarProvisionStatus: user.yeastarProvisionStatus || "pending",
-          yeastarProvisionError: user.yeastarProvisionError || "",
+          telephone: user.PBXDetails?.PBX_TELEPHONE || "",
+          yeastarExtensionId: user.PBXDetails?.PBX_EXTENSION_ID || null,
+          // sipSecret: user.sipSecret || null,
+          // yeastarProvisionStatus: user.yeastarProvisionStatus || "pending",
+          // yeastarProvisionError: user.yeastarProvisionError || "",
           createdAt: user.createdAt,
-          yestarBaseURL: YEASTAR_BASE_URL || null,
+          // yestarBaseURL: user.PBXDetails.PBX_BASE_URL || null,
           contactStatuses: user.contactStatuses || [],
           leadStatuses: user.leadStatuses || [],
           accountStatus: user.accountStatus === "active",
+          PBXDetails: user.PBXDetails || {},
           templates: {
             whatsappTemplates: {
               whatsappTemplatesData: paginated,
@@ -352,6 +362,15 @@ const getUserData = async (req, res) => {
                 refreshToken: user.zoom?.refreshToken || null,
               },
             ],
+            whatsapp:
+            {
+              isConnected: user.whatsappWaba.isConnected || false,
+              wabaId: user.whatsappWaba.wabaId || null,
+              phoneNumberId: user.whatsappWaba.phoneNumberId || null,
+              accessToken: user.whatsappWaba.accessToken || null,
+              displayName: user.whatsappWaba.displayName || null,
+              businessAccountId: user.whatsappWaba.businessAccountId || null,
+            },
           },
           isVerified: user.isVerified,
           userInfo: user.userInfo || {
@@ -361,18 +380,18 @@ const getUserData = async (req, res) => {
             employeeCount: "",
             companyName: "",
           },
-          extensionNumber: user.extensionNumber || null,
+          // extensionNumber: user.extensionNumber || null,
           extensionStatus: user.extensionStatus || null,
-          telephone: user.telephone || "",
-          yeastarExtensionId: user.yeastarExtensionId || null,
-          sipSecret: user.sipSecret || null,
-          yeastarProvisionStatus: user.yeastarProvisionStatus || "pending",
-          yeastarProvisionError: user.yeastarProvisionError || "",
+          extensionNumber: user.PBXDetails?.PBX_EXTENSION_NUMBER || null,
+          extensionStatus: user.extensionStatus || null,
+          telephone: user.PBXDetails?.PBX_TELEPHONE || "",
+          yeastarExtensionId: user.PBXDetails?.PBX_EXTENSION_ID || null,
           createdAt: user.createdAt,
-          yestarBaseURL: YEASTAR_BASE_URL || null,
+          // yestarBaseURL: user.PBXDetails.PBX_BASE_URL || null,
           contactStatuses: user.contactStatuses || [],
           leadStatuses: user.leadStatuses || [],
           accountStatus: user.accountStatus === "active",
+          PBXDetails: user.PBXDetails || {},
           templates: {
             emailTemplates: {
               emailTemplatesData: paginated,
@@ -411,6 +430,7 @@ const getUserData = async (req, res) => {
       leadCount: LeadCount,
       phonenumbers: phonenumbersForResponse,
       popupSettings: user.popupSettings || {},
+      PBXDetails: user.PBXDetails || {},
       accounts: {
         email: [
           {
@@ -468,6 +488,15 @@ const getUserData = async (req, res) => {
             refreshToken: user.zoom?.refreshToken || null,
           },
         ],
+        whatsapp:
+        {
+          isConnected: user.whatsappWaba.isConnected || false,
+          wabaId: user.whatsappWaba.wabaId || null,
+          phoneNumberId: user.whatsappWaba.phoneNumberId || null,
+          accessToken: user.whatsappWaba.accessToken || null,
+          displayName: user.whatsappWaba.displayName || null,
+          businessAccountId: user.whatsappWaba.businessAccountId || null,
+        },
       },
       isVerified: user.isVerified,
       userInfo: user.userInfo || {
@@ -477,15 +506,14 @@ const getUserData = async (req, res) => {
         employeeCount: "",
         companyName: "",
       },
-      extensionNumber: user.extensionNumber || null,
+      // extensionNumber: user.extensionNumber || null,
       extensionStatus: user.extensionStatus || null,
-      telephone: user.telephone || "",
-      yeastarExtensionId: user.yeastarExtensionId || null,
-      sipSecret: user.sipSecret || null,
-      yeastarProvisionStatus: user.yeastarProvisionStatus || "pending",
-      yeastarProvisionError: user.yeastarProvisionError || "",
+      extensionNumber: user.PBXDetails?.PBX_EXTENSION_NUMBER || null,
+      extensionStatus: user.extensionStatus || null,
+      telephone: user.PBXDetails?.PBX_TELEPHONE || "",
+      yeastarExtensionId: user.PBXDetails?.PBX_EXTENSION_ID || null,
       createdAt: user.createdAt,
-      yestarBaseURL: YEASTAR_BASE_URL || null,
+      // yestarBaseURL: user.PBXDetails.PBX_BASE_URL || null,
       contactStatuses: user.contactStatuses || [],
       leadStatuses: user.leadStatuses || [],
       accountStatus: user.accountStatus === "active",

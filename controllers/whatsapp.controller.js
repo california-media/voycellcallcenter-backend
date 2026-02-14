@@ -23,157 +23,264 @@ const {
     FRONTEND_URL,
 } = process.env;
 
-/**
- * STEP 1: Redirect user to Meta (Connect WhatsApp)
- */
-exports.connectWhatsApp = (req, res) => {
-    const userId = req.user._id;
 
-    const url =
-        `https://www.facebook.com/v23.0/dialog/oauth?` +
-        `client_id=${META_APP_ID}` +
-        `&redirect_uri=${META_WHATSAPP_REDIRECT_URI}` +
-        `&scope=business_management,whatsapp_business_management,whatsapp_business_messaging` +
-        `&response_type=code` +
-        `&state=${userId}`;
+const parseMetaError = (error, step) => {
+    const metaError = error.response?.data?.error;
 
-    // res.redirect(url);
-    res.json({ status: 'success', url: url });
+    if (!metaError) {
+        return {
+            step,
+            message: error.message || "Unknown Meta error"
+        };
+    }
+
+    let message = metaError.message;
+
+    /* Token errors */
+    if (metaError.code === 190) {
+        message = "Invalid or expired Access Token";
+    }
+
+    /* Permission errors */
+    if (metaError.code === 10 || metaError.code === 200) {
+        message = "Missing required WhatsApp permissions";
+    }
+
+    /* Invalid ID errors */
+    if (metaError.code === 100) {
+        message = `Invalid ${step} ID`;
+    }
+
+    return {
+        step,
+        message,
+        meta: metaError
+    };
 };
 
-/**
- * STEP 2: OAuth Callback
- */
-exports.whatsappCallback = async (req, res) => {
+// exports.connectWhatsApp = async (req, res) => {
+//     try {
+//         const {
+//             accessToken,
+//             businessAccountId,
+//             wabaId,
+//             phoneNumberId
+//         } = req.body;
+
+//         /* 1️⃣ Verify Business */
+//         const businessRes = await axios.get(
+//             `${META_GRAPH_URL}/${businessAccountId}`,
+//             { headers: { Authorization: `Bearer ${accessToken}` } }
+//         );
+
+//         console.log("businessRes", businessRes);
+
+//         /* 2️⃣ Verify WABA under Business */
+//         const wabaList = await axios.get(
+//             `${META_GRAPH_URL}/${businessAccountId}/owned_whatsapp_business_accounts`,
+//             { headers: { Authorization: `Bearer ${accessToken}` } }
+//         );
+
+//         console.log("wabaList", wabaList);
+
+//         const wabaExists = wabaList.data.data.find(
+//             w => w.id === wabaId
+//         );
+
+//         console.log("wabaExists", wabaExists);
+
+//         if (!wabaExists) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "WABA does not belong to this Business"
+//             });
+//         }
+
+//         /* 3️⃣ Verify Phone under WABA */
+//         const phoneList = await axios.get(
+//             `${META_GRAPH_URL}/${wabaId}/phone_numbers`,
+//             { headers: { Authorization: `Bearer ${accessToken}` } }
+//         );
+//         console.log("phoneList", phoneList);
+
+//         const phoneExists = phoneList.data.data.find(
+//             p => p.id === phoneNumberId
+//         );
+
+//         console.log("phoneExists", phoneExists);
+
+//         if (!phoneExists) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Phone Number does not belong to this WABA"
+//             });
+//         }
+
+//         /* 4️⃣ Save Connection */
+//         await User.findByIdAndUpdate(req.user._id, {
+//             whatsappWaba: {
+//                 isConnected: true,
+//                 businessAccountId,
+//                 wabaId,
+//                 phoneNumberId,
+//                 phoneNumber: phoneExists.display_phone_number,
+//                 accessToken
+//             }
+//         });
+
+//         res.json({
+//             success: true,
+//             message: "WABA Connected Successfully"
+//         });
+
+//     } catch (err) {
+//         res.status(400).json({
+//             success: false,
+//             error: err.response?.data || err.message
+//         });
+//     }
+// };
+
+exports.connectWhatsApp = async (req, res) => {
     try {
-        const { code, state: userId } = req.query;
+        const {
+            accessToken,
+            businessAccountId,
+            wabaId,
+            phoneNumberId
+        } = req.body;
 
-        // Exchange code for access token
-        const tokenRes = await axios.get(
-            `${META_GRAPH_URL}/oauth/access_token`,
-            {
-                params: {
-                    client_id: META_APP_ID,
-                    client_secret: META_APP_SECRET,
-                    redirect_uri: META_WHATSAPP_REDIRECT_URI,
-                    code,
-                },
-            }
+        /* ================================
+           1️⃣ VERIFY BUSINESS
+        =================================*/
+        let businessRes;
+        try {
+            businessRes = await axios.get(
+                `${META_GRAPH_URL}/${businessAccountId}`,
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+        } catch (error) {
+            const parsed = parseMetaError(error, "Business Account");
+            return res.status(400).json({
+                status: "error",
+                // step: parsed.step,
+                message: parsed.message,
+                // error: parsed.meta
+            });
+        }
+
+        /* ================================
+           2️⃣ VERIFY WABA UNDER BUSINESS
+        =================================*/
+        let wabaList;
+        try {
+            wabaList = await axios.get(
+                `${META_GRAPH_URL}/${businessAccountId}/owned_whatsapp_business_accounts`,
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+        } catch (error) {
+            const parsed = parseMetaError(error, "WABA fetch");
+            return res.status(400).json({
+                status: "error",
+                // step: parsed.step,
+                message: parsed.message,
+                // error: parsed.meta
+            });
+        }
+
+        const wabaExists = wabaList.data.data.find(
+            w => w.id === wabaId
         );
 
-        console.log("tokenRes = " + tokenRes);
+        if (!wabaExists) {
+            return res.status(400).json({
+                status: "error",
+                // step: "WABA Validation",
+                message: "WABA does not belong to this Business Account"
+            });
+        }
 
+        /* ================================
+           3️⃣ VERIFY PHONE UNDER WABA
+        =================================*/
+        let phoneList;
+        try {
+            phoneList = await axios.get(
+                `${META_GRAPH_URL}/${wabaId}/phone_numbers`,
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+        } catch (error) {
+            const parsed = parseMetaError(error, "Phone Numbers fetch");
+            return res.status(400).json({
+                status: "error",
+                // step: parsed.step,
+                message: parsed.message,
+                // error: parsed.meta
+            });
+        }
 
-        const accessToken = tokenRes.data.access_token;
-
-        console.log("accessToken = " + accessToken);
-
-        // Get Business
-        const businessRes = await axios.get(
-            `${META_GRAPH_URL}/me/businesses`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
+        const phoneExists = phoneList.data.data.find(
+            p => p.id === phoneNumberId
         );
 
-        console.log("businessRes = " + businessRes);
+        if (!phoneExists) {
+            return res.status(400).json({
+                status: "error",
+                // step: "Phone Validation",
+                message: "Phone Number does not belong to this WABA"
+            });
+        }
 
-        const businessAccountId = businessRes.data.data[0].id;
-
-        console.log("businessAccountId = " + businessAccountId);
-
-        // Get WABA
-        const wabaRes = await axios.get(
-            `${META_GRAPH_URL}/${businessAccountId}/owned_whatsapp_business_accounts`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-
-        console.log("wabaRes = " + wabaRes);
-
-        const wabaId = wabaRes.data.data[0].id;
-
-        console.log("wabaId = " + wabaId);
-
-        // Get Phone Number ID
-        const phoneRes = await axios.get(
-            `${META_GRAPH_URL}/${wabaId}/phone_numbers`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-
-        console.log("phoneRes = " + phoneRes);
-
-        const phoneNumberId = phoneRes.data.data[0].id;
-        const phoneNumber = phoneRes.data.data[0].display_phone_number;
-        console.log("phoneNumberId = " + phoneNumberId);
-        console.log("phoneNumber = " + phoneNumber);
-
-        // Save to user
-        await User.findByIdAndUpdate(userId, {
+        /* ================================
+           4️⃣ SAVE CONNECTION
+        =================================*/
+        await User.findByIdAndUpdate(req.user._id, {
             whatsappWaba: {
                 isConnected: true,
+                businessAccountId,
                 wabaId,
                 phoneNumberId,
-                phoneNumber, // 👈 VERY IMPORTANT
-                businessAccountId,
-                accessToken,
-            },
+                phoneNumber: phoneExists.display_phone_number,
+                accessToken
+            }
         });
 
-        // res.redirect(`${FRONTEND_URL}/settings/whatsapp?connected=true`);
-        const resultData = {
-            status: 'success',
-            message: 'WhatsApp connected successfully',
-            whatsappWaba: {
-                isConnected: true,
-                wabaId,
-                phoneNumberId,
-                phoneNumber, // 👈 VERY IMPORTANT
-                businessAccountId,
-                accessToken,
-            }
-        };
+        return res.json({
+            status: "success",
+            message: "WABA Connected Successfully"
+        });
 
-        // res.json({ status: 'success', message: 'Microsoft account connected', user });
-
-        return res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Whatsapp Connected</title>
-        <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                text-align: center; 
-                padding-top: 50px; 
-            }
-            .success { color: green; font-size: 18px; margin-bottom: 20px; }
-        </style>
-    </head>
-    <body>
-        <div class="success">Whatsapp account connected Successfully! You can close this window.</div>
-        <script>
-    try {
-        if (window.opener) {
-            window.opener.postMessage(${JSON.stringify(resultData)}, '*');
-        } else {
-            console.warn("No opener window found");
-        }
-    } catch (e) {
-        console.error("postMessage failed", e);
-    }
-    window.close();
-</script>
-
-    </body>
-    </html>
-`);
     } catch (err) {
-        console.error("WhatsApp OAuth Error:", err.response?.data || err);
-        // res.redirect(`${FRONTEND_URL}/settings/whatsapp?error=true`);
-        return res.send(`
-            <script>
-                window.opener.postMessage({ status: 'error', message: 'WhatsApp OAuth failed', error: '${err.response?.data || err.message}' }, '*');
-                window.close();
-            </script>
-        `);
+        return res.status(500).json({
+            status: "error",
+            step: "Server",
+            message: "Internal server error",
+            error: err.message
+        });
+    }
+};
+
+exports.disconnectWhatsApp = async (req, res) => {
+    try {
+        await User.findByIdAndUpdate(req.user._id, {
+            whatsappWaba: {
+                isConnected: false,
+                businessAccountId: null,
+                wabaId: null,
+                phoneNumberId: null,
+                phoneNumber: null,
+                accessToken: null,
+            },
+        });
+        res.json({
+            success: true,
+            message: "WABA Disconnected Successfully",
+        });
+    } catch (err) {
+        res.status(400).json({
+            success: false,
+            error: err.response?.data || err.message,
+        });
     }
 };
 
@@ -237,6 +344,20 @@ exports.getWabaProfile = async (req, res) => {
             displayNameUrl,
             { headers: { Authorization: `Bearer ${accessToken}` } }
         );
+
+        //DisplayName status 
+
+        // const displayNameStatus =
+        //     `${META_GRAPH_URL}/${phoneNumberId}` +
+        //     `?fields=new_display_name,new_name_status`;
+
+        // const { data: displayNameStatusRes } = await axios.get(
+        //     displayNameStatus,
+        //     { headers: { Authorization: `Bearer ${accessToken}` } }
+        // );
+
+        // console.log("displayNameStatusRes", displayNameStatusRes);
+
 
         /* -------------------------------------------------- */
         /* 3️⃣ QUALITY + LIMIT */
@@ -1303,7 +1424,7 @@ exports.sendTextMessage = async (req, res) => {
             console.error("Meta API error status:", error.response.status);
             console.error("Meta API error data:", error.response.data);
 
-            return res.status(error.response.status).json({
+            return res.status(400).json({
                 success: false,
                 message: "Failed to send WhatsApp message",
                 metaError: error.response.data,
@@ -1410,13 +1531,34 @@ exports.sendMessage = async (req, res) => {
                 });
             }
 
+            let uploadBuffer = file.buffer;
+            let uploadMime = file.mimetype;
+            let uploadName = file.originalname;
+
+            // // 🎧 convert if audio
+            // if (type === "audio") {
+            //     const converted = await convertAudioToOgg(
+            //         file.buffer,
+            //         file.originalname
+            //     );
+
+            //     uploadBuffer = converted.buffer;
+            //     uploadMime = converted.mimetype;
+            //     uploadName = converted.filename;
+            // }
+
             const form = new FormData();
             // form.append("file", fs.createReadStream(file.path));
-            form.append("file", file.buffer, {
-                filename: file.originalname,
-                contentType: file.mimetype
+            // form.append("file", file.buffer, {
+            //     filename: file.originalname,
+            //     contentType: file.mimetype
+            // });
+            // form.append("type", file.mimetype);
+            form.append("file", uploadBuffer, {
+                filename: uploadName,
+                contentType: uploadMime
             });
-            form.append("type", file.mimetype);
+            form.append("type", uploadMime);
             form.append("messaging_product", "whatsapp");
 
             const uploadRes = await axios.post(
@@ -1436,9 +1578,12 @@ exports.sendMessage = async (req, res) => {
             s3dataurl = await uploadWhatsAppMediaToS3({
                 userId,
                 messageType: type,
-                buffer: file.buffer,
-                mimeType: file.mimetype,
-                originalName: file.originalname
+                // buffer: file.buffer,
+                // mimeType: file.mimetype,
+                // originalName: file.originalname
+                buffer: uploadBuffer,
+                mimeType: uploadMime,
+                originalName: uploadName
             });
 
             mimeType = file.mimetype;

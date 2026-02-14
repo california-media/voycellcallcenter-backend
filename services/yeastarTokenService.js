@@ -1,3 +1,138 @@
+// const axios = require("axios");
+// const YeastarToken = require("../models/YeastarToken");
+// const YeastarSDKToken = require("../models/YeastarSDKToken");
+// const User = require("../models/userModel");
+// const mongoose = require("mongoose");
+
+
+// exports.getDeviceToken = async (deviceId, type = "pbx") => {
+//     try {
+//         const TokenModel = type === "sdk" ? YeastarSDKToken : YeastarToken;
+//         let tokenDoc = await TokenModel.findOne({ deviceId });
+
+//         // 1. Check validity with a larger buffer (5 minutes)
+//         const buffer = 5 * 60 * 1000;
+//         // if (
+//         //     tokenDoc &&
+//         //     tokenDoc.expires_at &&
+//         //     tokenDoc.expires_at.getTime() - buffer > Date.now()
+//         // ) {
+//         //     // 🔍 Validate token with PBX
+//         //     try {
+//         //         const test = await axios.get(
+//         //             `${tokenDoc.base_url}/extension/list?access_token=${tokenDoc.access_token}`
+//         //         );
+
+//         //         if (test.data?.errcode === 0) {
+//         //             return tokenDoc.access_token; // still valid
+//         //         }
+
+//         //         console.log("⚠️ Token expired on PBX, regenerating...");
+//         //     } catch (err) {
+//         //         console.log("⚠️ Token invalid on PBX, regenerating...");
+//         //     }
+//         // }
+
+//         if (
+//             tokenDoc &&
+//             tokenDoc.expires_at &&
+//             tokenDoc.expires_at.getTime() - buffer > Date.now()
+//         ) {
+//             try {
+//                 const test = await axios.get(
+//                     `${tokenDoc.base_url}/extension/list?access_token=${tokenDoc.access_token}`
+//                 );
+
+//                 // ✅ Token still valid
+//                 if (test.data?.errcode === 0) {
+//                     return tokenDoc.access_token;
+//                 }
+
+//                 // ❌ Token expired
+//                 if (isTokenExpiredResponse(test.data)) {
+//                     console.log("🔑 Token expired (10004) → regenerate");
+//                 } else {
+//                     console.log("⚠️ Extension API failed → regenerate");
+//                 }
+
+//             } catch (err) {
+//                 const code = err?.response?.data?.errcode;
+
+//                 if (code === 10004) {
+//                     console.log("🔑 Token expired from catch → regenerate");
+//                 } else {
+//                     console.log("⚠️ Validation request failed → regenerate");
+//                 }
+//             }
+//         }
+
+//         // 2. Fetch Device Credentials (do this once)
+//         const superAdmins = await User.find({ role: "superadmin" });
+//         let device = null;
+//         const deviceIdStr = deviceId.toString();
+
+//         for (const admin of superAdmins) {
+//             const found = (admin.PBXDevices || []).find(d => d.deviceId.toString() === deviceIdStr);
+//             if (found) { device = found; break; }
+//         }
+//         if (!device) throw new Error("Device credentials not found");
+
+//         // 3. Try Refresh if available
+//         if (tokenDoc?.refresh_token) {
+//             try {
+//                 const refreshRes = await axios.post(`${device.PBX_BASE_URL}/refresh_token`, {
+//                     refresh_token: tokenDoc.refresh_token,
+//                 });
+
+//                 if (refreshRes.data?.access_token) {
+//                     return await updateTokenInDb(TokenModel, deviceId, refreshRes.data, device.PBX_BASE_URL);
+//                 }
+//             } catch (refreshErr) {
+//                 console.log("🔄 Refresh failed, proceeding to full login...");
+//             }
+//         }
+
+//         // 4. Full Login (New Token)
+//         const loginPayload = type === "sdk"
+//             ? { username: device.PBX_SDK_ACCESS_ID, password: device.PBX_SDK_ACCESS_KEY }
+//             : { username: device.PBX_USERNAME, password: device.PBX_PASSWORD };
+
+//         const res = await axios.post(`${device.PBX_BASE_URL}/get_token`, loginPayload, {
+//             headers: {
+//                 "Content-Type": "application/json",
+//                 "User-Agent": device.PBX_USER_AGENT || "Voycell-App"
+//             }
+//         });
+
+//         if (!res.data?.access_token) throw new Error(`${type.toUpperCase()} login failed`);
+
+//         return await updateTokenInDb(TokenModel, deviceId, res.data, device.PBX_BASE_URL);
+
+//     } catch (err) {
+//         console.error(`❌ ${type.toUpperCase()} Token Error:`, err.message);
+//         throw err;
+//     }
+// };
+
+// // Helper to keep DB logic clean
+// async function updateTokenInDb(Model, deviceId, data, baseUrl) {
+//     const expiresAt = new Date(Date.now() + (data.expires_in || 7200) * 1000);
+//     const updated = await Model.findOneAndUpdate(
+//         { deviceId },
+//         {
+//             access_token: data.access_token,
+//             refresh_token: data.refresh_token,
+//             expires_in: data.expires_in || 7200,
+//             expires_at: expiresAt,
+//             // Store base_url here to ensure consistency
+//             base_url: baseUrl
+//         },
+//         { upsert: true, new: true }
+//     );
+//     return updated.access_token;
+// }
+
+
 const axios = require("axios");
 const YeastarToken = require("../models/YeastarToken");
 const YeastarSDKToken = require("../models/YeastarSDKToken");
@@ -5,68 +140,199 @@ const User = require("../models/userModel");
 const mongoose = require("mongoose");
 
 
+/**
+ * Detect Yeastar token expiry response
+ */
+function isTokenExpiredResponse(data) {
+    return data?.errcode === 10004;
+}
+
+/**
+ * Main Token Function
+ * Works for PBX + SDK
+ */
 exports.getDeviceToken = async (deviceId, type = "pbx") => {
     try {
-        const TokenModel = type === "sdk" ? YeastarSDKToken : YeastarToken;
+        const TokenModel =
+            type === "sdk" ? YeastarSDKToken : YeastarToken;
+
         let tokenDoc = await TokenModel.findOne({ deviceId });
 
-        // 1. Check validity with a larger buffer (5 minutes)
+        // ⏱ Expiry buffer (5 minutes safety)
         const buffer = 5 * 60 * 1000;
-        if (tokenDoc && tokenDoc.expires_at && (tokenDoc.expires_at.getTime() - buffer > Date.now())) {
-            return tokenDoc.access_token;
+
+        /**
+         * ─────────────────────────────
+         * 1️⃣ Check DB Expiry + Validate
+         * ─────────────────────────────
+         */
+        if (
+            tokenDoc &&
+            tokenDoc.expires_at &&
+            tokenDoc.expires_at.getTime() - buffer > Date.now()
+        ) {
+            try {
+                console.log("🔍 Validating existing token...");
+
+                const test = await axios.get(
+                    `${tokenDoc.base_url}/extension/list?access_token=${tokenDoc.access_token}`
+                );
+
+                if (test.data?.errcode === 0) {
+                    console.log("✅ Token still valid");
+                    return tokenDoc.access_token;
+                }
+
+                if (isTokenExpiredResponse(test.data)) {
+                    console.log("🔑 Token expired (10004)");
+                } else {
+                    console.log("⚠️ Token invalid, regenerating...");
+                }
+
+            } catch (err) {
+                const code = err?.response?.data?.errcode;
+
+                if (code === 10004) {
+                    console.log("🔑 Token expired from catch");
+                } else {
+                    console.log("⚠️ Validation API failed");
+                }
+            }
         }
 
-        // 2. Fetch Device Credentials (do this once)
-        const superAdmins = await User.find({ role: "superadmin" });
+        /**
+         * ─────────────────────────────
+         * 2️⃣ Fetch Device Credentials
+         * ─────────────────────────────
+         */
+        const superAdmins = await User.find({
+            role: "superadmin",
+        });
+
         let device = null;
         const deviceIdStr = deviceId.toString();
 
         for (const admin of superAdmins) {
-            const found = (admin.PBXDevices || []).find(d => d.deviceId.toString() === deviceIdStr);
-            if (found) { device = found; break; }
+            const found = (admin.PBXDevices || []).find(
+                (d) => d.deviceId.toString() === deviceIdStr
+            );
+            if (found) {
+                device = found;
+                break;
+            }
         }
-        if (!device) throw new Error("Device credentials not found");
 
-        // 3. Try Refresh if available
+        if (!device) {
+            throw new Error("Device credentials not found");
+        }
+
+        /**
+         * ─────────────────────────────
+         * 3️⃣ Try Refresh Token
+         * ─────────────────────────────
+         */
         if (tokenDoc?.refresh_token) {
             try {
-                const refreshRes = await axios.post(`${device.PBX_BASE_URL}/refresh_token`, {
-                    refresh_token: tokenDoc.refresh_token,
-                });
+                console.log("🔄 Trying refresh token...");
+
+                const refreshRes = await axios.post(
+                    `${device.PBX_BASE_URL}/refresh_token`,
+                    {
+                        refresh_token: tokenDoc.refresh_token,
+                    }
+                );
 
                 if (refreshRes.data?.access_token) {
-                    return await updateTokenInDb(TokenModel, deviceId, refreshRes.data, device.PBX_BASE_URL);
+                    console.log("✅ Token refreshed");
+
+                    return await updateTokenInDb(
+                        TokenModel,
+                        deviceId,
+                        refreshRes.data,
+                        device.PBX_BASE_URL
+                    );
                 }
+
+                console.log(
+                    "⚠️ Refresh response invalid → Full login"
+                );
+
             } catch (refreshErr) {
-                console.log("🔄 Refresh failed, proceeding to full login...");
+                console.log(
+                    "❌ Refresh failed → Full login"
+                );
             }
         }
 
-        // 4. Full Login (New Token)
-        const loginPayload = type === "sdk"
-            ? { username: device.PBX_SDK_ACCESS_ID, password: device.PBX_SDK_ACCESS_KEY }
-            : { username: device.PBX_USERNAME, password: device.PBX_PASSWORD };
+        /**
+         * ─────────────────────────────
+         * 4️⃣ Full Login (New Token)
+         * ─────────────────────────────
+         */
+        console.log("🔐 Generating new token via login...");
 
-        const res = await axios.post(`${device.PBX_BASE_URL}/get_token`, loginPayload, {
-            headers: {
-                "Content-Type": "application/json",
-                "User-Agent": device.PBX_USER_AGENT || "Voycell-App"
+        const loginPayload =
+            type === "sdk"
+                ? {
+                    username: device.PBX_SDK_ACCESS_ID,
+                    password: device.PBX_SDK_ACCESS_KEY,
+                }
+                : {
+                    username: device.PBX_USERNAME,
+                    password: device.PBX_PASSWORD,
+                };
+
+        const res = await axios.post(
+            `${device.PBX_BASE_URL}/get_token`,
+            loginPayload,
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                    "User-Agent":
+                        device.PBX_USER_AGENT || "Voycell-App",
+                },
             }
-        });
+        );
 
-        if (!res.data?.access_token) throw new Error(`${type.toUpperCase()} login failed`);
+        if (!res.data?.access_token) {
+            throw new Error(
+                `${type.toUpperCase()} login failed`
+            );
+        }
 
-        return await updateTokenInDb(TokenModel, deviceId, res.data, device.PBX_BASE_URL);
+        console.log("✅ New token generated");
+
+        return await updateTokenInDb(
+            TokenModel,
+            deviceId,
+            res.data,
+            device.PBX_BASE_URL
+        );
 
     } catch (err) {
-        console.error(`❌ ${type.toUpperCase()} Token Error:`, err.message);
+        console.error(
+            `❌ ${type.toUpperCase()} Token Error:`,
+            err.response?.data || err.message
+        );
         throw err;
     }
 };
 
-// Helper to keep DB logic clean
-async function updateTokenInDb(Model, deviceId, data, baseUrl) {
-    const expiresAt = new Date(Date.now() + (data.expires_in || 7200) * 1000);
+/**
+ * ─────────────────────────────
+ * Helper → Store Token in DB
+ * ─────────────────────────────
+ */
+async function updateTokenInDb(
+    Model,
+    deviceId,
+    data,
+    baseUrl
+) {
+    const expiresAt = new Date(
+        Date.now() + (data.expires_in || 7200) * 1000
+    );
+
     const updated = await Model.findOneAndUpdate(
         { deviceId },
         {
@@ -74,243 +340,13 @@ async function updateTokenInDb(Model, deviceId, data, baseUrl) {
             refresh_token: data.refresh_token,
             expires_in: data.expires_in || 7200,
             expires_at: expiresAt,
-            // Store base_url here to ensure consistency
-            base_url: baseUrl
+            base_url: baseUrl,
         },
-        { upsert: true, new: true }
+        {
+            upsert: true,
+            new: true,
+        }
     );
+
     return updated.access_token;
 }
-
-
-// exports.getDeviceToken = async (deviceId, type = "pbx") => {
-//     try {
-//         // 1️⃣ Select token model
-//         const TokenModel =
-//             type === "sdk" ? YeastarSDKToken : YeastarToken;
-
-//         // 2️⃣ Check existing token in DB first
-//         let tokenDoc = await TokenModel.findOne({ deviceId });
-
-//         // ✅ If access token valid → return
-//         const buffer = 60 * 1000; // 1 min safety
-
-//         if (
-//             tokenDoc &&
-//             tokenDoc.expires_at.getTime() - buffer > Date.now()
-//         ) {
-//             return tokenDoc.access_token;
-//         }
-
-//         // =====================================================
-//         // 3️⃣ If expired → Try refresh token
-//         // =====================================================
-//         if (tokenDoc?.refresh_token) {
-//             console.log("hello");
-//             try {
-
-//                 // 🔍 Always fetch device again for base_url
-//                 const superAdmins = await User.find({
-//                     role: "superadmin",
-//                 });
-
-//                 if (!superAdmins.length)
-//                     throw new Error("No SuperAdmins found");
-
-//                 const deviceIdStr = deviceId.toString();
-//                 let device = null;
-
-//                 for (const admin of superAdmins) {
-//                     const found = (admin.PBXDevices || []).find(
-//                         (d) => d.deviceId.toString() === deviceIdStr
-//                     );
-
-//                     if (found) {
-//                         device = found;
-//                         break;
-//                     }
-//                 }
-
-//                 if (!device)
-//                     throw new Error("Device credentials not found");
-
-//                 // 🔑 Use device base URL — NOT tokenDoc
-//                 const refreshUrl = `${device.PBX_BASE_URL}/refresh_token`;
-
-//                 console.log("🔄 Refresh URL:", refreshUrl);
-
-//                 const refreshRes = await axios.post(
-//                     refreshUrl,
-//                     {
-//                         refresh_token: tokenDoc.refresh_token,
-//                     },
-//                     {
-//                         headers: {
-//                             "Content-Type": "application/json",
-//                         },
-//                     }
-//                 );
-
-//                 if (refreshRes.data?.access_token) {
-//                     const expiresAt = new Date(
-//                         Date.now() +
-//                         (refreshRes.data.expires_in || 7200) * 1000
-//                     );
-
-//                     await TokenModel.findOneAndUpdate(
-//                         { deviceId },
-//                         {
-//                             base_url: device.PBX_BASE_URL,
-//                             access_token: refreshRes.data.access_token,
-//                             refresh_token:
-//                                 refreshRes.data.refresh_token ||
-//                                 tokenDoc.refresh_token,
-//                             expires_in:
-//                                 refreshRes.data.expires_in || 7200,
-//                             expires_at: expiresAt,
-//                         },
-//                         { upsert: true }
-//                     );
-
-//                     return refreshRes.data.access_token;
-//                 }
-//             } catch (refreshErr) {
-//                 console.log(
-//                     "⚠️ Refresh token failed, generating new..."
-//                 );
-//             }
-//         }
-
-//         // =====================================================
-//         // 4️⃣ Need PBX credentials → Find device in ALL superadmins
-//         // =====================================================
-//         // const superAdmins = await User.find({
-//         //   role: "superadmin",
-//         //   "PBXDevices.deviceId": deviceId,
-//         // });
-
-//         // if (!superAdmins.length)
-//         //   throw new Error("Device not found in any SuperAdmin");
-
-//         // let device = null;
-
-//         // for (const admin of superAdmins) {
-//         //   const found = admin.PBXDevices.find(
-//         //     (d) =>
-//         //       d.deviceId.toString() === deviceId.toString()
-//         //   );
-//         //   if (found) {
-//         //     device = found;
-//         //     break;
-//         //   }
-//         // }
-
-//         // if (!device)
-//         //   throw new Error("Device credentials not found");
-//         const superAdmins = await User.find({
-//             role: "superadmin",
-//         });
-
-//         if (!superAdmins.length)
-//             throw new Error("No SuperAdmins found");
-
-//         // Convert deviceId to string once
-//         const deviceIdStr = deviceId.toString();
-
-//         let device = null;
-
-//         for (const admin of superAdmins) {
-//             const found = (admin.PBXDevices || []).find(
-//                 (d) => d.deviceId.toString() === deviceIdStr
-//             );
-
-//             if (found) {
-//                 device = found;
-//                 break;
-//             }
-//         }
-
-//         if (!device)
-//             throw new Error("Device credentials not found");
-
-
-//         // =====================================================
-//         // 5️⃣ Prepare login payload
-//         // =====================================================
-//         let loginPayload;
-
-//         if (type === "sdk") {
-//             loginPayload = {
-//                 username: device.PBX_SDK_ACCESS_ID,
-//                 password: device.PBX_SDK_ACCESS_KEY,
-//             };
-//         } else {
-//             loginPayload = {
-//                 username: device.PBX_USERNAME,
-//                 password: device.PBX_PASSWORD,
-//             };
-//         }
-
-//         // =====================================================
-//         // 6️⃣ Generate NEW token
-//         // =====================================================
-//         const res = await axios.post(
-//             `${device.PBX_BASE_URL}/get_token`,
-//             loginPayload,
-//             {
-//                 headers: {
-//                     "Content-Type": "application/json",
-//                     "User-Agent":
-//                         device.PBX_USER_AGENT || "Voycell-App",
-//                 },
-//                 timeout: 10000,
-//             }
-//         );
-
-//         if (!res.data?.access_token) {
-//             throw new Error(
-//                 `${type.toUpperCase()} token generation failed`
-//             );
-//         }
-
-//         const data = res.data;
-
-//         const expiresAt = new Date(
-//             Date.now() + (data.expires_in || 7200) * 1000
-//         );
-
-//         // 7️⃣ Delete old token
-//         // await TokenModel.deleteMany({ deviceId });
-
-//         // // 8️⃣ Store new token
-//         // await TokenModel.create({
-//         //     deviceId,
-//         //     base_url: device.PBX_BASE_URL, // needed for refresh
-//         //     access_token: data.access_token,
-//         //     refresh_token: data.refresh_token,
-//         //     expires_in: data.expires_in || 7200,
-//         //     expires_at: expiresAt,
-//         // });
-
-//         await TokenModel.findOneAndUpdate(
-//             { deviceId },
-//             {
-//                 deviceId,
-//                 // base_url: device.PBX_BASE_URL,
-//                 access_token: data.access_token,
-//                 refresh_token: data.refresh_token,
-//                 expires_in: data.expires_in || 7200,
-//                 expires_at: expiresAt,
-//             },
-//             { upsert: true, new: true }
-//         );
-
-//         return data.access_token;
-//     } catch (err) {
-//         console.error(
-//             `❌ ${type.toUpperCase()} Token Error:`,
-//             err?.response?.data || err.message
-//         );
-//         throw err;
-//     }
-// };

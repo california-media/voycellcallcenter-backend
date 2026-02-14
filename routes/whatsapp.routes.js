@@ -6,7 +6,8 @@ const multer = require("multer");
 
 const {
     connectWhatsApp,
-    whatsappCallback,
+    disconnectWhatsApp,
+    // whatsappCallback,
     webhookVerify,
     webhookReceive,
     sendTextMessage,
@@ -24,8 +25,9 @@ const {
 const { createTemplate, getWabaTemplates, deleteWabaTemplate, getApprovedTemplates, getTemplateById } = require("../controllers/whatsappTemplateController");
 const upload = multer();
 
-router.get("/connect", checkForAuthentication(), connectWhatsApp);
-router.get("/callback", whatsappCallback);
+router.post("/connect", checkForAuthentication(), connectWhatsApp);
+router.post("/disconnect", checkForAuthentication(), disconnectWhatsApp);
+// router.get("/callback", whatsappCallback);
 
 router.get("/profile", checkForAuthentication(), getWabaProfile);
 

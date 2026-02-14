@@ -1,5 +1,6 @@
 const User = require("../models/userModel");
 const Contact = require("../models/contactModel");
+const Lead = require("../models/leadModel");
 
 const deleteUser = async (req, res) => {
   try {
@@ -41,12 +42,49 @@ const deleteUser = async (req, res) => {
     }
 
     // Step 3: Handle normal user case
+    // if (user.role === "user") {
+    //   const userToDeactivate = await User.findByIdAndUpdate(userId).select("createdByWhichCompanyAdmin");
+
+    //   // await User.findByIdAndUpdate(userId, { accountStatus: "deactivated" });
+
+
+    //   return res.status(200).json({
+    //     status: "success",
+    //     message: "Agent account deactivated",
+    //   });
+    // }
+
+    // Step 3: Handle normal user case
     if (user.role === "user") {
-      await User.findByIdAndUpdate(userId, { accountStatus: "deactivated" });
+
+      // 1️⃣ Deactivate user
+      await User.findByIdAndUpdate(userId, {
+        accountStatus: "deactivated",
+      });
+
+      // 2️⃣ Get Company Admin ID
+      const companyAdminId = user.createdByWhichCompanyAdmin;
+
+      // Safety check
+      if (companyAdminId) {
+
+        // 3️⃣ Reassign Contacts
+        await Contact.updateMany(
+          { createdBy: userId },
+          { createdBy: companyAdminId }
+        );
+
+        // 4️⃣ Reassign Leads
+        await Lead.updateMany(
+          { createdBy: userId },
+          { createdBy: companyAdminId }
+        );
+      }
 
       return res.status(200).json({
         status: "success",
-        message: "Agent account deactivated",
+        message:
+          "Agent account deactivated and data reassigned to company admin",
       });
     }
 
@@ -104,12 +142,44 @@ const suspendUser = async (req, res) => {
     }
 
     // Step 3: Handle normal user case
+    // if (user.role === "user") {
+    //   await User.findByIdAndUpdate(userId, { accountStatus: "suspended" });
+
+    //   return res.status(200).json({
+    //     status: "success",
+    //     message: "Agent account suspended",
+    //   });
+    // }
+
     if (user.role === "user") {
-      await User.findByIdAndUpdate(userId, { accountStatus: "suspended" });
+
+      // 1️⃣ Suspend user
+      await User.findByIdAndUpdate(userId, {
+        accountStatus: "suspended",
+      });
+
+      // 2️⃣ Get Company Admin ID
+      const companyAdminId = user.createdByWhichCompanyAdmin;
+
+      if (companyAdminId) {
+
+        // 3️⃣ Reassign Contacts
+        await Contact.updateMany(
+          { createdBy: userId },
+          { createdBy: companyAdminId }
+        );
+
+        // 4️⃣ Reassign Leads
+        await Lead.updateMany(
+          { createdBy: userId },
+          { createdBy: companyAdminId }
+        );
+      }
 
       return res.status(200).json({
         status: "success",
-        message: "Agent account suspended",
+        message:
+          "Agent account suspended and data reassigned to company admin",
       });
     }
 

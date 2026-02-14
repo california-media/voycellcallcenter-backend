@@ -198,49 +198,49 @@ const signupWithEmail = async (req, res) => {
       }
 
       // // === PART 3: Yeastar Extension Creation ===
-      try {
-        // Start extension creation after user is verified
-        const startExt = parseInt(process.env.EXTENSION_START || "1001", 10);
-        const maxAttempts = parseInt(
-          process.env.EXTENSION_MAX_ATTEMPTS || "500",
-          10
-        );
+      // try {
+      //   // Start extension creation after user is verified
+      //   const startExt = parseInt(process.env.EXTENSION_START || "1001", 10);
+      //   const maxAttempts = parseInt(
+      //     process.env.EXTENSION_MAX_ATTEMPTS || "500",
+      //     10
+      //   );
 
-        const nameForExtension =
-          `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email;
+      //   const nameForExtension =
+      //     `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email;
 
-        // Attempt to create Yeastar extension
-        const { extensionNumber, secret, result } =
-          await createYeastarExtensionForUser(user);
+      //   // Attempt to create Yeastar extension
+      //   const { extensionNumber, secret, result } =
+      //     await createYeastarExtensionForUser(user);
 
-        // If response not OK, throw manually
-        if (!extensionNumber || !result || result.errcode !== 0) {
-          throw new Error(
-            result?.errmsg || "Yeastar extension creation failed"
-          );
-        }
+      //   // If response not OK, throw manually
+      //   if (!extensionNumber || !result || result.errcode !== 0) {
+      //     throw new Error(
+      //       result?.errmsg || "Yeastar extension creation failed"
+      //     );
+      //   }
 
-        // ✅ Save extension details in user
-        user.extensionNumber = extensionNumber;
-        user.yeastarExtensionId = result?.data?.id || result?.id || null;
-        user.sipSecret = secret;
-        await user.save();
+      //   // ✅ Save extension details in user
+      //   user.extensionNumber = extensionNumber;
+      //   user.yeastarExtensionId = result?.data?.id || result?.id || null;
+      //   user.sipSecret = secret;
+      //   await user.save();
 
-        // ✅ Send post-verification demo email
+      //   // ✅ Send post-verification demo email
 
 
-        console.log("✅ Yeastar extension created:", extensionNumber);
-      } catch (err) {
-        console.error("❌ Yeastar extension creation failed:", err.message);
+      //   console.log("✅ Yeastar extension created:", extensionNumber);
+      // } catch (err) {
+      //   console.error("❌ Yeastar extension creation failed:", err.message);
 
-        // Cleanup: delete the user since extension provisioning failed
-        await User.findByIdAndDelete(user._id);
+      //   // Cleanup: delete the user since extension provisioning failed
+      //   await User.findByIdAndDelete(user._id);
 
-        return res.status(500).json({
-          status: "error",
-          message: `Signup failed: Yeastar extension could not be created (${err.message})`,
-        });
-      }
+      //   return res.status(500).json({
+      //     status: "error",
+      //     message: `Signup failed: Yeastar extension could not be created (${err.message})`,
+      //   });
+      // }
 
       // Setup initial plan after email verification (skip for superadmin)
       if (user.role !== "superadmin") {

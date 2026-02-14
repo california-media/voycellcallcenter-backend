@@ -1,19 +1,17 @@
 // controllers/scriptController.js (or your existing file)
 const crypto = require("crypto");
 const ScriptToken = require("../models/ScriptToken");
-const YeasterToken = require("../models/YeastarToken");
-const YeasterSdkToken = require("../models/YeastarSDKToken");
 const User = require("../models/userModel");
-
-const FRONTEND_BASE =
-  process.env.FRONTEND_BASE || "https://app.voycell.com";
 
 exports.generateScriptTag = async (req, res) => {
   try {
     const userId = req.user._id;
     const user = await User.findById(userId);
 
-    if (!user || !user.yeastarDetails.PBX_EXTENSION_NUMBER) {
+    console.log("Generating script tag for user:", userId);
+    console.log("User Yeastar Details:", user.PBXDetails);
+
+    if (!user || !user.PBXDetails.PBX_EXTENSION_NUMBER) {
       return res.status(400).json({ error: "User or extension not found" });
     }
 
@@ -24,7 +22,9 @@ exports.generateScriptTag = async (req, res) => {
       });
     }
 
-    const pbxDeviceId = user.yeastarDetails.PBX_DEVICE_ID || null;
+    const pbxDeviceId = user.PBXDetails.assignedDeviceId || null;
+
+    console.log("PBX Device ID:", pbxDeviceId);
 
     // === 1️⃣ Normalize allowedOrigin (remove trailing slash + lowercase) ===
     // const allowedOrigin = (req.body.allowedOrigin || "")
@@ -109,7 +109,8 @@ exports.generateScriptTag = async (req, res) => {
 
       // ✅ Always sync extension number
       const updatePayload = {
-        extensionNumber: user.yeastarDetails.PBX_EXTENSION_NUMBER,
+        extensionNumber: user.PBXDetails.PBX_EXTENSION_NUMBER,
+        assignedDeviceId: pbxDeviceId,
         updatedAt: new Date(),
       };
 
@@ -149,44 +150,14 @@ exports.generateScriptTag = async (req, res) => {
       await ScriptToken.create({
         token,
         userId,
-        extensionNumber: user.yeastarDetails.PBX_EXTENSION_NUMBER,
+        extensionNumber: user.PBXDetails.PBX_EXTENSION_NUMBER,
+        assignedDeviceId: pbxDeviceId,
         allowedOriginPopup: allowedOriginPopup, // ✅ array
         allowedOriginContactForm: allowedOriginContactForm, // ✅ array
         restrictedUrls: restrictedUrls,  // 🆕 array
         fieldName: fieldName || "phone"
       });
     }
-
-    // let scriptUrl;
-
-    // // === 6️⃣ Build script URL (no .js) ===
-    // scriptUrl = `${FRONTEND_BASE.replace(
-    //   /\/+$/,
-    //   ""
-    // )}/voycell_callback/${token}`;
-
-    // if (fieldName) {
-    //   scriptUrl = `${FRONTEND_BASE.replace(
-    //     /\/+$/,
-    //     ""
-    //   )}/voycell_callback/${token}/${fieldName}`;
-    // }
-
-    //     const loaderUrl = "https://d1zr8dznwp2wv9.cloudfront.net/voycell-loader.js";
-
-    //     let configScript = `
-    // <script>
-    //   window.VOYCELL_TOKEN = "${token}";
-    //   ${fieldName ? `window.VOYCELL_FIELD_NAME = "${fieldName}";` : ""}
-    // </script>
-    // `;
-
-    //     let loaderScript = `
-    // <script src="${loaderUrl}" async defer></script>
-    // `;
-
-    //     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    //     return res.status(200).send(configScript + loaderScript);
 
     const loaderUrl = "https://d3dt131388gl2h.cloudfront.net/voycell-loader.js";
 
@@ -200,13 +171,9 @@ exports.generateScriptTag = async (req, res) => {
 </script>
 `;
 
+    // === 7️⃣ Return <script> tag ===
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(scriptTag);
-
-
-    // === 7️⃣ Return <script> tag ===
-    // res.setHeader("Content-Type", "text/html; charset=utf-8");
-    // return res.status(200).send(`<script src="${scriptUrl}"></script>`);
   } catch (err) {
     console.error("generateScriptTag Error:", err);
     return res.status(500).json({ error: "Server Error" });

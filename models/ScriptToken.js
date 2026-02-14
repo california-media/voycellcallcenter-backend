@@ -5,6 +5,10 @@ const scriptTokenSchema = new mongoose.Schema({
   token: { type: String, unique: true, required: true },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   extensionNumber: { type: String, required: true },
+  assignedDeviceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null,
+  },
   createdAt: { type: Date, default: Date.now },
   // allowedOrigin: { type: String, default: "" }, // e.g. "https://example.com"
   allowedOriginPopup: {

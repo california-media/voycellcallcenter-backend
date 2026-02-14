@@ -201,6 +201,35 @@ const resolveDynamicParams = (
 /* ──────────────────────────────────────────────
    🔧 HELPER — Build Components
 ────────────────────────────────────────────── */
+// const buildTemplateComponents = (
+//     template,
+//     params
+// ) => {
+
+//     const components = [];
+
+//     const body =
+//         template.components.find(
+//             c => c.type === "BODY"
+//         );
+
+//     if (body) {
+
+//         components.push({
+//             type: "body",
+//             parameters: (params.body || []).map(
+//                 t => ({
+//                     type: "text",
+//                     text: t
+//                 })
+//             )
+//         });
+
+//     }
+
+//     return components;
+// };
+
 const buildTemplateComponents = (
     template,
     params
@@ -208,6 +237,65 @@ const buildTemplateComponents = (
 
     const components = [];
 
+    /* ===== HEADER ===== */
+    const header =
+        template.components.find(
+            c => c.type === "HEADER"
+        );
+
+    if (header?.format === "IMAGE" &&
+        header.media?.s3Url) {
+
+        components.push({
+            type: "header",
+            parameters: [{
+                type: "image",
+                image: {
+                    link: header.media.s3Url
+                }
+            }]
+        });
+    }
+
+    if(header?.format === "TEXT" && header.text){
+
+        components.push({
+            type: "header",
+            parameters: [{
+                type: "text",
+                text: header.text
+            }]
+        });
+    }
+
+    if(header?.format === "VIDEO" && header.media?.s3Url){
+
+        components.push({
+            type: "header",
+            parameters: [{
+                type: "video",
+                video: {
+                    link: header.media.s3Url
+                }
+            }]
+        });
+    }
+
+    if(header?.format === "DOCUMENT" && header.media?.s3Url) {
+
+        components.push({
+            type: "header",
+            parameters: [{
+                type: "document",
+                document: {
+                    link: header.media.s3Url,
+                    filename: header.media.fileName || "document"
+                }
+            }]
+        });
+    }
+
+    /* ===== BODY ===== */
     const body =
         template.components.find(
             c => c.type === "BODY"
@@ -217,18 +305,18 @@ const buildTemplateComponents = (
 
         components.push({
             type: "body",
-            parameters: (params.body || []).map(
-                t => ({
+            parameters:
+                (params.body || []).map(t => ({
                     type: "text",
                     text: t
-                })
-            )
+                }))
         });
-
     }
 
     return components;
 };
+
+
 
 /* ──────────────────────────────────────────────
    🔧 HELPER — Apply Dynamic Params
