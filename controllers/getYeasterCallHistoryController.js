@@ -13,6 +13,7 @@ const { zohoAfterCallSync } = require("../services/zohoAfterCallSync.service");
 const { createZoomMeeting } = require("../utils/zoomCalendar");
 const { createGoogleMeetEvent } = require("../utils/googleCalendar");
 const incomingcallConnection = require("../models/incomingcallConnection");
+const { parsePhoneNumberFromString } = require("libphonenumber-js");
 
 //show all calls of number agent and company admin calls, show proper agent ya company admin name in call,extention is change so call is not show
 
@@ -41,6 +42,80 @@ function normalizeNumber(number) {
     .replace(/\s+/g, "") // remove spaces
     .replace(/^\+/, "") // remove leading +
     .replace(/\D/g, ""); // remove all non-digits
+}
+
+// ======================================================
+// 📞 Extract countryCode + number (Global support)
+// ======================================================
+function extractNumberDetails(rawNumber) {
+
+  if (!rawNumber) return null;
+
+  const parsed = parsePhoneNumberFromString("+" + rawNumber);
+
+  // If parsing fails → fallback last 10 digits
+  if (!parsed) {
+    return {
+      countryCode: null,
+      number: rawNumber.slice(-10),
+    };
+  }
+
+  return {
+    countryCode: parsed.countryCallingCode,
+    number: parsed.nationalNumber,
+  };
+}
+
+// ======================================================
+// 🔍 Find Contact / Lead (Flexible match)
+// ======================================================
+async function findRecord(details, userId) {
+
+  if (!details?.number) return null;
+
+  // 1️⃣ Full match (country + number)
+  let contact = await Contact.findOne({
+    phoneNumbers: {
+      $elemMatch: {
+        countryCode: details.countryCode,
+        number: details.number,
+      },
+    },
+    createdBy: userId,
+  });
+
+  let lead = null;
+
+  if (!contact) {
+    lead = await Lead.findOne({
+      phoneNumbers: {
+        $elemMatch: {
+          countryCode: details.countryCode,
+          number: details.number,
+        },
+      },
+      createdBy: userId,
+    });
+  }
+
+  // 2️⃣ If not found → match only number
+  if (!contact && !lead) {
+
+    contact = await Contact.findOne({
+      "phoneNumbers.number": details.number,
+      createdBy: userId,
+    });
+
+    if (!contact) {
+      lead = await Lead.findOne({
+        "phoneNumbers.number": details.number,
+        createdBy: userId,
+      });
+    }
+  }
+
+  return contact || lead || null;
 }
 
 exports.fetchAndStoreCallHistory = async (req, res) => {
@@ -112,6 +187,21 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
       const from_number = normalizeNumber(call.call_from_number);
       const to_number = normalizeNumber(call.call_to_number);
 
+      // ==========================================
+      // 📞 Parse FROM & TO numbers
+      // ==========================================
+      const fromDetails = extractNumberDetails(from_number);
+      const toDetails = extractNumberDetails(to_number);
+
+      console.log("FROM Parsed:", fromDetails);
+      console.log("TO Parsed:", toDetails);
+
+      // ==========================================
+      // 🔍 Find matching records
+      // ==========================================
+      const fromRecord = await findRecord(fromDetails, userId);
+      const toRecord = await findRecord(toDetails, userId);
+
       console.log(from_number, to_number);
 
       console.log(call.time);
@@ -144,6 +234,50 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         disposition_code: call.reason,
         trunk: call.dst_trunk,
       });
+
+      // ==========================================
+      // 📝 Prepare Activity
+      // ==========================================
+      const baseActivity = {
+        action: "Call activity",
+        type: "call",
+        title:
+          call.call_type === "Outbound"
+            ? "Outgoing Call"
+            : "Incoming Call",
+        description: `Call ${call.disposition} | Duration: ${call.duration}s`,
+        timestamp: dubaiFormatted,
+      };
+
+      // ==========================================
+      // 💾 Store FROM activity
+      // ==========================================
+      if (fromRecord) {
+
+        fromRecord.activities.push({
+          ...baseActivity,
+          description: `Call with ${to_number} | ${call.disposition}`,
+        });
+
+        await fromRecord.save();
+
+        console.log("FROM activity stored");
+      }
+
+      // ==========================================
+      // 💾 Store TO activity
+      // ==========================================
+      if (toRecord) {
+
+        toRecord.activities.push({
+          ...baseActivity,
+          description: `Call with ${from_number} | ${call.disposition}`,
+        });
+
+        await toRecord.save();
+
+        console.log("TO activity stored");
+      }
 
       inserted++;
     }
@@ -1406,10 +1540,20 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       targetDoc.status = status;
     }
 
-    if (firstname && lastname) {
+
+    if (firstname) {
       targetDoc.firstname = firstname;
+    }
+
+    if (lastname) {
       targetDoc.lastname = lastname;
     }
+
+    // if (firstname && lastname) {
+    //   targetDoc.firstname = firstname;
+    //   targetDoc.lastname = lastname;
+    // }
+
 
     // ✅ 5. ADD NOTE AS TASK
     if (note) {

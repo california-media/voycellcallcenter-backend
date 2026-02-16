@@ -13,6 +13,7 @@ const { downloadMetaMedia } = require("../services/metaMedia");
 const { uploadWhatsAppMediaToS3, uploadWhatsAppMediaProfileToS3 } = require("../utils/uploadWhatsAppMedia");
 const { createCampaignSchedule } = require("../services/awsScheduler");
 const dotenv = require("dotenv");
+const { parsePhoneNumberFromString } = require("libphonenumber-js");
 dotenv.config();
 
 const {
@@ -712,40 +713,59 @@ exports.updateWabaProfile = async (req, res) => {
 exports.refreshWabaToken = async (req, res) => {
     try {
         const userId = req.user._id;
+        const access_token_waba = req.body.access_token_waba;
 
         const user = await User.findById(userId);
 
-        const currentToken = user.whatsappWaba.accessToken;
-
-        /* -------- TOKEN EXCHANGE -------- */
-
-        const url = `${META_GRAPH_URL}/oauth/access_token`;
-
-        const { data } = await axios.get(url, {
-            params: {
-                grant_type: "fb_exchange_token",
-                client_id: process.env.META_APP_ID,
-                client_secret: process.env.META_APP_SECRET,
-                fb_exchange_token: currentToken,
-            },
-        });
+        const wabaId = user.whatsappWaba.wabaId;
+        const businessAccountId = user.whatsappWaba.businessAccountId;
 
         /* -------- SAVE NEW TOKEN -------- */
 
-        user.whatsappWaba.accessToken = data.access_token;
+        let wabaList;
+        try {
+            wabaList = await axios.get(
+                `${META_GRAPH_URL}/${businessAccountId}/owned_whatsapp_business_accounts`,
+                { headers: { Authorization: `Bearer ${access_token_waba}` } }
+            );
+        } catch (error) {
+            const parsed = parseMetaError(error, "WABA fetch");
+            return res.status(400).json({
+                status: "error",
+                // step: parsed.step,
+                message: parsed.message,
+                // error: parsed.meta
+            });
+        }
+
+        const wabaExists = wabaList.data.data.find(
+            w => w.id === wabaId
+        );
+
+        console.log("wabaExists with new token", wabaExists);
+
+        if (!wabaExists) {
+            return res.status(400).json({
+                status: "error",
+                // step: "WABA Validation",
+                message: "WABA does not belong to this Business Account"
+            });
+        }
+
+        user.whatsappWaba.accessToken = access_token_waba;
 
         // expires in seconds
-        user.whatsappWaba.tokenExpiresAt = new Date(
-            Date.now() + data.expires_in * 1000
-        );
+        // user.whatsappWaba.tokenExpiresAt = new Date(
+        //     Date.now() + 60 * 60 * 1000 // 1 hour in milliseconds
+        // );
 
         await user.save();
 
         res.json({
             success: true,
             message: "Access token refreshed",
-            accessToken: data.access_token,
-            expiresIn: data.expires_in,
+            accessToken: access_token_waba,
+            // expiresIn: 60 * 60,
         });
 
     } catch (error) {
@@ -1333,6 +1353,7 @@ exports.sendTextMessage = async (req, res) => {
             });
         }
 
+
         // 2️⃣ Fetch user
         console.log("Fetching user from DB...");
         const user = await User.findById(userId);
@@ -1408,6 +1429,59 @@ exports.sendTextMessage = async (req, res) => {
             messageTimestamp: new Date(),
             raw: response.data
         });
+
+        const phoneNumberObj = parsePhoneNumberFromString("+" + to);
+
+        if (!phoneNumberObj) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid phone number format",
+            });
+        }
+
+        const countryCode = phoneNumberObj.countryCallingCode; // e.g. 91
+        const number = phoneNumberObj.nationalNumber;
+
+        let contact = await Contact.findOne({
+            phoneNumbers: {
+                $elemMatch: {
+                    countryCode: countryCode,
+                    number: number,
+                },
+            },
+            createdBy: user._id,
+        });
+
+        let lead = null;
+
+        if (!contact) {
+            lead = await Lead.findOne({
+                phoneNumbers: {
+                    $elemMatch: {
+                        countryCode: countryCode,
+                        number: number,
+                    },
+                },
+                createdBy: user._id,
+            });
+        }
+
+        const activityData = {
+            action: "Text message sent",
+            type: "whatsapp",
+            title: "WhatsApp Message",
+            description: "Whatsapp Text Message sent",
+            timestamp: new Date(),
+        };
+
+        if (contact) {
+            contact.activities.push(activityData);
+            await contact.save();
+        }
+        else if (lead) {
+            lead.activities.push(activityData);
+            await lead.save();
+        }
 
         // 6️⃣ Success response
         res.json({
@@ -1643,6 +1717,60 @@ exports.sendMessage = async (req, res) => {
             messageTimestamp: new Date(),
             raw: response.data
         });
+
+        const phoneNumberObj = parsePhoneNumberFromString("+" + to);
+
+        if (!phoneNumberObj) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid phone number format",
+            });
+        }
+
+        const countryCode = phoneNumberObj.countryCallingCode; // e.g. 91
+        const number = phoneNumberObj.nationalNumber;
+
+        let contact = await Contact.findOne({
+            phoneNumbers: {
+                $elemMatch: {
+                    countryCode: countryCode,
+                    number: number,
+                },
+            },
+            createdBy: user._id,
+        });
+
+        let lead = null;
+
+        if (!contact) {
+            lead = await Lead.findOne({
+                phoneNumbers: {
+                    $elemMatch: {
+                        countryCode: countryCode,
+                        number: number,
+                    },
+                },
+                createdBy: user._id,
+            });
+        }
+
+        const activityData = {
+            action: `${type} message sent`,
+            type: "whatsapp",
+            title: "WhatsApp Message",
+            description: `Whatsapp ${type} Message sent`,
+            timestamp: new Date(),
+        };
+
+        if (contact) {
+            contact.activities.push(activityData);
+            await contact.save();
+        }
+        else if (lead) {
+            lead.activities.push(activityData);
+            await lead.save();
+        }
+
 
         // 🔹 cleanup temp file
         if (file?.path) fs.unlinkSync(file.path);
@@ -1943,6 +2071,60 @@ exports.sendTemplateMessage = async (req, res) => {
             status: "sent",
             raw: data
         });
+
+
+        const phoneNumberObj = parsePhoneNumberFromString("+" + to);
+
+        if (!phoneNumberObj) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid phone number format",
+            });
+        }
+
+        const countryCode = phoneNumberObj.countryCallingCode; // e.g. 91
+        const number = phoneNumberObj.nationalNumber;
+
+        let contact = await Contact.findOne({
+            phoneNumbers: {
+                $elemMatch: {
+                    countryCode: countryCode,
+                    number: number,
+                },
+            },
+            createdBy: user._id,
+        });
+
+        let lead = null;
+
+        if (!contact) {
+            lead = await Lead.findOne({
+                phoneNumbers: {
+                    $elemMatch: {
+                        countryCode: countryCode,
+                        number: number,
+                    },
+                },
+                createdBy: user._id,
+            });
+        }
+
+        const activityData = {
+            action: "Template message sent",
+            type: "whatsapp",
+            title: "WhatsApp Message",
+            description: `Whatsapp Template Message sent`,
+            timestamp: new Date(),
+        };
+
+        if (contact) {
+            contact.activities.push(activityData);
+            await contact.save();
+        }
+        else if (lead) {
+            lead.activities.push(activityData);
+            await lead.save();
+        }
 
         return res.json({ success: true, data });
 
@@ -2612,6 +2794,60 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                     messageTimestamp: new Date()
                 });
 
+
+                const phoneNumberObj = parsePhoneNumberFromString("+" + toNumber);
+
+                if (!phoneNumberObj) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid phone number format",
+                    });
+                }
+
+                const countryCode = phoneNumberObj.countryCallingCode; // e.g. 91
+                const number = phoneNumberObj.nationalNumber;
+
+                let contact = await Contact.findOne({
+                    phoneNumbers: {
+                        $elemMatch: {
+                            countryCode: countryCode,
+                            number: number,
+                        },
+                    },
+                    createdBy: user._id,
+                });
+
+                let lead = null;
+
+                if (!contact) {
+                    lead = await Lead.findOne({
+                        phoneNumbers: {
+                            $elemMatch: {
+                                countryCode: countryCode,
+                                number: number,
+                            },
+                        },
+                        createdBy: user._id,
+                    });
+                }
+
+                const activityData = {
+                    action: "Template message sent",
+                    type: "whatsapp",
+                    title: "WhatsApp Message",
+                    description: `Whatsapp Template Message sent`,
+                    timestamp: new Date(),
+                };
+
+                if (contact) {
+                    contact.activities.push(activityData);
+                    await contact.save();
+                }
+                else if (lead) {
+                    lead.activities.push(activityData);
+                    await lead.save();
+                }
+
                 results.push({
                     to: toNumber,
                     success: true,
@@ -3173,6 +3409,40 @@ exports.getWhatsappConversations = async (req, res) => {
                         }
                     },
 
+                    /* ---------------- NEW FIELDS START ---------------- */
+
+                    // Count outgoing template messages
+                    templateMessagesCount: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $eq: ["$direction", "outgoing"] },
+                                        { $eq: ["$messageType", "template"] }
+                                    ]
+                                },
+                                1,
+                                0
+                            ]
+                        }
+                    },
+
+                    // Count all messages (incoming + outgoing)
+                    sessionMessagesCount: { $sum: 1 },
+
+                    // First incoming message text
+                    firstIncomingMessage: {
+                        $first: {
+                            $cond: [
+                                { $eq: ["$direction", "incoming"] },
+                                "$content.text",
+                                null
+                            ]
+                        }
+                    },
+
+                    /* ---------------- NEW FIELDS END ---------------- */
+
                     // last message = newest
                     lastMessageTime: { $last: "$sortTime" },
 
@@ -3207,11 +3477,127 @@ exports.getWhatsappConversations = async (req, res) => {
                 }
             },
 
+            // {
+            //     $project: {
+            //         _id: 0,
+            //         from: 1,
+            //         originalName: 1,
+            //         lastMessageTime: 1,
+            //         lastIncomingTime: 1,
+            //         messages: 1,
+            //     }
+            // },
+
             {
                 $project: {
                     _id: 0,
                     from: 1,
                     originalName: 1,
+
+                    isWabaChat: {
+                        $cond: [
+                            {
+                                $gte: [
+                                    "$lastIncomingTime",
+                                    new Date(now.getTime() - 24 * 60 * 60 * 1000)
+                                ]
+                            },
+                            true,
+                            false
+                        ]
+                    },
+
+                    /* -------- ACTIVE STATUS -------- */
+
+                    userActiveStatus: {
+                        $let: {
+                            vars: {
+                                diffMs: {
+                                    $subtract: [new Date(), "$lastIncomingTime"]
+                                }
+                            },
+                            in: {
+                                $switch: {
+                                    branches: [
+
+                                        /* -------- MINUTES (< 60) -------- */
+                                        {
+                                            case: {
+                                                $lt: [
+                                                    { $divide: ["$$diffMs", 60000] },
+                                                    60
+                                                ]
+                                            },
+                                            then: {
+                                                $concat: [
+                                                    {
+                                                        $toString: {
+                                                            $floor: {
+                                                                $divide: ["$$diffMs", 60000]
+                                                            }
+                                                        }
+                                                    },
+                                                    " min ago"
+                                                ]
+                                            }
+                                        },
+
+                                        /* -------- HOURS (< 24) -------- */
+                                        {
+                                            case: {
+                                                $lt: [
+                                                    { $divide: ["$$diffMs", 3600000] },
+                                                    24
+                                                ]
+                                            },
+                                            then: {
+                                                $concat: [
+                                                    {
+                                                        $toString: {
+                                                            $floor: {
+                                                                $divide: ["$$diffMs", 3600000]
+                                                            }
+                                                        }
+                                                    },
+                                                    " hr ago"
+                                                ]
+                                            }
+                                        }
+
+                                    ],
+
+                                    /* -------- DAYS (>= 24 hr) -------- */
+                                    default: {
+                                        $concat: [
+                                            {
+                                                $toString: {
+                                                    $floor: {
+                                                        $divide: ["$$diffMs", 86400000]
+                                                    }
+                                                }
+                                            },
+                                            " day ago"
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    },
+
+
+                    lastActiveConversation: "$lastIncomingTime",
+
+                    /* -------- COUNTS -------- */
+
+                    templateMessages: "$templateMessagesCount",
+                    sessionMessages: "$sessionMessagesCount",
+
+                    /* -------- FIRST MESSAGE -------- */
+
+                    firstUserMessage: "$firstIncomingMessage",
+
+                    /* -------- EXISTING -------- */
+
                     lastMessageTime: 1,
                     lastIncomingTime: 1,
                     messages: 1,
