@@ -336,10 +336,10 @@ const userSchema = new Schema(
     },
 
     popupSettings: {
-      themeColor: { type: String, default: "#4CAF50" },
+      themeColor: { type: String, default: "#2249AA" },
       popupHeading: { type: String, default: "📞 Request a Call Back" },
-      headingColor: { type: String, default: "#4CAF50" },
-      floatingButtonColor: { type: String, default: "#4CAF50" },
+      headingColor: { type: String, default: "#2249AA" },
+      floatingButtonColor: { type: String, default: "#2249AA" },
       popupText: {
         type: String,
         default:
@@ -377,6 +377,7 @@ const userSchema = new Schema(
         number: {
           type: String,
         },
+        isVerified: { type: Boolean, default: false }, // ✅ ADD
         _id: false, // Use the number as the unique identifier
       },
     ],
@@ -469,8 +470,36 @@ const userSchema = new Schema(
       webhook: {
         callbackUrl: String,
         verifyToken: String
-      }
+      },
+
+      chats: [
+        {
+          chatNumber: { type: String, index: true },
+
+          lastIncomingTime: { type: Date },
+          lastOutgoingTime: { type: Date },
+
+          lastMessageTime: { type: Date },
+          lastMessageDirection: {
+            type: String,
+            enum: ["incoming", "outgoing"]
+          },
+
+          firstIncomingMetaMessageId: { type: String },
+          firstOutgoingMetaMessageId: { type: String },
+          lastIncomingMetaMessageId: { type: String },
+          lastOutgoingMetaMessageId: { type: String },
+        }
+      ]
+
     },
+
+    assignedWaba: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User", // reference to company admin
+      default: null,
+    },
+
 
     campaigns: [
       {

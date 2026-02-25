@@ -11,9 +11,7 @@ const { createTokenforUser } = require("../../services/authentication");
  * ======================================================
  * User verifies email and sets password
  */
-exports.verifyUser = async (req, res) => {
-    console.log("hello");
-    
+exports.verifyUser = async (req, res) => {    
     try {
         const { verifyToken, password } = req.body;
 
@@ -37,25 +35,6 @@ exports.verifyUser = async (req, res) => {
         user.emailVerificationToken = undefined;
         user.password = password;
 
-        // Create Yeastar Extension
-        // try {
-        //     const { extensionNumber, secret, result } =
-        //         await createYeastarExtensionForUser(user);
-
-        //     if (!extensionNumber || !result || result.errcode !== 0) {
-        //         throw new Error(result?.errmsg || "Yeastar extension creation failed");
-        //     }
-
-        //     user.extensionNumber = extensionNumber;
-        //     user.yeastarExtensionId = result?.data?.id || result?.id || null;
-        //     user.sipSecret = secret;
-        //     user.yeastarProvisionStatus = "done";
-        // } catch (err) {
-        //     console.error("Yeastar extension creation failed:", err.message);
-        //     user.yeastarProvisionStatus = "failed";
-        //     user.yeastarProvisionError = err.message;
-        // }
-
         await user.save();
 
         const token = createTokenforUser(user);
@@ -69,7 +48,6 @@ exports.verifyUser = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error("Verify User Error:", error);
         return res.status(500).json({
             status: "error",
             message: "Verification failed",

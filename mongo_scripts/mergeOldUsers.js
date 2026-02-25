@@ -11,8 +11,6 @@ async function fixLeadStatuses() {
         ],
     });
 
-    console.log("Users to fix:", users.length);
-
     for (const user of users) {
         user.leadStatuses = [
             { value: "interested", label: "Interested", group: 1, isDefault: true },
@@ -23,8 +21,6 @@ async function fixLeadStatuses() {
 
         await user.save({ validateBeforeSave: true });
     }
-
-    console.log("✅ leadStatuses fixed successfully");
     process.exit();
 }
 

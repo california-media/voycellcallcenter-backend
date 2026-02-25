@@ -28,15 +28,11 @@ async function deleteContactsForUser() {
     process.exit(1);
   }
 
-  console.log("MongoDB URL log:", uri);
-
   try {
     await mongoose.connect(uri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log("✅ Connected to MongoDB");
-
     const db = mongoose.connection.db;
     const collection = db.collection("contacts");
 
@@ -50,14 +46,10 @@ async function deleteContactsForUser() {
     }
 
     const result = await collection.deleteMany(query);
-    console.log(
-      `🗑️  Deleted ${result.deletedCount} contact(s) for user ${userIdArg}`
-    );
   } catch (error) {
     console.error("❌ Error deleting user's contacts:", error);
   } finally {
     await mongoose.disconnect();
-    console.log("🔒 Disconnected from MongoDB");
   }
 }
 

@@ -25,13 +25,7 @@ const decodeToken = (token) => {
 };
 
 export const handler = async (event, context) => {
-    console.log("====================================");
-    console.log("[HANDLER] incomming call invoked");
-    console.log("[HANDLER] Raw event:", JSON.stringify(event, null, 2));
-    console.log("[HANDLER] Timestamp:", new Date().toISOString());
     context.callbackWaitsForEmptyEventLoop = false;
-    console.log("[HANDLER] Action:", event.action);
-
     try {
         await connectDB();
     } catch (err) {
@@ -40,18 +34,12 @@ export const handler = async (event, context) => {
     }
 
     if (event.action === "connect") {
-        console.log("[CONNECT] New connection attempt");
-        console.log("[CONNECT] connectionId:", event.connectionId);
-
         const decoded = decodeToken(event.token);
 
         if (!decoded?._id) {
             console.warn("[CONNECT] Invalid or missing user ID, aborting");
             return { statusCode: 401, body: "Unauthorized" };
         }
-
-        console.log("[CONNECT] User authenticated");
-        console.log("[CONNECT] userId:", decoded._id);
 
         try {
             const result = await incomingcallConnection.updateOne(
@@ -62,7 +50,6 @@ export const handler = async (event, context) => {
                 },
                 { upsert: true }
             );
-            console.log("[CONNECT] DB update result:", result);
             return { statusCode: 200, body: "Connected" };
         } catch (err) {
             console.error("[CONNECT] Failed to save connection", err);
@@ -71,28 +58,16 @@ export const handler = async (event, context) => {
     }
 
     if (event.action === "disconnect") {
-        console.log("[DISCONNECT] Disconnect event received");
-        console.log("[DISCONNECT] connectionId:", event.connectionId);
-
         try {
             const result = await incomingcallConnection.deleteOne({
                 connectionId: event.connectionId,
             });
-
-            console.log(
-                "[DISCONNECT] Cleanup complete",
-                "deletedCount:",
-                result.deletedCount
-            );
             return { statusCode: 200, body: "Disconnected" };
         } catch (err) {
             console.error("[DISCONNECT] Cleanup failed", err);
             return { statusCode: 500, body: "Cleanup failed" };
         }
     }
-
-    console.log("[HANDLER] Execution finished");
-    console.log("====================================");
     return { statusCode: 200, body: "OK" };
 };
 

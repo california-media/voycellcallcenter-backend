@@ -5,7 +5,6 @@ const checkAccountStatus = async (req, res, next) => {
     const userId = req.user?._id; // req.user must come from auth middleware
 
     if (!userId) {
-      console.log("Account Status Middleware Error: No user ID found in request");
       return res.status(401).json({
         status: "error",
         message: "Unauthorized: User not authenticated",

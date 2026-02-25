@@ -6,21 +6,13 @@ const apiGateway = new AWS.ApiGatewayManagementApi({
 });
 
 export const handler = async (event) => {
-    console.log("incoming call EVENT:", JSON.stringify(event));
-
     /**
    * 🔥 CASE 1: Called from WEBHOOK (manual invoke)
    */
     if (event.action === "incomingcall") {
-        console.log("===incoming call action called===");
-        
         const { connections, payload } = event;
 
-        console.log(connections);
-        
-
         if (!connections || connections.length === 0) {
-            console.log("No connections to notify");
             return { statusCode: 200 };
         }
 
@@ -33,12 +25,9 @@ export const handler = async (event) => {
                         data: payload,
                     }),
                 }).promise();
-
-                console.log("✅ Sent to:", connectionId);
             } catch (err) {
                 // If connection is stale, AWS returns 410
                 if (err.statusCode === 410) {
-                    console.log("🗑️ Stale connection:", connectionId);
                 } else {
                     console.error("❌ WS error:", err);
                 }
@@ -59,11 +48,7 @@ export const handler = async (event) => {
     }
 
     if (routeKey === "$connect") {
-        console.log("[incomingcall] $connect route triggered");
-
         if (!token) {
-            console.warn("[incomingcall] Missing token on $connect");
-            console.log("====================================");
             return { statusCode: 401 };
         }
 
@@ -72,14 +57,6 @@ export const handler = async (event) => {
             connectionId,
             token,
         };
-
-        console.log("[incomingcall] Invoking saveConnection-waba");
-        console.log("[incomingcall] Payload:", JSON.stringify(payload, null, 2));
-
-        // 🔥 FIRE AND FORGET (NO WAIT)
-        // const responce = 
-
-        // console.log(responce);
 
 
         // return { statusCode: 200 };
@@ -91,27 +68,19 @@ export const handler = async (event) => {
                 Payload: JSON.stringify(payload)
             }).promise();
 
-            console.log("[incomingcall] Lambda invoke successful (async)");
         } catch (err) {
             console.error("[incomingcall] Lambda invoke failed", err);
         }
 
-        console.log("[incomingcall] $connect handler finished");
-        console.log("====================================");
         return { statusCode: 200 };
 
     }
 
     if (routeKey === "$disconnect") {
-        console.log("[incomingcall] $disconnect route triggered");
-
         const payload = {
             action: "disconnect",
             connectionId,
         };
-
-        console.log("[incomingcall] Invoking saveConnection-waba");
-        console.log("[incomingcall] Payload:", JSON.stringify(payload, null, 2));
 
         try {
             await lambda.invoke({
@@ -119,14 +88,9 @@ export const handler = async (event) => {
                 InvocationType: "Event",
                 Payload: JSON.stringify(payload)
             }).promise();
-
-            console.log("[incomingcall] Lambda invoke successful (async)");
         } catch (err) {
             console.error("[incomingcall] Lambda invoke failed", err);
         }
-
-        console.log("[incomingcall] $disconnect handler finished");
-        console.log("====================================");
         return { statusCode: 200 };
 
     }

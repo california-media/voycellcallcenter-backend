@@ -51,11 +51,7 @@ async function uploadWhatsAppMediaTemplateToS3({
   originalName = "file"
 }) {
   const ext = mimeType.split("/")[1] || "bin";
-  console.log("messageType in uploadWhatsAppMediaTemplateToS3", messageType);
   const folder = Template_MEDIA_FOLDER_MAP[messageType] || "others";
-
-  console.log("folder in uploadWhatsAppMediaTemplateToS3", folder);
-
   const key = `users/${userId}/whatsapp/template/${folder}/${originalName}_${Date.now()}.${ext}`;
 
   await s3.send(

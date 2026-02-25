@@ -159,7 +159,6 @@ const getMyReferrals = async (req, res) => {
       let changed = false;
 
       if (refUser) {
-        console.log(refUser);
 
         if (!updatedEntry.firstname && refUser.firstname) {
           updatedEntry.firstname = refUser.firstname;

@@ -7,33 +7,23 @@ const { getUserCurrentPlan } = require("./utils/stripeUtils");
 
 async function testEmailVerificationFlow() {
   try {
-    console.log("🧪 Testing Email Verification Flow...\n");
 
     // Connect to MongoDB (adjust connection string as needed)
     if (mongoose.connection.readyState === 0) {
       await mongoose.connect(
         process.env.MONGODB_URI || "mongodb://localhost:27017/contacts-test"
       );
-      console.log("✅ Connected to MongoDB");
     }
 
     // Test 1: Check setupInitialPlan function
-    console.log("\n📋 Test 1: Setup Initial Plan Function");
     const planData = await setupInitialPlan();
 
     // Test 2: Verify plan exists in database
     if (planData?.plan) {
       const plan = await Plan.findById(planData.plan);
-      console.log("Available plan details:", {
-        name: plan?.name,
-        duration: plan?.duration,
-        price: plan?.price,
-      });
     }
 
     // Test 3: Simulate user signup and verification
-    console.log("\n👤 Test 2: User Signup and Email Verification Flow");
-
     // Create a test user (simulating initial signup)
     const testUser = new User({
       firstname: "Test",

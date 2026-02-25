@@ -15,6 +15,7 @@ const querystring = require("querystring");
 const axios = require("axios");
 const ReferralLog = require("../models/referralLogModel");
 const { createYeastarExtensionForUser } = require("../utils/yeastarClient");
+const { META_GRAPH_URL } = require("../config/whatsapp");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -78,7 +79,6 @@ async function addOrUpdateReferral(referrerId, referredUser) {
 
   let now = new Date();
   let needSaveReferrer = false;
-  console.log("referrer index is", index);
   if (index !== -1) {
     // Update missing fields on existing entry
     const entry = referrer.myReferrals[index];
@@ -119,7 +119,6 @@ async function addOrUpdateReferral(referrerId, referredUser) {
       phonenumbers: phoneObjs,
       signupDate: referredUser.createdAt || now,
     };
-    console.log("new referral entry is", newEntry);
     referrer.myReferrals = referrer.myReferrals || [];
     referrer.myReferrals.push(newEntry);
     needSaveReferrer = true;
@@ -197,51 +196,6 @@ const signupWithEmail = async (req, res) => {
         user.signupMethod = "email";
       }
 
-      // // === PART 3: Yeastar Extension Creation ===
-      // try {
-      //   // Start extension creation after user is verified
-      //   const startExt = parseInt(process.env.EXTENSION_START || "1001", 10);
-      //   const maxAttempts = parseInt(
-      //     process.env.EXTENSION_MAX_ATTEMPTS || "500",
-      //     10
-      //   );
-
-      //   const nameForExtension =
-      //     `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email;
-
-      //   // Attempt to create Yeastar extension
-      //   const { extensionNumber, secret, result } =
-      //     await createYeastarExtensionForUser(user);
-
-      //   // If response not OK, throw manually
-      //   if (!extensionNumber || !result || result.errcode !== 0) {
-      //     throw new Error(
-      //       result?.errmsg || "Yeastar extension creation failed"
-      //     );
-      //   }
-
-      //   // ✅ Save extension details in user
-      //   user.extensionNumber = extensionNumber;
-      //   user.yeastarExtensionId = result?.data?.id || result?.id || null;
-      //   user.sipSecret = secret;
-      //   await user.save();
-
-      //   // ✅ Send post-verification demo email
-
-
-      //   console.log("✅ Yeastar extension created:", extensionNumber);
-      // } catch (err) {
-      //   console.error("❌ Yeastar extension creation failed:", err.message);
-
-      //   // Cleanup: delete the user since extension provisioning failed
-      //   await User.findByIdAndDelete(user._id);
-
-      //   return res.status(500).json({
-      //     status: "error",
-      //     message: `Signup failed: Yeastar extension could not be created (${err.message})`,
-      //   });
-      // }
-
       // Setup initial plan after email verification (skip for superadmin)
       if (user.role !== "superadmin") {
         if (user.referredBy) {
@@ -279,7 +233,6 @@ const signupWithEmail = async (req, res) => {
 
       try {
         await sendPostVerificationDemoEmail(user);
-        console.log("📧 Post-verification demo email sent");
       } catch (emailErr) {
         console.error("Failed to send demo email:", emailErr.message);
       }
@@ -405,8 +358,6 @@ const signupWithEmail = async (req, res) => {
 
     await sendVerificationEmail(newUser.email, verificationLink);
 
-    console.log("Verification Link:", verificationLink);
-
     // newUser.isActive = true; // mark as active
 
     return res.status(201).json({
@@ -421,11 +372,198 @@ const signupWithEmail = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Signup error:", error);
     return res.status(500).json({
       status: "error",
       message: "Signup failed",
       error: error.message,
+    });
+  }
+};
+
+async function sendWhatsAppOtp(toPhoneNumber, otp) {
+  try {
+    const url = `${META_GRAPH_URL}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+
+    const payload = {
+      messaging_product: "whatsapp",
+      to: toPhoneNumber,
+      type: "template",
+      template: {
+        name: "otp",
+        language: {
+          code: "en_US"
+        },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: otp }
+            ]
+          },
+          {
+            type: "button",
+            sub_type: "url",
+            index: 0,
+            parameters: [
+              { type: "text", text: otp }  // Just the OTP (must be ≤ 15 characters)
+            ]
+          }
+        ]
+      }
+    };
+
+    const headers = {
+      Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    };
+
+    const response = await axios.post(url, payload, { headers });
+  } catch (error) {
+    throw error;
+  }
+};
+
+const verifyRealPhoneNumber = async (req, res) => {
+  try {
+    const userId = req.user?._id; // from token middleware
+    const { countryCode, phonenumber, otp, resendOtp = false } =
+      req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized",
+      });
+    }
+
+    if (!countryCode || !phonenumber) {
+      return res.status(400).json({
+        status: "error",
+        message: "Country code and phone number required",
+      });
+    }
+
+    const sanitizedCountryCode = countryCode.replace("+", "");
+    const sanitizedNumber = phonenumber.replace(/\D/g, "");
+
+
+    const existingPhoneUser = await User.findOne({
+      phonenumbers: {
+        $elemMatch: {
+          countryCode: sanitizedCountryCode,
+          number: sanitizedNumber,
+          isVerified: true || false, // only block verified numbers (recommended)
+        },
+      },
+      _id: { $ne: userId }, // exclude current user
+    });
+
+    if (existingPhoneUser) {
+      return res.status(400).json({
+        status: "error",
+        message: "Phone number already in use by another user",
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
+
+    // helper
+    const generateOtp = () =>
+      Math.floor(100000 + Math.random() * 900000).toString();
+
+    // ===============================
+    // SEND / RESEND OTP
+    // ===============================
+    if (!otp || resendOtp) {
+      const generatedOtp = generateOtp();
+      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      user.otp = generatedOtp;
+      user.otpExpiresAt = otpExpiresAt;
+
+      await user.save();
+
+      const phoneForWhatsAppApi = `+${sanitizedCountryCode}${sanitizedNumber}`;
+
+      try {
+        await sendWhatsAppOtp(phoneForWhatsAppApi, generatedOtp);
+      } catch (error) {
+        console.error("OTP Send Failed:", error);
+
+        return res.status(500).json({
+          status: "error",
+          message: "Failed to send OTP",
+        });
+      }
+
+      return res.status(200).json({
+        status: "pending",
+        message: resendOtp
+          ? "OTP resent successfully"
+          : "OTP sent successfully",
+      });
+    }
+
+    // ===============================
+    // VERIFY OTP
+    // ===============================
+    if (user.otp !== otp) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid OTP",
+      });
+    }
+
+    if (user.otpExpiresAt < new Date()) {
+      return res.status(400).json({
+        status: "error",
+        message: "OTP expired",
+      });
+    }
+
+    // mark number verified
+    const phoneExistsIndex = user.phonenumbers.findIndex(
+      (p) =>
+        p.countryCode === sanitizedCountryCode &&
+        p.number === sanitizedNumber
+    );
+
+    if (phoneExistsIndex >= 0) {
+      user.phonenumbers[phoneExistsIndex].isVerified = true;
+    } else {
+      // add if not exists
+      user.phonenumbers.push({
+        countryCode: sanitizedCountryCode,
+        number: sanitizedNumber,
+        isVerified: true,
+      });
+    }
+
+    // clear otp
+    user.otp = undefined;
+    user.otpExpiresAt = undefined;
+
+    await user.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Phone number verified successfully",
+      data: {
+        phoneVerified: true,
+        phonenumber: `+${sanitizedCountryCode}${sanitizedNumber}`,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      message: "Server error",
     });
   }
 };
@@ -471,7 +609,6 @@ const resendVerificationLink = async (req, res) => {
       verificationLink,
     });
   } catch (error) {
-    console.error("Resend verification error:", error);
     return res.status(500).json({
       status: "error",
       message: "Failed to resend verification link",
@@ -928,13 +1065,6 @@ const unifiedLogin = async (req, res) => {
           .update(password)
           .digest("hex");
 
-        // if (hash !== user.password) {
-        //   return res.status(401).json({
-        //     status: "error",
-        //     message: "Invalid credentials",
-        //   });
-        // }
-
         // ❌ Wrong password handling
         if (hash !== user.password) {
           const now = new Date();
@@ -982,7 +1112,6 @@ const unifiedLogin = async (req, res) => {
         user.firstFailedLoginAt = null;
         user.lockUntil = null;
         await user.save();
-        console.log(newSessionId);
 
         // ✅ CREATE NEW TOKEN WITH SESSION ID
         const token = createTokenforUser(user);
@@ -999,7 +1128,6 @@ const unifiedLogin = async (req, res) => {
           },
         });
       } catch (err) {
-        console.log("Login error:", err);
         return res.status(401).json({
           status: "error",
           message: err.message || "Invalid credentials",
@@ -1010,7 +1138,6 @@ const unifiedLogin = async (req, res) => {
       .status(400)
       .json({ status: "error", message: "Invalid login request" });
   } catch (err) {
-    console.log(err);
     return res.status(500).json({ status: "error", message: "Login failed" });
   }
 };
@@ -1031,8 +1158,6 @@ const generateMagicLink = async (req, res) => {
     }
 
     // ✅ Find user email
-    // const user = await User.findById(userId).select("email");
-
     if (!user || !user.email) {
       return res.status(400).json({
         status: "error",
@@ -1066,7 +1191,6 @@ const generateMagicLink = async (req, res) => {
       expiresAt,
     });
   } catch (err) {
-    console.log("Magic link error:", err);
     return res.status(500).json({
       status: "error",
       message: "Failed to generate magic link",
@@ -1151,7 +1275,6 @@ const loginWithMagicLink = async (req, res) => {
       },
     });
   } catch (err) {
-    console.log("Magic login error:", err);
     return res.status(500).json({
       status: "error",
       message: "Magic link login failed",
@@ -1161,8 +1284,6 @@ const loginWithMagicLink = async (req, res) => {
 
 const logoutUser = async (req, res) => {
   try {
-    console.log("hello");
-
     const userId = req.user._id; // requires auth middleware
     const user = await User.findById(userId);
 
@@ -1181,6 +1302,7 @@ const logoutUser = async (req, res) => {
 module.exports = {
   signupWithEmail,
   signupWithPhoneNumber,
+  verifyRealPhoneNumber,
   unifiedLogin,
   resendVerificationLink,
   logoutUser,

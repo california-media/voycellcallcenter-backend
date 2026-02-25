@@ -1,8 +1,9 @@
 const { Router } = require("express");
 const { checkForAuthentication } = require("../middlewares/authentication");
+const checkAccountStatus = require("../middlewares/checkAccountStatus");
 const {
   signupWithEmail,
-  signupWithPhoneNumber,
+  verifyRealPhoneNumber,
   unifiedLogin,
   resendVerificationLink,
   logoutUser,
@@ -54,7 +55,7 @@ const router = Router();
 
 router.post("/signup/email", signupWithEmail);
 
-router.post("/signup/phonenumber", signupWithPhoneNumber);
+router.post("/verify-phone-number", checkForAuthentication(), checkAccountStatus, verifyRealPhoneNumber);
 
 router.post("/resendVerificationLink", resendVerificationLink);
 

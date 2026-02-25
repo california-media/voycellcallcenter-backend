@@ -1,132 +1,3 @@
-// const Contact = require("../models/contactModel");
-
-// exports.getAllContactsOrLeads = async (req, res) => {
-//   try {
-//     const {
-//       isLead = false,
-//       page = 1,
-//       limit = 10,
-//       search = "",
-//       tag = "",
-//       sorted = false,
-//       isFavourite = false,
-//     } = req.body;
-
-//     const createdBy = req.user._id;
-
-//     // -------------------------------
-//     // 🔍 Build Base Query
-//     // -------------------------------
-//     const query = { createdBy, isLead };
-
-//     // Filter by favourite
-//     if (isFavourite === true || isFavourite === "true") {
-//       query.isFavourite = true;
-//     }
-
-//     // -------------------------------
-//     // 🔍 Search Filter (case-insensitive)
-//     // -------------------------------
-//     if (search?.trim()) {
-//       const searchText = search.trim();
-//       const regex = new RegExp(searchText, "i"); // Case-insensitive regex
-
-//       query.$or = [
-//         { firstname: regex },
-//         { lastname: regex },
-//         { emailAddresses: { $elemMatch: { $regex: regex } } },
-//         {
-//           phonenumbers: {
-//             $elemMatch: { number: { $regex: regex } }, // partial number search
-//           },
-//         },
-//         {
-//           $expr: {
-//             $regexMatch: {
-//               input: { $concat: ["$firstname", " ", "$lastname"] },
-//               regex: searchText, // plain string here, not RegExp
-//             },
-//           },
-//         },
-//       ];
-//     }
-
-//     // -------------------------------
-//     // 🏷️ Tag Filter
-//     // -------------------------------
-//     if (Array.isArray(tag) && tag.length > 0) {
-//       query["tags.tag"] = { $in: tag.map((t) => new RegExp(`^${t}$`, "i")) };
-//     } else if (typeof tag === "string" && tag.trim() !== "") {
-//       query["tags.tag"] = { $regex: `^${tag.trim()}$`, $options: "i" };
-//     }
-
-//     // -------------------------------
-//     // 📊 Pagination
-//     // -------------------------------
-//     const totalCount = await Contact.countDocuments(query);
-//     const totalPages = Math.ceil(totalCount / limit);
-//     const skip = (page - 1) * limit;
-
-//     // -------------------------------
-//     // 📋 Fetch Data
-//     // -------------------------------
-//     const items = await Contact.find(query)
-//       .sort(sorted ? { firstname: 1, lastname: 1 } : { createdAt: -1, _id: -1 })
-//       .skip(skip)
-//       .limit(parseInt(limit))
-//       .select("-updatedAt -__v")
-//       .lean();
-
-//     // -------------------------------
-//     // 🧹 Clean Data
-//     // -------------------------------
-//     const data = items.map((item) => {
-//       // Normalize phone numbers
-//       item.phoneNumbers = Array.isArray(item.phonenumbers)
-//         ? item.phonenumbers.filter(
-//             (p) =>
-//               (p?.number && p.number.trim()) ||
-//               (p?.countryCode && p.countryCode.trim())
-//           )
-//         : [];
-
-//       // Normalize tags
-//       item.tags = Array.isArray(item.tags)
-//         ? item.tags.map((t) => ({
-//             tag: t.tag,
-//             emoji: t.emoji || "",
-//           }))
-//         : [];
-
-//       item.contact_id = item._id?.toString();
-//       return item;
-//     });
-
-//     // -------------------------------
-//     // ✅ Response
-//     // -------------------------------
-//     res.status(200).json({
-//       status: "success",
-//       message: isLead
-//         ? "Leads fetched successfully"
-//         : "Contacts fetched successfully",
-//       data,
-//       pagination: {
-//         currentPage: parseInt(page),
-//         totalPages,
-//         totalItems: totalCount,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error fetching contacts/leads:", error);
-//     res.status(500).json({
-//       status: "error",
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
-
 const Contact = require("../models/contactModel");
 const Lead = require("../models/leadModel");
 const User = require("../models/userModel");
@@ -141,7 +12,6 @@ const escapeRegex = (str = "") =>
 function normalizePhone(value = "") {
   return value.replace(/\D/g, ""); // remove +, spaces, -, etc
 }
-
 
 exports.getAllContactsOrLeads = async (req, res) => {
   try {
@@ -206,17 +76,10 @@ exports.getAllContactsOrLeads = async (req, res) => {
       );
     }
 
-
-    // -----------------------
-
-    // Base query
-    // const query = { createdBy };
-
     const query = {
       createdBy: { $in: allowedUserIds }
     };
 
-    console.log("Allowed User IDs:", allowedUserIds);
     // -----------------------
     // Filters
     // -----------------------
@@ -234,18 +97,6 @@ exports.getAllContactsOrLeads = async (req, res) => {
     } else if (typeof status === "string" && status.trim() !== "") {
       query.status = status.trim();
     }
-
-    // Filter by tags
-    // if (Array.isArray(tag) && tag.length > 0) {
-    //   query["tags.tag"] = {
-    //     $in: tag.map((t) => new RegExp(`^${escapeRegex(t)}$`, "i")),
-    //   };
-    // } else if (typeof tag === "string" && tag.trim() !== "") {
-    //   query["tags.tag"] = {
-    //     $regex: `^${escapeRegex(tag.trim())}$`,
-    //     $options: "i",
-    //   };
-    // }
 
     // -----------------------
     // Filter by tags (MULTIPLE TAGS - ANY MATCH)
@@ -334,11 +185,19 @@ exports.getAllContactsOrLeads = async (req, res) => {
 
     const users = await User.find(
       { _id: { $in: allowedUserIds } },
-      { firstname: 1, lastname: 1 }
+      { firstname: 1, lastname: 1, tags: 1 }
     ).lean();
 
     users.forEach(u => {
       usersMap[u._id.toString()] = `${u.firstname || ""} ${u.lastname || ""}`.trim();
+    });
+
+    const userTagsMap = {};
+
+    users.forEach(u => {
+      userTagsMap[u._id.toString()] = Array.isArray(u.tags)
+        ? u.tags.map(t => t.tag_id.toString())
+        : [];
     });
 
     // -----------------------
@@ -367,10 +226,28 @@ exports.getAllContactsOrLeads = async (req, res) => {
         ? item.emailAddresses.filter((e) => e && e.trim())
         : [];
 
-      // Clean tags
-      item.tags = Array.isArray(item.tags)
-        ? item.tags.map((t) => ({ tag: t.tag, emoji: t.emoji || "" }))
-        : [];
+      // ------------------------------------------------------------------
+      // Filter tags based on LOGGED-IN USER only (Matching by tag_id)
+      // ------------------------------------------------------------------
+      if (Array.isArray(item.tags)) {
+        const requesterId = userId.toString();
+        const allowedTags = users.find(u => u._id.toString() === requesterId)?.tags || [];
+        const allowedTagIdStrings = allowedTags.map(t => t.tag_id.toString());
+
+        item.tags = item.tags
+          .filter(t => t.tag_id && allowedTagIdStrings.includes(t.tag_id.toString()))
+          .map(t => {
+            // Find the tag details from the requester's profile for consistency
+            const matchedTag = allowedTags.find(at => at.tag_id.toString() === t.tag_id.toString());
+            return {
+              tag_id: t.tag_id,
+              tag: matchedTag ? matchedTag.tag : t.tag,
+              emoji: matchedTag ? matchedTag.emoji : (t.emoji || "")
+            };
+          });
+      } else {
+        item.tags = [];
+      }
 
       // Add contact_id alias
       item.contact_id = item._id?.toString();
@@ -406,7 +283,6 @@ exports.getAllContactsOrLeads = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("getAllContactsOrLeads error:", err);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -414,6 +290,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
     });
   }
 };
+
 
 exports.getAllActivities = async (req, res) => {
   try {
@@ -467,7 +344,6 @@ exports.getAllActivities = async (req, res) => {
       data: activities,
     });
   } catch (err) {
-    console.error("getAllActivities error:", err);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -482,7 +358,6 @@ exports.getAllActivities = async (req, res) => {
 exports.getSingleContactOrLead = async (req, res) => {
   try {
     const { contact_id, category } = req.body;
-    console.log("getSingleContactOrLead called with:", { contact_id, category });
     // const createdBy = req.user._id;
     const loginUserId = req.user._id;
     const user = await User.findById(loginUserId).select("role");
@@ -510,22 +385,9 @@ exports.getSingleContactOrLead = async (req, res) => {
       Model = Contact;
     }
 
-    // const contact = await Model.findOne({
-    //   _id: contact_id,
-    //   createdBy,
-    // })
-    //   .select("-__v -updatedAt")
-    //   .lean();
-
     let query = {
       contact_id: contact_id,
     };
-
-    console.log("Login User Role:", loginUserRole);
-    console.log("Constructed Query Before Role Check:", query);
-
-    // Apply role-based access control
-    console.log("Applying role-based access control...");
 
     if (loginUserRole === "user") {
       // agent → only their own contacts
@@ -545,14 +407,28 @@ exports.getSingleContactOrLead = async (req, res) => {
         $in: [loginUserId, ...agentIds],
       };
     }
-    console.log("Final Query After Role Check:", query);
+
+    // -----------------------
+    // Fetch relevant users for names and tag filtering
+    // -----------------------
+    let userQuery = { _id: loginUserId };
+    if (loginUserRole === "companyAdmin") {
+      userQuery = {
+        $or: [
+          { _id: loginUserId },
+          { createdByWhichCompanyAdmin: loginUserId }
+        ]
+      };
+    }
+    const users = await User.find(userQuery).select("tags _id firstname lastname").lean();
+    const usersMap = {};
+    users.forEach((u) => {
+      usersMap[u._id.toString()] = `${u.firstname} ${u.lastname}`.trim();
+    });
 
     const contact = await Model.findOne(query)
       .select("-__v -updatedAt")
       .lean();
-
-    console.log("Fetched Contact/Lead:", contact);
-
 
     if (!contact) {
       return res.status(404).json({
@@ -560,8 +436,6 @@ exports.getSingleContactOrLead = async (req, res) => {
         message: "Contact not found",
       });
     }
-
-
 
     // Clean phone numbers
     if (Array.isArray(contact.phoneNumbers)) {
@@ -585,13 +459,34 @@ exports.getSingleContactOrLead = async (req, res) => {
       ? contact.emailAddresses.filter((e) => e && e.trim())
       : [];
 
-    // Clean tags
-    contact.tags = Array.isArray(contact.tags)
-      ? contact.tags.map((t) => ({ tag: t.tag, emoji: t.emoji || "" }))
-      : [];
+    // ------------------------------------------------------------------
+    // Filter tags based on LOGGED-IN USER only (Matching by tag_id)
+    // ------------------------------------------------------------------
+    if (Array.isArray(contact.tags)) {
+      const requesterId = loginUserId.toString();
+      const allowedTags = users.find(u => u._id.toString() === requesterId)?.tags || [];
+      const allowedTagIdStrings = allowedTags.map(t => t.tag_id.toString());
+
+      contact.tags = contact.tags
+        .filter(t => t.tag_id && allowedTagIdStrings.includes(t.tag_id.toString()))
+        .map(t => {
+          const matchedTag = allowedTags.find(at => at.tag_id.toString() === t.tag_id.toString());
+          return {
+            tag_id: t.tag_id,
+            tag: matchedTag ? matchedTag.tag : t.tag,
+            emoji: matchedTag ? matchedTag.emoji : (t.emoji || "")
+          };
+        });
+    } else {
+      contact.tags = [];
+    }
 
     // Add contact_id alias
     contact.contact_id = contact._id?.toString();
+
+    // ✅ ADD AGENT NAME AND ID
+    contact.agentName = usersMap[contact.createdBy?.toString()] || "";
+    contact.agentId = contact.createdBy?.toString();
 
     return res.status(200).json({
       status: "success",
@@ -602,7 +497,6 @@ exports.getSingleContactOrLead = async (req, res) => {
       data: contact,
     });
   } catch (err) {
-    console.error("getSingleContactOrLead error:", err);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -610,6 +504,7 @@ exports.getSingleContactOrLead = async (req, res) => {
     });
   }
 };
+
 
 exports.getAllContactOrLeadForEvent = async (req, res) => {
   try {
@@ -620,28 +515,6 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
     const baseQuery = { createdBy };
 
     // Add search functionality if search term is provided
-    // if (search && search.trim() !== "") {
-    //   const searchTerm = search.trim();
-    //   const escaped = escapeRegex(searchTerm);
-    //   const regexInsensitive = new RegExp(escaped, "i");
-
-    //   baseQuery.$or = [
-    //     { firstname: { $regex: regexInsensitive } },
-    //     { lastname: { $regex: regexInsensitive } },
-    //     { emailAddresses: { $elemMatch: { $regex: regexInsensitive } } },
-    //     {
-    //       $expr: {
-    //         $regexMatch: {
-    //           input: {
-    //             $toLower: { $concat: ["$firstname", " ", "$lastname"] },
-    //           },
-    //           regex: searchTerm.toLowerCase(),
-    //         },
-    //       },
-    //     },
-    //   ];
-    // }
-
     if (search && search.trim() !== "") {
       const searchTerm = search.trim();
       const escaped = escapeRegex(searchTerm);
@@ -717,29 +590,8 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
             },
           },
         },
-
         // ✅ Phone search (all variants)
         ...phoneConditions,
-
-        // // ✅ Phone number (PARTIAL or FULL)
-        // ...(phoneRegex
-        //   ? [
-        //     {
-        //       phoneNumbers: {
-        //         $elemMatch: {
-        //           number: { $regex: phoneRegex },
-        //         },
-        //       },
-        //     },
-        //     {
-        //       phoneNumbers: {
-        //         $elemMatch: {
-        //           countryCode: { $regex: phoneRegex },
-        //         },
-        //       },
-        //     },
-        //   ]
-        //   : []),
       ];
     }
 
@@ -788,7 +640,6 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
       data: finalData,
     });
   } catch (err) {
-    console.error("getAllContactOrLeadIdEmails error:", err);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",

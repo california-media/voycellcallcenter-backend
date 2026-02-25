@@ -180,7 +180,7 @@ const sendPostVerificationDemoEmail = async (user) => {
     const clientName =
         `${user.firstname || ""} ${user.lastname || ""}`.trim() || "Client";
 
-    const meetingLink = "https://calendly.com/your-link"; // 🔁 replace with real link
+    const meetingLink = "https://voycell.com/voycell-book-a-demo"; // 🔁 replace with real link
 
     const mailOptions = {
         from: '"VOYCELL" <noreply@voycell.com>',

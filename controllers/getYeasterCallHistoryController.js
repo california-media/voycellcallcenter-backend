@@ -122,11 +122,8 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    console.log(userId);
-    // console.log(token);
-
     const user = await User.findById(userId);
-    if (!user || !user.extensionNumber) {
+    if (!user || !user.PBXDetails.PBX_EXTENSION_NUMBER) {
       return res.status(400).json({
         success: false,
         message: "User extension not found",
@@ -150,9 +147,6 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
 
     const encodedStart = encodeURIComponent(startTime);
     const encodedEnd = encodeURIComponent(endTime);
-
-    console.log("Using Yeastar TZ:", TZ);
-    console.log("startTime:", startTime, "endTime:", endTime);
 
     // -------- OUTBOUND --------
     const urlFrom = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
@@ -193,24 +187,15 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
       const fromDetails = extractNumberDetails(from_number);
       const toDetails = extractNumberDetails(to_number);
 
-      console.log("FROM Parsed:", fromDetails);
-      console.log("TO Parsed:", toDetails);
-
       // ==========================================
       // 🔍 Find matching records
       // ==========================================
       const fromRecord = await findRecord(fromDetails, userId);
       const toRecord = await findRecord(toDetails, userId);
 
-      console.log(from_number, to_number);
-
-      console.log(call.time);
-
       const dubaiFormatted = moment
         .tz(call.time, "MM/DD/YYYY HH:mm:ss", TZ)
         .format("MM/DD/YYYY HH:mm:ss");
-
-      console.log(dubaiFormatted);
 
       await CallHistory.create({
         userId,
@@ -260,8 +245,6 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         });
 
         await fromRecord.save();
-
-        console.log("FROM activity stored");
       }
 
       // ==========================================
@@ -275,8 +258,6 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         });
 
         await toRecord.save();
-
-        console.log("TO activity stored");
       }
 
       inserted++;
@@ -292,7 +273,6 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
       message: `Stored ${inserted} new call records`,
     });
   } catch (err) {
-    console.log("Error:", err.response?.data || err.message);
     return res.status(500).json({
       status: "error",
       message: "Failed to fetch/store call history",
@@ -525,7 +505,6 @@ exports.getCompanyCallHistory = async (req, res) => {
       callRecords,
     });
   } catch (err) {
-    console.error("❌ Company Call History Error:", err);
     res.status(500).json({
       status: "error",
       message: "Failed to fetch call history",
@@ -540,7 +519,7 @@ exports.getAgentCallHistory = async (req, res) => {
 
     // 1️⃣ Fetch logged-in company admin
     const agent = await User.findById(loginUserId).select(
-      "_id firstname lastname extensionNumber role"
+      "_id firstname lastname extensionNumber role PBXDetails"
     );
 
     if (!agent) {
@@ -550,7 +529,7 @@ exports.getAgentCallHistory = async (req, res) => {
       });
     }
 
-    const agentExtension = agent.extensionNumber;
+    const agentExtension = agent.PBXDetails.PBX_EXTENSION_NUMBER;
 
     // 2️⃣ Request filters
     const {
@@ -615,14 +594,6 @@ exports.getAgentCallHistory = async (req, res) => {
       }
     }
 
-    // // 8️⃣ Date Filter
-    // if (startDate && endDate) {
-    //   query.start_time = {
-    //     $gte: new Date(startDate),
-    //     $lte: new Date(endDate)
-    //   };
-    // }
-
     // 8️⃣ Date Filter (SAFE for STRING + DATE + NULL values)
     if (startDate && endDate) {
       query.$expr = {
@@ -673,10 +644,6 @@ exports.getAgentCallHistory = async (req, res) => {
       userId: loginUserId,
     };
 
-    // if (query.direction) summaryFilter.direction = query.direction;
-    // if (query.status) summaryFilter.status = query.status;
-    // if (query.start_time) summaryFilter.start_time = query.start_time;
-
     const inbound = await CallHistory.countDocuments({
       ...summaryFilter,
       direction: "Inbound",
@@ -686,11 +653,6 @@ exports.getAgentCallHistory = async (req, res) => {
       ...summaryFilter,
       direction: "Outbound",
     });
-
-    // const internal = await CallHistory.countDocuments({
-    //   ...summaryFilter,
-    //   direction: "Internal",
-    // });
 
     const missed = await CallHistory.countDocuments({
       ...summaryFilter,
@@ -721,7 +683,6 @@ exports.getAgentCallHistory = async (req, res) => {
       callRecords: finalData,
     });
   } catch (err) {
-    console.error("❌ CompanyAdmin Get Call History Error:", err);
     return res.status(500).json({
       status: "error",
       message: "Failed to retrieve call history",
@@ -976,7 +937,6 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       callRecords,
     });
   } catch (err) {
-    console.error("❌ Phone Call History Error:", err);
     return res.status(500).json({
       status: "error",
       message: "Failed to retrieve phone number call history",
@@ -1020,8 +980,6 @@ exports.callRecordingDownload = async (req, res) => {
     )}`;
 
     const step1 = await axios.get(url1);
-    console.log(step1);
-
     if (!step1.data.download_resource_url) {
       return res.status(500).json({
         status: "error",
@@ -1035,10 +993,6 @@ exports.callRecordingDownload = async (req, res) => {
         const url = new URL(pbxBaseUrl);
         return `${url.protocol}//${url.host}`;
       } catch (err) {
-        console.error(
-          "Invalid PBX base URL:",
-          pbxBaseUrl
-        );
         return pbxBaseUrl;
       }
     }
@@ -1056,7 +1010,6 @@ exports.callRecordingDownload = async (req, res) => {
       fileUrl: url2,
     });
   } catch (err) {
-    console.error("❌ Call Recording Download Error:", err);
     return res.status(500).json({
       status: "error",
       message: "Failed to download recording",
@@ -1129,10 +1082,6 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     // ------------------------------
     // FETCH CALLS
     // ------------------------------
-    // const calls = await CallHistory.find({
-    //   userId: { $in: userIdsToInclude },   // <-- filter by userIds
-    //   start_time: { $gte: startDate, $lt: endDate }
-    // }).select("start_time direction");
 
     const calls = await CallHistory.find({
       userId: { $in: userIdsToInclude },
@@ -1216,8 +1165,6 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     // COUNT CALLS DAY-WISE
     // ------------------------------
     calls.forEach((call) => {
-      // const d = new Date(call.start_time);
-
       const d = new Date(
         call.start_time.replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$1-$2")
       );
@@ -1245,7 +1192,6 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
       days: daysArray.reverse(), // earliest → latest
     });
   } catch (error) {
-    console.error("Error:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -1298,16 +1244,11 @@ exports.getMonthlyCallGraph = async (req, res) => {
       userIdsToSearch = [...userIdsToSearch, ...agentIds];
     }
 
-    // 4️⃣ Fetch calls
-    // const calls = await CallHistory.find({
-    //   userId: { $in: userIdsToSearch },
-    //   start_time: { $gte: startDate, $lte: endDate },
-    // }).select("start_time direction status");
-
     // 4️⃣ Fetch calls (safe for start_time stored as STRING "MM/DD/YYYY HH:mm:ss")
     // Converts start_time -> Date using $dateFromString, safely handles nulls/mixed types.
     const calls = await CallHistory.find({
       userId: { $in: userIdsToSearch },
+      direction: { $ne: "Internal" },
       $expr: {
         $and: [
           {
@@ -1374,7 +1315,6 @@ exports.getMonthlyCallGraph = async (req, res) => {
       role: loginUser.role,
     });
   } catch (error) {
-    console.error("Error:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -1385,11 +1325,8 @@ exports.getMonthlyCallGraph = async (req, res) => {
 
 exports.addFormDataAfterCallEnd = async (req, res) => {
   try {
-    console.log("data saving...");
-
     const { phoneNumbers, firstname, lastname, status, note, meeting } =
       req.body;
-    console.log("status sent", status);
     const userId = req.user._id;
 
     // -----------------------------------------------
@@ -1428,11 +1365,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     let rawNumber = String(phoneNumbers.number || "")
       .trim()
       .replace(/\D/g, "");
-    // let contact = await Contact.findOne({
-    //   createdBy: userId,
-    //   "phoneNumbers.countryCode": rawCountry,
-    //   "phoneNumbers.number": rawNumber,
-    // });
 
     let contact = await Contact.findOne({
       createdBy: { $in: allowedUserIds },
@@ -1440,20 +1372,11 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       "phoneNumbers.number": rawNumber,
     });
 
-    // let lead = await Lead.findOne({
-    //   createdBy: userId,
-    //   "phoneNumbers.countryCode": rawCountry,
-    //   "phoneNumbers.number": rawNumber,
-    // });
-
     let lead = await Lead.findOne({
       createdBy: { $in: allowedUserIds },
       "phoneNumbers.countryCode": rawCountry,
       "phoneNumbers.number": rawNumber,
     });
-
-    // let targetDoc = contact || lead;
-    // let targetType = contact ? "contact" : lead ? "lead" : "newLead";
 
     let targetDoc = null;
     let targetType = null;
@@ -1471,8 +1394,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       const contactObj = contact.toObject();
 
       // ✅ IMPORTANT: REMOVE _id so MongoDB creates new Lead document
-      // delete contactObj._id;
-
       const newLead = await Lead.create({
         ...contactObj, // ✅ COPY ALL FIELDS
         isLead: true, // ✅ MARK AS LEAD
@@ -1549,11 +1470,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       targetDoc.lastname = lastname;
     }
 
-    // if (firstname && lastname) {
-    //   targetDoc.firstname = firstname;
-    //   targetDoc.lastname = lastname;
-    // }
-
 
     // ✅ 5. ADD NOTE AS TASK
     if (note) {
@@ -1570,36 +1486,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
         description: note,
       });
     }
-
-    // ✅ 6. ADD MEETING
-    // if (meeting) {
-    //   // targetDoc.meetings.push({
-    //   //   meetingTitle: meeting.meetingTitle || "Call Follow-up",
-    //   //   meetingDescription: meeting.meetingDescription || "",
-    //   //   meetingStartDate: meeting.meetingStartDate,
-    //   //   meetingStartTime: meeting.meetingStartTime,
-    //   //   meetingType: meeting.meetingType || "offline",
-    //   //   meetingLink: meeting.meetingLink || "",
-    //   //   meetingLocation: meeting.meetingLocation || "",
-    //   // });
-
-    //   targetDoc.meetings.push({
-    //     meetingTitle: meeting.meetingTitle || "Call Follow-up",
-    //     meetingDescription: meeting.meetingDescription || "",
-    //     meetingStartDate: meeting.meetingStartDate,
-    //     meetingStartTime: meeting.meetingStartTime,
-    //     meetingType: meeting.meetingType || "offline",
-    //     meetingLink: meeting.meetingLink || "",
-    //     meetingLocation: meeting.meetingLocation || "",
-    //   });
-
-    //   targetDoc.activities.push({
-    //     action: "meeting_added",
-    //     type: "meeting",
-    //     title: meeting.meetingTitle || "Meeting Scheduled",
-    //     description: "Meeting created after call",
-    //   });
-    // }
 
     if (meeting) {
       const timezone = meeting.timezone || "UTC";
@@ -1698,56 +1584,10 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       });
     }
 
-    // if (meeting) {
-    //   let meetingObj = {
-    //     meetingTitle: meeting.meetingTitle || "Call Follow-up",
-    //     meetingDescription: meeting.meetingDescription || "",
-    //     meetingStartDate: meeting.meetingStartDate,
-    //     meetingStartTime: meeting.meetingStartTime,
-    //     meetingType: meeting.meetingType || "offline",
-    //     meetingLocation: meeting.meetingLocation || "",
-    //     meetingProvider: meeting.meetingProvider || null,
-    //     meetingLink: "",
-    //   };
-
-    //   if (meetingObj.meetingType === "online") {
-    //     if (!meetingObj.meetingProvider) {
-    //       return res.status(400).json({
-    //         message: "Meeting provider is required for online meetings (zoom/google)",
-    //       });
-    //     }
-
-    //     if (meetingObj.meetingProvider === "zoom") {
-    //       const zoomData = await createZoomMeeting(loggedInUser, meetingObj, "UTC");
-    //       meetingObj.meetingLink = zoomData.joinUrl;
-    //       meetingObj.meetingProvider = "zoom";
-    //     }
-
-    //     if (meetingObj.meetingProvider === "google") {
-    //       const link = await createGoogleMeetEvent(loggedInUser, meetingObj, "UTC");
-    //       meetingObj.meetingLink = link;
-    //       meetingObj.meetingProvider = "google";
-    //     }
-
-    //     meetingObj.meetingLocation = undefined; // clear location
-    //   }
-
-    //   targetDoc.meetings.push(meetingObj);
-
-    //   targetDoc.activities.push({
-    //     action: "meeting_added",
-    //     type: "meeting",
-    //     title: meetingObj.meetingTitle || "Meeting Scheduled",
-    //     description: "Meeting created after call",
-    //   });
-    // }
-
-
     // ✅ 7. SAVE FINAL DOCUMENT
     await targetDoc.save();
 
     if (loggedInUser.zoho?.accessToken && loggedInUser.zoho?.refreshToken) {
-      console.log("hello");
       zohoAfterCallSync({
         user: loggedInUser,
         targetDoc,
@@ -1767,7 +1607,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       data: targetDoc,
     });
   } catch (error) {
-    console.error("❌ addFormDataAfterCallEnd Error:", error);
     return res.status(500).json({
       message: "Internal server error",
       error: error.message,
@@ -1779,40 +1618,58 @@ exports.findByPhoneNumber = async (req, res) => {
   try {
     const { phoneNumbers } = req.body;
     const loggedInUser = req.user;
-    console.log("loggedInUser", loggedInUser);
-    if (!phoneNumbers?.countryCode || !phoneNumbers?.number) {
+
+    if (!phoneNumbers || !phoneNumbers.number) {
       return res.status(400).json({
         success: false,
-        message: "countryCode and number are required",
+        message: "Phone number is required",
       });
     }
 
     const user = await User.findById(loggedInUser._id);
     if (!user) {
-      return res.status(400).json({
-        status: "error",
+      return res.status(404).json({
+        success: false,
         message: "User not found",
       });
     }
 
-    const { countryCode, number } = phoneNumbers;
+    /* ---------------------------------------------
+       STEP 1: Prepare raw input
+    --------------------------------------------- */
 
-    // const normalizedCountryCode = String(countryCode).trim().replace(/\D/g, "");
-    // const normalizedNumber = String(number).trim().replace(/\D/g, "");
+    let rawInput = "";
+    let onlyNumberSearch = false;
 
-    /**
-     * 🔐 Decide allowed userIds
-     */
+    if (phoneNumbers.countryCode && phoneNumbers.number) {
+      rawInput =
+        "+" +
+        String(phoneNumbers.countryCode).replace(/\D/g, "") +
+        String(phoneNumbers.number).replace(/\D/g, "");
+    } else {
+      rawInput = String(phoneNumbers.number).replace(/\D/g, "");
+
+      if (rawInput.startsWith("00")) {
+        rawInput = "+" + rawInput.slice(2);
+      } else if (rawInput.length > 10) {
+        rawInput = "+" + rawInput;
+      } else {
+        // Local number (no country code)
+        onlyNumberSearch = true;
+      }
+    }
+
+    /* ---------------------------------------------
+       STEP 2: Allowed User IDs
+    --------------------------------------------- */
+
     let allowedUserIds = [];
 
     if (user.role === "user") {
-      // normal user → only own data
       allowedUserIds = [loggedInUser._id];
-      console.log("allowedUserIds", allowedUserIds);
     }
 
     if (user.role === "companyAdmin") {
-      // company admin → self + agents
       const agents = await User.find({
         createdByWhichCompanyAdmin: loggedInUser._id,
       }).select("_id");
@@ -1821,59 +1678,86 @@ exports.findByPhoneNumber = async (req, res) => {
         loggedInUser._id,
         ...agents.map((a) => a._id),
       ];
-      console.log("allowedUserIds", allowedUserIds);
     }
 
-    /**
-     * 🔎 Common phone query
-     */
-    const phoneQuery = {
-      phoneNumbers: {
-        $elemMatch: {
-          countryCode: String(countryCode).trim().replace(/\D/g, ""),
-          number: String(number).trim().replace(/\D/g, ""),
-        },
-      },
-      createdBy: { $in: allowedUserIds },
-    };
+    /* ---------------------------------------------
+       STEP 3: Try Parsing (if not local-only)
+    --------------------------------------------- */
 
-    /**
-     * 🔍 Search Contact & Lead
-     */
+    let phoneQuery;
+
+    if (!onlyNumberSearch) {
+      let parsedPhone;
+
+      if (rawInput.startsWith("+")) {
+        parsedPhone = parsePhoneNumberFromString(rawInput);
+      } else {
+        parsedPhone = parsePhoneNumberFromString(rawInput, "IN");
+      }
+
+      if (parsedPhone && parsedPhone.isValid()) {
+        const normalizedCountryCode = parsedPhone.countryCallingCode;
+        const normalizedNumber = parsedPhone.nationalNumber;
+
+        phoneQuery = {
+          phoneNumbers: {
+            $elemMatch: {
+              countryCode: normalizedCountryCode,
+              number: normalizedNumber,
+            },
+          },
+          createdBy: { $in: allowedUserIds },
+        };
+      } else {
+        // Parsing failed → fallback to number only search
+        onlyNumberSearch = true;
+      }
+    }
+
+    /* ---------------------------------------------
+       STEP 4: Fallback → Search only by number
+    --------------------------------------------- */
+
+    if (onlyNumberSearch) {
+      const cleanNumber = String(phoneNumbers.number).replace(/\D/g, "");
+
+      phoneQuery = {
+        "phoneNumbers.number": cleanNumber,
+        createdBy: { $in: allowedUserIds },
+      };
+    }
+
+    /* ---------------------------------------------
+       STEP 5: Search DB
+    --------------------------------------------- */
+
     const [contact, lead] = await Promise.all([
       Contact.findOne(phoneQuery),
       Lead.findOne(phoneQuery),
     ]);
 
-    /**
-     * ❌ Nothing found
-     */
     if (!contact && !lead) {
       return res.status(200).json({
-        status: "success",
-        message: "Found contact/lead",
-        data: {}
+        success: true,
+        message: "No contact or lead found",
+        data: {},
       });
     }
 
-    /**
-     * ✅ Found
-     */
-    const mergedResult = contact || lead;
-    console.log("Found contact/lead:", mergedResult);
     return res.status(200).json({
-      status: "success",
-      message: "Found contact/lead",
-      data: mergedResult,
+      success: true,
+      message: "Contact/Lead found",
+      data: contact || lead,
     });
+
   } catch (error) {
-    console.error("Phone lookup error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error",
     });
   }
 };
+
 
 const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 
@@ -1883,26 +1767,10 @@ const lambdaClient = new LambdaClient({
 
 exports.incomingCallWebhook = async (req, res) => {
   try {
-    console.log("Incoming Call Webhook Received:", req.body);
     const userId = req.user._id;
-
-    // if (!userId) {
-    //   return res.status(400).json({ message: "User not found" });
-    // }
 
     const connections = await incomingcallConnection.find({ userId });
 
-    // if (!connections || connections.length === 0) {
-    //   return res.status(400).json({ message: "No active connections found" });
-    // }
-
-
-    console.log("connections", connections);
-
-
-    // if (!connections) {
-    //   return res.status(400).json({ message: "Connection not found" });
-    // }
 
     const payload = {
       userId,
@@ -1919,14 +1787,11 @@ exports.incomingCallWebhook = async (req, res) => {
         payload,
       })
     }));
-    console.log("Invoked incomingcall-webhook successfully");
-    console.log(responce);
 
     // You can process the incoming call data here
     // For example, save it to the database or trigger other actions
     return res.status(200).json({ message: "Webhook received successfully" });
   } catch (error) {
-    console.error("❌ Incoming Call Webhook Error:", error);
     return res.status(500).json({
       message: "Internal server error",
       error: error.message,

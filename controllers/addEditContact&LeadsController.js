@@ -165,19 +165,6 @@ const addEditContactisLeads = async (req, res) => {
 
     const isCreating = !contact_id || contact_id === "0";
 
-    // // ------------------------------------------------------------------
-    // // DUPLICATE CHECK FOR EMAIL / PHONE
-    // // ------------------------------------------------------------------
-    // const duplicateCheck = {
-    //   $or: [
-    //     { emailAddresses: { $in: emails }, createdBy: user_id },
-    //     {
-    //       "phoneNumbers.number": { $in: phones.map((p) => p.number) },
-    //       createdBy: user_id,
-    //     },
-    //   ],
-    // };
-
     // ------------------------------------------------------------------
     // COMPANY-WIDE DUPLICATE CHECK FOR EMAIL / PHONE
     // ------------------------------------------------------------------
@@ -251,20 +238,6 @@ const addEditContactisLeads = async (req, res) => {
       });
     }
 
-
-    // If creating → block duplicates across both models
-    // if (isCreating) {
-    //   const exists =
-    //     (await Contact.findOne(duplicateCheck)) ||
-    //     (await Lead.findOne(duplicateCheck));
-    //   if (exists) {
-    //     return res.status(409).json({
-    //       status: "error",
-    //       message: "Contact/Lead already exists with same email or phone",
-    //     });
-    //   }
-    // }
-
     // ------------------------------------------------------------------
     // IMAGE UPLOAD
     // ------------------------------------------------------------------
@@ -329,30 +302,6 @@ const addEditContactisLeads = async (req, res) => {
     const prevCategory = existing.isLead ? "lead" : "contact";
 
     // // Duplicate check for updates → exclude current doc
-    // const duplicate =
-    //   (await Contact.findOne({
-    //     ...duplicateCheck,
-    //     createdBy: req.user._id,
-    //     contact_id: { $ne: existing.contact_id },
-    //   })) ||
-    //   (await Lead.findOne({
-    //     ...duplicateCheck,
-    //     createdBy: req.user._id,
-    //     contact_id: { $ne: existing.contact_id },
-    //   }));
-    // console.log("existing id:", contact_id);
-    // console.log("Received duplicate:", duplicate);
-
-    // if (duplicate) {
-    //   return res.status(409).json({
-    //     status: "error",
-    //     message: "Another record already exists with this email or phone",
-    //   });
-    // }
-
-    // Duplicate check for updates → use company-wide maps but ignore the same existing record
-    // (existing is the document we are updating)
-    // Rebuild incoming normalized phones & emails (reuse variables from above if in scope)
     const updateIncomingEmails = (emails || []).map(e => String(e).toLowerCase().trim());
     const updateIncomingPhones = (phones || []).map(p => {
       if (!p) return null;
@@ -448,23 +397,6 @@ const addEditContactisLeads = async (req, res) => {
         activityType = "contact";
       }
 
-      // const newDoc = await currentModel.create({
-      //   ...old,
-      //   ...req.body,
-      //   isLead: isLeadReq,
-      //   status: newStatus,
-      //   contactImageURL: finalImageURL || old.contactImageURL,
-      //   activities: [
-      //     ...(old.activities || []),
-      //     {
-      //       action: activity,
-      //       title: activityTitle,
-      //       type: activityType,
-      //       description: activityDescription,
-      //     },
-      //   ],
-      // });
-
       const newDoc = await currentModel.create({
         ...old,
 
@@ -514,8 +446,6 @@ const addEditContactisLeads = async (req, res) => {
     // NORMAL UPDATE - CORRECTED
     // ------------------------------------------------------------------
     const updatePayload = {
-      // 1. Fields that are safe to update with null/undefined if not provided,
-      //    or where an empty string is acceptable (social links).
       firstname: firstname,
       lastname: lastname,
       company: company,
@@ -526,26 +456,10 @@ const addEditContactisLeads = async (req, res) => {
       twitter: twitter,
       facebook: facebook,
       website: website,
-      // Note: isFavourite and notes are missing from req.body destructuring but
-      // often included in update payloads, ensure they are present if needed.
       isFavourite: req.body.isFavourite,
-      // notes: req.body.notes,
     };
 
     // 2. Conditional updates for arrays (email, phone)
-    // ONLY update if the client explicitly provided data (emails/phones are the parsed arrays).
-    // If client *did not* provide `emailAddresses` or `phoneNumbers`, `emails` and `phones`
-    // will be empty arrays `[]` from the parsing step, but we check if they came from the body.
-    // The safest way is to check if the request body keys exist.
-
-    // A better approach: if the parsed arrays are NOT empty, use them.
-    // If they are empty, check if the original request body property was present.
-
-    // If client sends { emailAddresses: [] }, we want to clear the emails.
-    // If client sends {}, we want to keep the old emails.
-
-    // Assuming your parsing logic on lines 21-27 is what determines if the client
-    // intended to update the array:
     const emailBodyPresent = req.body.emailAddresses !== undefined;
     const phoneBodyPresent = req.body.phoneNumbers !== undefined;
 
@@ -555,14 +469,6 @@ const addEditContactisLeads = async (req, res) => {
     if (phoneBodyPresent) {
       updatePayload.phoneNumbers = phones;
     }
-
-    // Fallback if we assume no body key means no change, but an empty array means clear.
-    // The current parsing makes it tricky. Let's use the simplest and most common fix:
-    // Only update if the parsed array is NOT empty, or if we *know* the client explicitly
-    // intended to send an empty array (which is hard without better client-side checks).
-    // For now, if the parsed array is not empty, we update it.
-    // The safest approach is the one above using `req.body` presence.
-    // Let's use a simpler structure that relies on the initial parsing:
 
     // Update with non-empty values from request body
     if (firstname !== undefined) updatePayload.firstname = firstname;
@@ -611,7 +517,6 @@ const addEditContactisLeads = async (req, res) => {
       data: updated,
     });
   } catch (error) {
-    console.error("API ERROR:", error);
     return res.status(500).json({ status: "error", message: error.message });
   }
 };
@@ -704,7 +609,6 @@ const deleteContactOrLead = async (req, res) => {
       message: "Record deleted",
     });
   } catch (error) {
-    console.error("Error deleting record:", error);
     res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -728,6 +632,22 @@ const toggleContactFavorite = async (req, res) => {
       });
     }
 
+    // Determine access scope
+    let createdByFilter = { createdBy: req.user._id };
+
+    // If Company Admin → include agents
+    if (user.role === "companyAdmin") {
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: user._id,
+      }).select("_id");
+
+      const agentIds = agents.map((a) => a._id);
+
+      createdByFilter = {
+        createdBy: { $in: [user._id, ...agentIds] },
+      };
+    }
+
     const { contact_id, isFavourite, category } = req.body;
 
     if (!contact_id) {
@@ -749,11 +669,11 @@ const toggleContactFavorite = async (req, res) => {
       let record =
         (await Contact.findOne({
           _id: contact_id,
-          createdBy: req.user._id,
+          ...createdByFilter,
         })) ||
         (await Lead.findOne({
           _id: contact_id,
-          createdBy: req.user._id,
+          ...createdByFilter,
         }));
 
       if (!record) {
@@ -808,7 +728,7 @@ const toggleContactFavorite = async (req, res) => {
     // Find the record
     const record = await currentModel.findOne({
       _id: contact_id,
-      createdBy: req.user._id,
+      ...createdByFilter,
     });
 
     if (!record) {
@@ -844,7 +764,6 @@ const toggleContactFavorite = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error toggling favorite:", error);
     res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -925,7 +844,6 @@ const batchDeleteContacts = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error batch deleting records:", error);
     res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -994,29 +912,6 @@ const updateFirstPhoneOrEmail = async (req, res) => {
     if (field === "phone") {
       // Parse phone number - expecting format like "+1 1234567890" or "1234567890"
       const trimmedValue = value.trim();
-
-      // // Check if it starts with +
-      // if (trimmedValue.startsWith("+")) {
-      //   const parts = trimmedValue.slice(1).split(/\s+/);
-      //   if (parts.length >= 2) {
-      //     countryCode = parts[0].replace(/[^\d]/g, "");
-      //     number = parts.slice(1).join("").replace(/[^\d]/g, "");
-      //   } else {
-      //     // No space, try to split (assume first 1-3 digits are country code)
-      //     const allDigits = trimmedValue.slice(1).replace(/[^\d]/g, "");
-      //     if (allDigits.length > 3) {
-      //       countryCode = allDigits.slice(0, 2); // Assume 2-digit country code
-      //       number = allDigits.slice(2);
-      //     } else {
-      //       number = allDigits;
-      //       countryCode = "1"; // Default to US
-      //     }
-      //   }
-      // } else {
-      //   // No country code, just number
-      //   number = trimmedValue.replace(/[^\d]/g, "");
-      //   countryCode = "1"; // Default to US
-      // }
 
       // ✅ Parse full phone number using libphonenumber-js
       const phoneNumber = parsePhoneNumberFromString(trimmedValue);
@@ -1143,7 +1038,6 @@ const updateFirstPhoneOrEmail = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error("Error updating phone/email:", error);
     res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -1201,7 +1095,6 @@ const updateAttachments = async (req, res) => {
         const fileURL = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
         return fileURL;
       } catch (error) {
-        console.error(`S3 upload failed for ${file.originalname}:`, error);
         throw new Error("File upload failed");
       }
     };
@@ -1227,7 +1120,6 @@ const updateAttachments = async (req, res) => {
           };
           newAttachments.push(attachment);
         } catch (error) {
-          console.error(`Failed to upload file ${file.originalname}:`, error);
         }
       }
     }
@@ -1246,7 +1138,6 @@ const updateAttachments = async (req, res) => {
           existingAttachments = [];
         }
       } catch (error) {
-        console.error("Error parsing existingAttachments:", error);
         existingAttachments = [];
       }
     }
@@ -1277,7 +1168,6 @@ const updateAttachments = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error updating attachments:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",

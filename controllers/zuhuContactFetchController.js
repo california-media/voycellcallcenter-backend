@@ -98,9 +98,6 @@ exports.redirectToZoho = (req, res) => {
   const category = req.query.category || "contact"; // 👈 ADD (default)
   const type = category === "lead" ? "lead" : "contact"; // derive type from category
   const userId = req.user._id;
-  console.log("defaultCountryCode:", defaultCountryCode);
-  console.log("tags:", tags);
-  console.log("category:", category);
   const scope = type === "lead"
     ? "ZohoCRM.modules.leads.READ"
     : "ZohoCRM.modules.contacts.READ";
@@ -145,7 +142,6 @@ exports.handleZohoCallback = async (req, res) => {
     category = "contact", // 👈 ADD
     type,
   } = JSON.parse(Buffer.from(state, "base64").toString());
-  console.log("userId:", userId, "defaultCountryCode:", defaultCountryCode, "tags:", tags, "category:", category);
 
   try {
     /* ===== TOKEN ===== */
@@ -324,9 +320,6 @@ exports.handleZohoCallback = async (req, res) => {
 
     const saved = await TargetModel.insertMany(toInsert);
 
-    console.log(saved);
-    // console.log(`📊 Zoho ${type.toUpperCase()} Import Summary:`);
-
 
     const resultData = {
       status: "success",
@@ -337,8 +330,6 @@ exports.handleZohoCallback = async (req, res) => {
       totalImported: saved.length,
       contacts: saved,
     };
-    console.log("Result Data:", resultData);
-
     return res.send(`
           <!DOCTYPE html>
           <html>
@@ -353,7 +344,6 @@ exports.handleZohoCallback = async (req, res) => {
           </html>
     `);
   } catch (err) {
-    console.error("Zoho Import Error:", err);
     return res.send(`
       <script>
         window.opener.postMessage({ status: "error" }, "*");

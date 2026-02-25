@@ -1,79 +1,3 @@
-// const axios = require("axios");
-// const Contact = require("../models/contactModel");
-// const Lead = require("../models/leadModel");
-// const { buildGlobalDuplicateSets } = require("./duplicate.service");
-
-// const fetchModule = async (module, apiBaseUrl, token) => {
-//   const res = await axios.get(
-//     `${apiBaseUrl}/crm/v2/${module}`,
-//     { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
-//   );
-//   return res.data.data || [];
-// };
-
-// exports.syncZoho = async (user) => {
-//   const { phones, emails } = await buildGlobalDuplicateSets(user._id);
-
-//   const [contacts, leads, tasks, events] = await Promise.all([
-//     fetchModule("Contacts", user.zoho.apiBaseUrl, user.zoho.accessToken),
-//     fetchModule("Leads", user.zoho.apiBaseUrl, user.zoho.accessToken),
-//     fetchModule("Tasks", user.zoho.apiBaseUrl, user.zoho.accessToken),
-//     fetchModule("Events", user.zoho.apiBaseUrl, user.zoho.accessToken)
-//   ]);
-
-//   for (const c of contacts) {
-//     const phone = c.Phone?.replace(/\D/g, "");
-//     const email = c.Email?.toLowerCase();
-
-//     const exists = phones.has(phone) || emails.has(email);
-
-//     if (exists) {
-//       await Contact.updateOne(
-//         { createdBy: user._id },
-//         { $set: { firstname: c.First_Name, lastname: c.Last_Name } }
-//       );
-//     } else {
-//       await Contact.create({
-//         firstname: c.First_Name,
-//         lastname: c.Last_Name,
-//         phoneNumbers: phone ? [{ number: phone }] : [],
-//         emailAddresses: email ? [email] : [],
-//         createdBy: user._id
-//       });
-//     }
-//   }
-
-//   for (const l of leads) {
-//     await Lead.updateOne(
-//       { emailAddresses: l.Email?.toLowerCase() },
-//       {
-//         $setOnInsert: {
-//           firstname: l.First_Name,
-//           lastname: l.Last_Name,
-//           emailAddresses: [l.Email],
-//           createdBy: user._id
-//         }
-//       },
-//       { upsert: true }
-//     );
-//   }
-
-//   // Attach tasks & meetings
-//   for (const t of tasks) {
-//     await Contact.updateMany(
-//       {},
-//       { $push: { tasks: { taskDescription: t.Subject } } }
-//     );
-//   }
-
-//   for (const e of events) {
-//     await Contact.updateMany(
-//       {},
-//       { $push: { meetings: { meetingTitle: e.Event_Title } } }
-//     );
-//   }
-// };
-
 
 const axios = require("axios");
 const Contact = require("../models/contactModel");
@@ -203,5 +127,4 @@ exports.syncZoho = async (user) => {
     );
   }
 
-  console.log("✅ Zoho sync completed");
 };

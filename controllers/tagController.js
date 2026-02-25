@@ -10,7 +10,6 @@ const updateContactTags = async (req, res) => {
     const contact_id = req.body.contact_id;
     const { tags } = req.body;
     const category = req.body.category;
-    console.log(contact_id);
 
     // ✅ Validate category
 
@@ -20,7 +19,6 @@ const updateContactTags = async (req, res) => {
         message: "category must be either 'contact' or 'lead' if provided",
       });
     }
-    console.log(user_id);
 
     // ✅ Get user
     const user = await User.findById(user_id);
@@ -41,7 +39,6 @@ const updateContactTags = async (req, res) => {
     }
 
     const Model = category === "lead" ? Lead : Contact;
-    console.log(category);
 
     // ✅ Validate contact
     const contact = await Model.findOne({
@@ -84,27 +81,33 @@ const updateContactTags = async (req, res) => {
 
     let matchedTags = [];
 
-    let nextContactOrder =
-      contact.tags.length > 0
-        ? Math.max(...contact.tags.map(t => t.order ?? 0)) + 1
-        : 0;
-
     let nextUserTagOrder =
       user.tags.length > 0
         ? Math.max(...user.tags.map(t => t.order ?? 0)) + 1
         : 0;
 
+    // ------------------------------------------------------------------
+    // PROCESS INCOMING TAGS (DEDUPLICATE)
+    // ------------------------------------------------------------------
+    const processedTags = [];
+    const seenNames = new Set();
+    let userTagsUpdated = false;
+
     for (const tagItem of tagsArray) {
       const tagText = tagItem.tag?.trim();
-      const emoji = tagItem.emoji || "";
-
       if (!tagText) continue;
 
+      const normalizedName = tagText.toLowerCase();
+      if (seenNames.has(normalizedName)) continue;
+      seenNames.add(normalizedName);
+
+      const emoji = tagItem.emoji || "🏷️";
+
       let existingUserTag = user.tags.find(
-        (t) => t.tag.toLowerCase() === tagText.toLowerCase()
+        (t) => t.tag.toLowerCase() === normalizedName
       );
 
-      // 🆕 CREATE USER TAG
+      // Create tag in User profile if missing
       if (!existingUserTag) {
         existingUserTag = {
           tag_id: new mongoose.Types.ObjectId(),
@@ -112,106 +115,58 @@ const updateContactTags = async (req, res) => {
           emoji,
           order: nextUserTagOrder++,
         };
-
         user.tags.push(existingUserTag);
-        await user.save();
+        userTagsUpdated = true;
       }
-
-      // 🔁 CHECK CONTACT TAG
-      const existingContactTag = contact.tags.find(
-        (t) => String(t.tag_id) === String(existingUserTag.tag_id)
-      );
-
-      matchedTags.push({
-        tag_id: existingUserTag.tag_id,
-        tag: existingUserTag.tag,
-        emoji: existingUserTag.emoji,
-
-        globalOrder: existingUserTag.order,
-
-        order: existingContactTag
-          ? existingContactTag.order
-          : nextContactOrder++,
-      });
+      processedTags.push(existingUserTag);
     }
 
-    // for (const tagItem of tagsArray) {
-    //   const tagText = tagItem.tag?.trim();
-    //   const emoji = tagItem.emoji || "";
+    if (userTagsUpdated) {
+      await user.save();
+    }
 
-    //   if (!tagText) continue;
+    // ------------------------------------------------------------------
+    // MERGE WITH EXISTING CONTACT TAGS (PRESERVE OTHER USERS' TAGS)
+    // ------------------------------------------------------------------
+    const myTagIdStrings = user.tags.map(t => t.tag_id.toString());
 
-    //   // 🔍 Check if tag already exists for user
-    //   const existingUserTag = user.tags.find(
-    //     (t) => t.tag.toLowerCase() === tagText.toLowerCase()
-    //   );
+    // Tags that belong to OTHER users (not in current user's tag list)
+    const otherUsersTags = contact.tags.filter(
+      t => !t.tag_id || !myTagIdStrings.includes(t.tag_id.toString())
+    );
 
-    //   let tagObj;
+    let nextContactOrder =
+      contact.tags.length > 0
+        ? Math.max(...contact.tags.map(t => t.order ?? 0)) + 1
+        : 0;
 
-    //   if (existingUserTag) {
-    //     tagObj = {
-    //       tag_id: existingUserTag.tag_id,
-    //       tag: existingUserTag.tag,
-    //       emoji: existingUserTag.emoji || null,
-    //       order: existingUserTag.order || null,
-    //     };
-    //   } else {
-    //     // 🆕 Create new tag
-    //     const newTag = {
-    //       tag_id: new mongoose.Types.ObjectId(),
-    //       tag: tagText,
-    //       emoji,
-    //       order: user.tags.length + 1, // assign next order
-    //     };
-    //     user.tags.push(newTag);
-    //     await user.save();
+    const myNewContactTags = processedTags.map(ut => {
+      // Check if this tag already exists on the contact to preserve its local order
+      const existingOnContact = contact.tags.find(
+        t => String(t.tag_id) === String(ut.tag_id)
+      );
 
-    //     tagObj = {
-    //       tag_id: newTag.tag_id,
-    //       tag: newTag.tag,
-    //       emoji: newTag.emoji || null,
-    //       order: newTag.order || null,
-    //     };
-    //   }
+      return {
+        tag_id: ut.tag_id,
+        tag: ut.tag,
+        emoji: ut.emoji,
+        globalOrder: ut.order,
+        order: existingOnContact ? existingOnContact.order : nextContactOrder++,
+      };
+    });
 
-    //   // matchedTags.push(tagObj);
-    //   const existingContactTag = contact.tags.find(
-    //     (t) => String(t.tag_id) === String(tagObj.tag_id)
-    //   );
-
-    //   matchedTags.push({
-    //     ...tagObj,
-    //     globalOrder: existingUserTag?.order ?? null,
-    //     order: existingContactTag
-    //       ? existingContactTag.order
-    //       : contact.tags.length + matchedTags.length, // 👈 unique per contact
-    //   });
-    // }
-
-    // ✅ Maintain consistent order with user tags
-    // const userTagOrder = user.tags.map((t) => String(t.tag_id));
-
-    // matchedTags.sort((a, b) => {
-    //   const indexA = userTagOrder.indexOf(String(a.tag_id));
-    //   const indexB = userTagOrder.indexOf(String(b.tag_id));
-    //   return indexA - indexB;
-    // });
-
-    // // ✅ Add 'order' field to each tag
-    // matchedTags = matchedTags.map((t) => ({
-    //   ...t,
-    //   order: userTagOrder.indexOf(String(t.tag_id)),
-    // }));
+    // Final combined list
+    const finalContactTags = [...otherUsersTags, ...myNewContactTags];
 
     // ✅ Save to contact
-    contact.tags = matchedTags;
+    contact.tags = finalContactTags;
     await logActivityToContact(category, contact._id, {
       action: "tags_updated",
       type: "tag",
       title: "Tags Updated",
-      description: `Tags updated to: ${matchedTags.length === 0
+      description: `Tags updated to: ${myNewContactTags.length === 0
         ? "No tags"
-        : matchedTags.map((t) => t.tag).join(", ")
+        : myNewContactTags.map((t) => t.tag).join(", ")
         }`,
     });
 
@@ -223,7 +178,6 @@ const updateContactTags = async (req, res) => {
       tags: matchedTags,
     });
   } catch (error) {
-    console.error("❌ Error updating contact tags:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -231,161 +185,6 @@ const updateContactTags = async (req, res) => {
     });
   }
 };
-
-// const updateMultipleContactTags = async (req, res) => {
-//   try {
-//     const user_id = req.user._id;
-//     const { contact_id, tags, category } = req.body;
-
-//     // ✅ Validate category
-//     if (!category || !["contact", "lead"].includes(category)) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "category must be either 'contact' or 'lead'",
-//       });
-//     }
-
-//     // ✅ Validate contact_id (must be array)
-//     if (!Array.isArray(contact_id) || contact_id.length === 0) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "contact_id must be a non-empty array",
-//       });
-//     }
-
-//     // ✅ Validate tags
-//     if (!Array.isArray(tags) || tags.length === 0) {
-//       return res.status(400).json({
-//         status: "error",
-//         message: "tags must be a non-empty array",
-//       });
-//     }
-
-//     const Model = category === "lead" ? Lead : Contact;
-
-//     // ✅ Fetch user
-//     const user = await User.findById(user_id);
-//     if (!user) {
-//       return res.status(404).json({
-//         status: "error",
-//         message: "User not found",
-//       });
-//     }
-
-//     // ===============================
-//     // 🔖 STEP 1: Ensure tags exist at USER level
-//     // ===============================
-
-//     let nextUserTagOrder =
-//       user.tags.length > 0
-//         ? Math.max(...user.tags.map(t => t.order ?? 0)) + 1
-//         : 0;
-
-//     const userTagMap = {}; // tagText(lowercase) => userTag
-
-//     for (const tagItem of tags) {
-//       const tagText = tagItem.tag?.trim();
-//       const emoji = tagItem.emoji || "";
-
-//       if (!tagText) continue;
-
-//       let existingUserTag = user.tags.find(
-//         t => t.tag.toLowerCase() === tagText.toLowerCase()
-//       );
-
-//       if (!existingUserTag) {
-//         existingUserTag = {
-//           tag_id: new mongoose.Types.ObjectId(),
-//           tag: tagText,
-//           emoji,
-//           order: nextUserTagOrder++,
-//         };
-//         user.tags.push(existingUserTag);
-//       }
-
-//       userTagMap[tagText.toLowerCase()] = existingUserTag;
-//     }
-
-//     await user.save();
-
-//     // ===============================
-//     // 🔁 STEP 2: Apply tags to EACH contact / lead
-//     // ===============================
-
-//     const updatedContacts = [];
-
-//     for (const id of contact_id) {
-//       const contact = await Model.findOne({
-//         contact_id: new mongoose.Types.ObjectId(id),
-//         createdBy: user_id,
-//       });
-
-//       if (!contact) continue;
-
-//       let nextContactOrder =
-//         contact.tags.length > 0
-//           ? Math.max(...contact.tags.map(t => t.order ?? 0)) + 1
-//           : 0;
-
-//       const newTags = [];
-
-//       for (const tagItem of tags) {
-//         const tagText = tagItem.tag?.trim().toLowerCase();
-//         if (!tagText) continue;
-
-//         const userTag = userTagMap[tagText];
-
-//         const existingContactTag = contact.tags.find(
-//           t => String(t.tag_id) === String(userTag.tag_id)
-//         );
-
-//         newTags.push({
-//           tag_id: userTag.tag_id,
-//           tag: userTag.tag,
-//           emoji: userTag.emoji,
-//           globalOrder: userTag.order,
-//           order: existingContactTag
-//             ? existingContactTag.order
-//             : nextContactOrder++,
-//         });
-//       }
-
-//       contact.tags = newTags;
-
-//       await logActivityToContact(category, contact._id, {
-//         action: "tags_updated",
-//         type: "tag",
-//         title: "Tags Updated",
-//         description:
-//           newTags.length === 0
-//             ? "No tags"
-//             : `Tags updated to: ${newTags.map(t => t.tag).join(", ")}`,
-//       });
-
-//       await contact.save();
-//       updatedContacts.push(contact);
-//     }
-
-//     // ===============================
-//     // ✅ RESPONSE
-//     // ===============================
-
-//     return res.status(200).json({
-//       status: "success",
-//       message: "Tags assigned successfully",
-//       updatedCount: updatedContacts.length,
-//       contacts: updatedContacts,
-//     });
-
-//   } catch (error) {
-//     console.error("❌ Error updating contact tags:", error);
-//     return res.status(500).json({
-//       status: "error",
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
 
 const updateMultipleContactTags = async (req, res) => {
   try {
@@ -453,7 +252,19 @@ const updateMultipleContactTags = async (req, res) => {
 
     const userTagMap = {}; // lowercase tag => userTag
 
-    for (const tagItem of tags) {
+    const uniqueIncomingTags = [];
+    const seenNamesInRequest = new Set();
+    for (const t of tags) {
+      const name = t.tag?.trim();
+      if (!name) continue;
+      const lowerName = name.toLowerCase();
+      if (!seenNamesInRequest.has(lowerName)) {
+        seenNamesInRequest.add(lowerName);
+        uniqueIncomingTags.push(t);
+      }
+    }
+
+    for (const tagItem of uniqueIncomingTags) {
       const tagText = tagItem.tag?.trim();
       if (!tagText) continue;
 
@@ -479,53 +290,78 @@ const updateMultipleContactTags = async (req, res) => {
     await loginUser.save();
 
     // ===============================
-    // 🔁 STEP 2: APPLY TAGS TO CONTACTS / LEADS
+    // 🔁 STEP 2: APPLY TAGS TO CONTACTS / LEADS (OPTIMIZED)
     // ===============================
     let updatedCount = 0;
+    const batchSize = 10000;
 
-    for (const id of contact_id) {
-      const doc = await Model.findOne({
-        contact_id: new mongoose.Types.ObjectId(id),
-        createdBy: { $in: allowedCreatedByIds },
-      });
+    for (let i = 0; i < contact_id.length; i += batchSize) {
+      const batchIds = contact_id.slice(i, i + batchSize);
 
-      if (!doc) continue;
+      // Fetch contacts for this batch
+      const docs = await Model.find({
+        contact_id: { $in: batchIds.map(id => new mongoose.Types.ObjectId(id)) },
+        createdBy: { $in: allowedCreatedByIds }
+      }).select("tags _id contact_id");
 
-      let nextContactOrder =
-        doc.tags.length > 0
-          ? Math.max(...doc.tags.map(t => t.order ?? 0)) + 1
-          : 0;
+      const bulkOps = [];
 
-      for (const tagItem of tags) {
-        const tagKey = tagItem.tag?.trim().toLowerCase();
-        if (!tagKey) continue;
+      for (const doc of docs) {
+        const newTagsToAdd = [];
+        let nextContactOrder =
+          doc.tags.length > 0
+            ? Math.max(...doc.tags.map(t => t.order ?? 0)) + 1
+            : 0;
 
-        const userTag = userTagMap[tagKey];
+        for (const tagItem of uniqueIncomingTags) {
+          const tagKey = tagItem.tag?.trim().toLowerCase();
+          if (!tagKey) continue;
 
-        const alreadyExists = doc.tags.find(
-          t => String(t.tag_id) === String(userTag.tag_id)
-        );
+          const userTag = userTagMap[tagKey];
+          if (!userTag) continue;
 
-        if (alreadyExists) continue;
+          const alreadyExists = doc.tags.find(
+            t => String(t.tag_id) === String(userTag.tag_id)
+          );
 
-        doc.tags.push({
-          tag_id: userTag.tag_id,
-          tag: userTag.tag,
-          emoji: userTag.emoji,
-          globalOrder: userTag.order,
-          order: nextContactOrder++,
-        });
+          if (!alreadyExists) {
+            newTagsToAdd.push({
+              tag_id: userTag.tag_id,
+              tag: userTag.tag,
+              emoji: userTag.emoji,
+              globalOrder: userTag.order,
+              order: nextContactOrder++,
+            });
+          }
+        }
+
+        if (newTagsToAdd.length > 0) {
+          const activityObj = {
+            action: "tags_added",
+            type: "tag",
+            title: "Tags Added",
+            description: `Tags added: ${newTagsToAdd.map(t => t.tag).join(", ")}`,
+            timestamp: new Date()
+          };
+
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: doc._id },
+              update: {
+                $push: {
+                  tags: { $each: newTagsToAdd },
+                  activities: activityObj
+                }
+              }
+            }
+          });
+          updatedCount++;
+        }
       }
 
-      await logActivityToContact(category, doc._id, {
-        action: "tags_added",
-        type: "tag",
-        title: "Tags Added",
-        description: `Tags added: ${tags.map(t => t.tag).join(", ")}`,
-      });
-
-      await doc.save();
-      updatedCount++;
+      if (bulkOps.length > 0) {
+        await Model.bulkWrite(bulkOps);
+      }
     }
 
     // ===============================
@@ -538,7 +374,6 @@ const updateMultipleContactTags = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Tag update error:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -546,7 +381,6 @@ const updateMultipleContactTags = async (req, res) => {
     });
   }
 };
-
 
 const addTag = async (req, res) => {
   try {
@@ -612,7 +446,6 @@ const addTag = async (req, res) => {
       data: newTags,
     });
   } catch (error) {
-    console.error("Add Tags Error:", error);
     return res.status(500).json({
       status: "error",
       message: "Error adding tags",
@@ -621,36 +454,9 @@ const addTag = async (req, res) => {
   }
 };
 
-// try {
-//   const user = await User.findById(req.user._id);
-//   if (!user) {
-//     return res
-//       .status(404)
-//       .json({ status: "error", message: "User not found" });
-//   }
-//   const userTags = user.tags.map((tag) => ({
-//     tag_id: tag.tag_id,
-//     tag: tag.tag,
-//     emoji: tag.emoji, // Ensure icon is always present
-//     order: tag.order || null,
-//   }));
-
-//   res.status(200).json({
-//     status: "success",
-//     message: "Tags Fetched",
-//     data: userTags,
-//   });
-// } catch {
-//   res
-//     .status(500)
-//     .json({ status: "error", message: "Error fetching the tags" });
-// }
-
 const getTags = async (req, res) => {
   try {
     const userId = req.user._id;
-    console.log(userId);
-
 
     const user = await User.findById(userId).lean();
     if (!user) {
@@ -727,7 +533,6 @@ const getTags = async (req, res) => {
       data: tagsWithCounts,
     });
   } catch (err) {
-    console.error("❌ getTags error:", err);
     res.status(500).json({
       status: "error",
       message: "Error fetching tags",
@@ -856,7 +661,6 @@ const getTagWithContact = async (req, res) => {
       data,
     });
   } catch (err) {
-    console.error("getTagWithContact error:", err);
     return res.status(500).json({
       status: "error",
       message: err.message,
@@ -934,7 +738,6 @@ const editTag = async (req, res) => {
       data: [user.tags[index]],
     });
   } catch (error) {
-    console.error("Edit Tag Error:", error);
     return res.status(500).json({
       status: "error",
       message: "Error editing tag",
@@ -1056,7 +859,6 @@ const deleteTag = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("DeleteTag Error:", error);
     return res.status(500).json({
       status: "error",
       message: "Delete tag failed",

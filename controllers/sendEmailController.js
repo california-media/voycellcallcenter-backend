@@ -399,7 +399,7 @@ exports.sendEmail = async (req, res) => {
             }
 
             const mailOptions = {
-                from: `"Contacts Management" <${user.smtpUser}>`,
+                from: `"VOYCELL" <${user.smtpUser}>`,
                 to,
                 subject,
                 text: text || "",

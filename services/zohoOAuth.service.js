@@ -26,21 +26,6 @@ exports.getAuthURL = ({ accountsUrl, redirectUri, state }) => {
   });
 };
 
-// exports.getTokens = async ({ code, accountsUrl, redirectUri }) => {
-//   console.log("Token Request URL:", `${accountsUrl}/oauth/v2/token`);
-//   const res = await axios.post(
-//     `${accountsUrl}/oauth/v2/token`,
-//     qs.stringify({
-//       grant_type: "authorization_code",
-//       client_id: process.env.ZOHO_CLIENT_ID,
-//       client_secret: process.env.ZOHO_CLIENT_SECRET,
-//       redirect_uri: redirectUri,
-//       code
-//     })
-//   );
-//   return res.data;
-// };
-
 exports.getTokens = async ({ code, accountsUrl, redirectUri }) => {
   return axios.post(
     `${accountsUrl}/oauth/v2/token`,

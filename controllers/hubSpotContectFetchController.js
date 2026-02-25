@@ -14,9 +14,6 @@ const buildGlobalDuplicateSets = async (userId) => {
   if (!loggedInUser) throw new Error("User not found");
 
   // Determine the company admin id:
-  // - if the logged-in user *is* the company admin (role === 'companyAdmin') -> use their _id
-  // - else if logged-in user has createdByWhichCompanyAdmin -> use that id
-  // - else fallback to the logged in user only
   let companyAdminId = null;
   if (String(loggedInUser.role) === "companyAdmin") {
     companyAdminId = loggedInUser._id;
@@ -82,10 +79,6 @@ const redirectToHubSpot = (req, res) => {
   const defaultCountryCode = req.query.defaultCountryCode || "971";
   const tags = req.query.tags || "[]"; // 👈 ADD
   const category = req.query.category || "contact"; // 👈 ADD (default)
-  console.log("user_id:", user_id);
-  console.log("tags:", tags);
-  console.log("category:", category);
-  console.log("defaultCountryCode:", defaultCountryCode);
   const params = querystring.stringify({
     client_id: process.env.HUBSPOT_CLIENT_ID,
     redirect_uri: process.env.HUBSPOT_REDIRECT_URI,
@@ -118,7 +111,6 @@ const handleHubSpotCallback = async (req, res) => {
     tags = "[]",
     category = "contact", // 👈 ADD
   } = JSON.parse(Buffer.from(state, "base64").toString());
-  console.log("userId:", userId, "defaultCountryCode:", defaultCountryCode, "tags:", tags, "category:", category);
 
   try {
     // ✅ TOKEN
@@ -227,11 +219,9 @@ const handleHubSpotCallback = async (req, res) => {
 
       // ✅ ✅ ✅ NEW GOOGLE-LIKE FIX ✅ ✅ ✅
       if (firstname && /\d/.test(firstname) && !rawPhone) {
-        console.log("📞 Number found in firstname, moving to phone");
         rawPhone = String(firstname);
         firstname = "";
       } else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(firstname) && !email) {
-        console.log("📧 Email found in firstname, moving to email");
         email = firstname.toLowerCase();
         firstname = "";
       }
@@ -297,9 +287,6 @@ const handleHubSpotCallback = async (req, res) => {
       });
 
       if (emailDuplicate || phoneDuplicate) {
-        console.log(
-          `Skipping duplicate: ${firstname} ${lastname}, phone: ${phoneList[0]?.number}`
-        );
         continue;
       }
 
@@ -340,17 +327,7 @@ const handleHubSpotCallback = async (req, res) => {
       phoneList.forEach((p) => addPhoneVariants(p));
     }
 
-    console.log(`\n📊 HubSpot Import Summary:`);
-    console.log(
-      `Total HubSpot contacts fetched: ${(contactResponse.data.results || []).length
-      }`
-    );
-    console.log(
-      `Contacts to insert (after deduplication): ${contactsToInsert.length}`
-    );
-
     const savedContacts = await TargetModel.insertMany(contactsToInsert);
-    console.log(`✅ Successfully saved: ${savedContacts.length} contacts`);
 
     const resultData = {
       status: "success",
@@ -376,7 +353,6 @@ const handleHubSpotCallback = async (req, res) => {
       </html>
     `);
   } catch (error) {
-    console.error("HubSpot Error:", error);
     return res.send(`
       <script>
         window.opener.postMessage({ status: "error", message: "HubSpot Import Failed" }, "*");

@@ -1,5 +1,4 @@
 require("dotenv").config();
-console.log("Environment Variables Loaded:");
 // super admin email password
 // email : superadmin@example.com
 // password : SuperSecure123
@@ -18,7 +17,6 @@ const upload = multer({ storage });
 const mongoose = require("mongoose");
 const serverless = require("serverless-http");
 
-console.log("Connecting to MongoDB...");
 const { checkForAuthentication } = require("./middlewares/authentication");
 const checkAccountStatus = require("./middlewares/checkAccountStatus");
 const checkRole = require("./middlewares/roleCheck");
@@ -79,8 +77,6 @@ const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
 // const chatAgentRoutes = require("./routes/chatAgentRoutes");
 // const initGraphQL = require("./graphql");
 
-console.log("Setting up Express app...");
-
 app.use(cors());
 
 app.use(express.json({ limit: "50mb" }));
@@ -92,7 +88,6 @@ app.use("/user", userRoutes);
 // ✅ NOW mount GraphQL
 
 // initGraphQL(app, checkForAuthentication);
-console.log("Setting up routes...");
 app.use("/api/yeastar", express.json(), yeastarRoutes);
 app.use(
   "/api/yeastar-login",
@@ -257,12 +252,8 @@ app.use("/check", (req, res) => {
 });
 app.use("/", (req, res) => {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
-
   res.json({ message: "API Homepage" });
 });
-
-console.log("Setting up error handling...");
 
 // ------------------- DB CONNECT -------------------
 let cachedConnection = null;
@@ -270,18 +261,14 @@ let cachedConnection = null;
 const connectToDatabase = async () => {
   // Check if connection exists AND is actually working
   if (cachedConnection && mongoose.connection.readyState === 1) {
-    console.log("♻️ Using cached MongoDB connection");
     return cachedConnection;
   }
 
   try {
     // Close any stale connections
     if (mongoose.connection.readyState !== 0) {
-      console.log("🔄 Closing stale connection...");
       await mongoose.connection.close();
     }
-
-    console.log("MongoDB URL log:", process.env.MONGO_URL);
 
     // Optimized settings for AWS Lambda
     const connection = await mongoose.connect(process.env.MONGO_URL, {
@@ -298,10 +285,8 @@ const connectToDatabase = async () => {
     });
 
     cachedConnection = connection;
-    console.log("✅ MongoDB connected successfully");
     return connection;
   } catch (err) {
-    console.error("❌ Database connection failed:", err);
     cachedConnection = null;
     throw err;
   }
@@ -369,8 +354,6 @@ const serverlessHandler = serverless(app);
 module.exports.handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
 
-  console.log("Incoming Event:", JSON.stringify(event));
-
   try {
     await connectToDatabase();
 
@@ -379,8 +362,6 @@ module.exports.handler = async (event, context) => {
     ================================= */
 
     if (event?.type === "SEND_SCHEDULED_CAMPAIGN") {
-
-      console.log("⏰ Scheduled Campaign Triggered");
 
       const {
         campaignId,

@@ -7,16 +7,10 @@ dotenv.config();
 
 
 const connectDB = async () => {
-    console.log("[DB] connectDB called");
-    console.log("[DB] mongoose.readyState =", mongoose.connection.readyState);
-
     try {
         if (mongoose.connection.readyState === 1) {
-            console.log("[DB] Already connected, skipping");
             return;
         }
-
-        console.log("[DB] Connecting to MongoDB...");
         const start = Date.now();
 
         await mongoose.connect(process.env.MONGO_URL, {
@@ -31,12 +25,8 @@ const connectDB = async () => {
 };
 
 const decodeToken = (token) => {
-    console.log("[AUTH] decodeToken called");
-    console.log("[AUTH] token exists:", Boolean(token));
-
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log("[AUTH] token decoded successfully", decoded);
         return decoded;
     } catch (err) {
         console.error("[AUTH] token verification failed", err.message);
@@ -46,13 +36,7 @@ const decodeToken = (token) => {
 
 
 export const handler = async (event, context) => {
-    console.log("====================================");
-    console.log("[HANDLER] saveConnection-waba invoked");
-    console.log("[HANDLER] Raw event:", JSON.stringify(event, null, 2));
-    console.log("[HANDLER] Timestamp:", new Date().toISOString());
     context.callbackWaitsForEmptyEventLoop = false;
-    console.log("[HANDLER] Action:", event.action);
-
     try {
         await connectDB();
     } catch (err) {
@@ -61,18 +45,12 @@ export const handler = async (event, context) => {
     }
 
     if (event.action === "connect") {
-        console.log("[CONNECT] New connection attempt");
-        console.log("[CONNECT] connectionId:", event.connectionId);
-
         const decoded = decodeToken(event.token);
 
         if (!decoded?._id) {
             console.warn("[CONNECT] Invalid or missing user ID, aborting");
             return { statusCode: 401, body: "Unauthorized" };
         }
-
-        console.log("[CONNECT] User authenticated");
-        console.log("[CONNECT] userId:", decoded._id);
 
         try {
             const result = await WsConnection.updateOne(
@@ -83,7 +61,6 @@ export const handler = async (event, context) => {
                 },
                 { upsert: true }
             );
-            console.log("[CONNECT] DB update result:", result);
             return { statusCode: 200, body: "Connected" };
         } catch (err) {
             console.error("[CONNECT] Failed to save connection", err);
@@ -92,19 +69,11 @@ export const handler = async (event, context) => {
     }
 
     if (event.action === "disconnect") {
-        console.log("[DISCONNECT] Disconnect event received");
-        console.log("[DISCONNECT] connectionId:", event.connectionId);
-
         try {
             const result = await WsConnection.deleteOne({
                 connectionId: event.connectionId,
             });
 
-            console.log(
-                "[DISCONNECT] Cleanup complete",
-                "deletedCount:",
-                result.deletedCount
-            );
             return { statusCode: 200, body: "Disconnected" };
         } catch (err) {
             console.error("[DISCONNECT] Cleanup failed", err);
@@ -112,7 +81,5 @@ export const handler = async (event, context) => {
         }
     }
 
-    console.log("[HANDLER] Execution finished");
-    console.log("====================================");
     return { statusCode: 200, body: "OK" };
 };

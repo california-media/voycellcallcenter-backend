@@ -92,8 +92,6 @@ exports.adminRegisterUser = async (req, res) => {
     const verificationLink =
       FRONTEND_URL + `/agent-setup?verificationToken=${emailVerificationToken}`;
 
-    console.log(verificationLink);
-
     await sendVerificationEmail(email, verificationLink);
 
     return res.status(201).json({
@@ -106,12 +104,6 @@ exports.adminRegisterUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(
-      "Admin Register Error, deleting user with email: ",
-      req.body.email,
-      error
-    );
-
     await User.deleteOne({ email: req.body.email });
     return res.status(500).json({
       status: "error",
@@ -120,36 +112,6 @@ exports.adminRegisterUser = async (req, res) => {
     });
   }
 };
-
-///get all agents(role = user) created by company admin
-// exports.getAllUsersByCompanyAdmin = async (req, res) => {
-//   try {
-//     const companyAdminId = req.user._id; // ✅ from auth middleware
-
-//     const users = await User.find({
-//       createdByWhichCompanyAdmin: companyAdminId,
-//     })
-//       .select(
-//         "-password -salt -otp -otpExpiresAt -resetPasswordToken -resetPasswordExpires"
-//       ) // hide sensitive data
-//       .sort({ createdAt: -1 });
-
-
-//     return res.status(200).json({
-//       message: "Agents fetched successfully",
-//       status: "success",
-//       count: users.length,
-//       data: users,
-//     });
-//   } catch (error) {
-//     console.error("❌ getAllUsersByCompanyAdmin error:", error);
-//     res.status(500).json({
-//       status: "error",
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
 
 exports.getAllUsersByCompanyAdmin = async (req, res) => {
   try {
@@ -220,7 +182,6 @@ exports.getAllUsersByCompanyAdmin = async (req, res) => {
       data: users,
     });
   } catch (error) {
-    console.error("❌ getAllUsersByCompanyAdmin error:", error);
     res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -240,7 +201,7 @@ exports.getAllUsersByCompanyAdmin = async (req, res) => {
 exports.editAgent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { firstname, lastname, email } = req.body;
+    const { firstname, lastname, email, isWaba = false } = req.body;
     const companyAdminId = req.user._id;
 
     // Find the user and verify ownership
@@ -256,6 +217,12 @@ exports.editAgent = async (req, res) => {
           "Agent not found or you don't have permission to edit this agent",
       });
     }
+
+    // Get company admin (needed for WABA assignment)
+    const companyAdmin = await User.findOne({
+      _id: companyAdminId,
+      role: "companyAdmin",
+    });
 
     // If email is being changed, check if new email already exists
     if (email && email !== user.email) {
@@ -290,6 +257,52 @@ exports.editAgent = async (req, res) => {
     if (firstname !== undefined) user.firstname = firstname;
     if (lastname !== undefined) user.lastname = lastname;
 
+    /* ================================
+   WABA Assign / Unassign Logic
+=================================*/
+
+    if (typeof isWaba === "boolean") {
+
+      // ASSIGN WABA
+      if (isWaba === true) {
+
+        if (!companyAdmin?.whatsappWaba?.isConnected) {
+          return res.status(400).json({
+            status: "error",
+            message: "Company admin has no connected WABA",
+          });
+        }
+
+        user.whatsappWaba = {
+          ...companyAdmin.whatsappWaba.toObject(),
+          chats: [],
+          isConnected: true,
+        };
+      }
+
+      // UNASSIGN WABA
+      else {
+        user.whatsappWaba = {
+          isConnected: false,
+          wabaId: null,
+          phoneNumberId: null,
+          businessAccountId: null,
+          accessToken: null,
+          tokenExpiresAt: null,
+          phoneNumber: null,
+          displayName: null,
+          qualityRating: null,
+          messagingLimit: null,
+          businessVerificationStatus: null,
+          accountReviewStatus: null,
+          status: null,
+          profile: {},
+          webhook: {},
+          chats: [],
+        };
+      }
+    }
+
     await user.save();
 
     return res.status(200).json({
@@ -303,7 +316,6 @@ exports.editAgent = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ editAgent error:", error);
     res.status(500).json({
       status: "error",
       message: "Failed to update agent",
@@ -311,7 +323,6 @@ exports.editAgent = async (req, res) => {
     });
   }
 };
-
 /**
  * ======================================================
  * DELETE AGENT API
@@ -341,9 +352,7 @@ exports.deleteAgent = async (req, res) => {
     if (user.yeastarExtensionId) {
       try {
         await deleteYeastarExtension(user.yeastarExtensionId);
-        console.log("✅ Yeastar extension deleted for user:", user.email);
       } catch (err) {
-        console.error("⚠️ Failed to delete Yeastar extension:", err.message);
         // Continue with user deletion even if Yeastar deletion fails
       }
     }
@@ -360,7 +369,6 @@ exports.deleteAgent = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ deleteAgent error:", error);
     res.status(500).json({
       status: "error",
       message: "Failed to delete agent",

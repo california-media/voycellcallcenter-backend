@@ -129,7 +129,6 @@ const createLead = async ({ user, data }) => {
 // };
 
 const createTask = async ({ user, module, recordId, note }) => {
-  console.log("note:", note, "module:", module, "recordId:", recordId, "user:", user);
   return request({
     user,
     method: "post",
@@ -150,72 +149,7 @@ const createTask = async ({ user, module, recordId, note }) => {
 };
 
 
-
-
-// 📅 CREATE MEETING
-// const createMeeting = async ({ user, module, recordId, meeting }) => {
-//   const startDateTime = new Date(
-//     `${meeting.meetingStartDate}T${meeting.meetingStartTime}:00`
-//   );
-
-//   // 🔥 force future (avoid closed meeting)
-//   startDateTime.setMinutes(startDateTime.getMinutes() + 10);
-
-//   const endDateTime = new Date(startDateTime.getTime() + 30 * 60000);
-
-//   const timezone =
-//     user.zoho.timezone?.includes("/") ? user.zoho.timezone : "Asia/Kolkata";
-
-//   const formatZohoDateTime = (date) => {
-//     const pad = (n) => String(n).padStart(2, "0");
-//     return (
-//       `${date.getFullYear()}-` +
-//       `${pad(date.getMonth() + 1)}-` +
-//       `${pad(date.getDate())}T` +
-//       `${pad(date.getHours())}:` +
-//       `${pad(date.getMinutes())}:00`
-//     );
-//   };
-
-//   const res = await request({
-//     user,
-//     method: "post",
-//     url: `${user.zoho.apiBaseUrl}/crm/v2/Events`,
-//     data: {
-//       data: [
-//         {
-//           Event_Title: meeting.meetingTitle || "Follow-up Call",
-//           Description: meeting.meetingDescription || "",
-
-//           Start_DateTime: formatZohoDateTime(startDateTime),
-//           End_DateTime: formatZohoDateTime(endDateTime),
-
-//           Owner: { id: user.zoho.userId },
-//           $timezone: timezone,
-
-//           // 🔥 REQUIRED
-//           Who_Id: recordId,
-
-//           // 🔥 REQUIRED FOR INVITE
-//           Participants: [
-//             {
-//               type: module === "Contacts" ? "contact" : "lead",
-//               participant: recordId,
-//             },
-//           ],
-
-//           Send_Invitation: true,
-//         },
-//       ],
-//     },
-//   });
-
-//   console.log("Zoho Meeting Response:", res.data);
-//   return res;
-// };
-
 const createMeeting = async ({ user, module, recordId, meeting }) => {
-  console.log("meeting:", meeting, "module:", module, "recordId:", recordId, "user:", user);
   const startDateTime = new Date(
     `${meeting.meetingStartDate}T${meeting.meetingStartTime}:00`
   );

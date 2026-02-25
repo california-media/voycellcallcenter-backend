@@ -4,55 +4,6 @@ const Pipeline = require("../models/Pipeline");
 const User = require("../models/userModel");
 const { logActivityToContact } = require("../utils/activityLogger");
 
-// 🟢 1️⃣ Change status — convert to lead + create pipeline
-// exports.changeStatus = async (req, res) => {
-//   try {
-//     const { contact_id } = req.body;
-//     const { newStatus, note } = req.body;
-//     const userId = req.user?._id;
-
-//     if (!newStatus)
-//       return res.status(400).json({ message: "Status is required" });
-
-//     const contact = await Contact.findById(contact_id);
-//     if (!contact) return res.status(404).json({ message: "Contact not found" });
-
-//     const oldStatus = contact.status;
-
-//     // Get user's contact statuses
-//     const user = await User.findById(userId).select("contactStatuses");
-//     const userStatusValues = user?.contactStatuses?.map((s) => s.value) || [];
-
-//     // 🧠 Convert contact → lead if status is "interested"
-//     if (newStatus === "interested" && !contact.isLead) {
-//       contact.isLead = true;
-//       console.log(`🔄 Contact ${contact._id} converted to lead`);
-//     }
-
-//     contact.status = newStatus;
-//     await contact.save();
-
-//     // 📈 Create pipeline only for leads and if status exists in user's contact statuses
-//     if (contact.isLead && userStatusValues.includes(newStatus)) {
-//       await Pipeline.create({
-//         lead_id: contact._id,
-//         previousStatus: oldStatus,
-//         currentStatus: newStatus,
-//         changedBy: userId,
-//         note,
-//       });
-//     }
-
-//     res.status(200).json({
-//       message: "Status updated successfully",
-//       status: "success",
-//       data: contact,
-//     });
-//   } catch (error) {
-//     console.error("❌ changeStatus error:", error);
-//     res.status(500).json({ message: "Internal server error", error });
-//   }
-// };
 
 exports.changeStatus = async (req, res) => {
   try {
@@ -120,7 +71,6 @@ exports.changeStatus = async (req, res) => {
 
       // Remove contact completely
       await Contact.findByIdAndDelete(contact_id);
-      console.log(`🔄 Contact ${contact_id} converted to Lead ${lead._id}`);
       // Create first pipeline
       await Pipeline.create({
         lead_id: contact_id,
@@ -183,7 +133,6 @@ exports.changeStatus = async (req, res) => {
       message: "Record not found",
     });
   } catch (error) {
-    console.error("changeStatus ERROR:", error);
     res.status(500).json({ message: "Internal server error", error });
   }
 };
@@ -203,7 +152,6 @@ exports.getPipeline = async (req, res) => {
       data: pipeline,
     });
   } catch (error) {
-    console.error("❌ getPipeline error:", error);
     res.status(500).json({ message: "Internal server error", error });
   }
 };
@@ -238,7 +186,6 @@ exports.getPipelineOverview = async (req, res) => {
       data: leads,
     });
   } catch (error) {
-    console.error("❌ getPipelineOverview error:", error);
     res.status(500).json({ message: "Internal server error", error });
   }
 };

@@ -24,6 +24,49 @@ const {
     FRONTEND_URL,
 } = process.env;
 
+const updateChatLastMessage = async ({
+    userId,
+    chatNumber,
+    direction,
+    timestamp
+}) => {
+
+    // Field to update based on direction
+    const timeField =
+        direction === "incoming"
+            ? "whatsappWaba.chats.$.lastIncomingTime"
+            : "whatsappWaba.chats.$.lastOutgoingTime";
+
+    // 1️⃣ Try updating existing chat
+    const updated = await User.findOneAndUpdate(
+        {
+            _id: userId,
+            "whatsappWaba.chats.chatNumber": chatNumber
+        },
+        {
+            $set: {
+                [timeField]: timestamp
+            }
+        },
+        { new: true }
+    );
+
+    // 2️⃣ If chat not exist → create new
+    if (!updated) {
+        await User.findByIdAndUpdate(userId, {
+            $push: {
+                "whatsappWaba.chats": {
+                    chatNumber,
+                    lastIncomingTime:
+                        direction === "incoming" ? timestamp : null,
+                    lastOutgoingTime:
+                        direction === "outgoing" ? timestamp : null
+                }
+            }
+        });
+    }
+};
+
 
 const parseMetaError = (error, step) => {
     const metaError = error.response?.data?.error;
@@ -58,89 +101,6 @@ const parseMetaError = (error, step) => {
         meta: metaError
     };
 };
-
-// exports.connectWhatsApp = async (req, res) => {
-//     try {
-//         const {
-//             accessToken,
-//             businessAccountId,
-//             wabaId,
-//             phoneNumberId
-//         } = req.body;
-
-//         /* 1️⃣ Verify Business */
-//         const businessRes = await axios.get(
-//             `${META_GRAPH_URL}/${businessAccountId}`,
-//             { headers: { Authorization: `Bearer ${accessToken}` } }
-//         );
-
-//         console.log("businessRes", businessRes);
-
-//         /* 2️⃣ Verify WABA under Business */
-//         const wabaList = await axios.get(
-//             `${META_GRAPH_URL}/${businessAccountId}/owned_whatsapp_business_accounts`,
-//             { headers: { Authorization: `Bearer ${accessToken}` } }
-//         );
-
-//         console.log("wabaList", wabaList);
-
-//         const wabaExists = wabaList.data.data.find(
-//             w => w.id === wabaId
-//         );
-
-//         console.log("wabaExists", wabaExists);
-
-//         if (!wabaExists) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "WABA does not belong to this Business"
-//             });
-//         }
-
-//         /* 3️⃣ Verify Phone under WABA */
-//         const phoneList = await axios.get(
-//             `${META_GRAPH_URL}/${wabaId}/phone_numbers`,
-//             { headers: { Authorization: `Bearer ${accessToken}` } }
-//         );
-//         console.log("phoneList", phoneList);
-
-//         const phoneExists = phoneList.data.data.find(
-//             p => p.id === phoneNumberId
-//         );
-
-//         console.log("phoneExists", phoneExists);
-
-//         if (!phoneExists) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Phone Number does not belong to this WABA"
-//             });
-//         }
-
-//         /* 4️⃣ Save Connection */
-//         await User.findByIdAndUpdate(req.user._id, {
-//             whatsappWaba: {
-//                 isConnected: true,
-//                 businessAccountId,
-//                 wabaId,
-//                 phoneNumberId,
-//                 phoneNumber: phoneExists.display_phone_number,
-//                 accessToken
-//             }
-//         });
-
-//         res.json({
-//             success: true,
-//             message: "WABA Connected Successfully"
-//         });
-
-//     } catch (err) {
-//         res.status(400).json({
-//             success: false,
-//             error: err.response?.data || err.message
-//         });
-//     }
-// };
 
 exports.connectWhatsApp = async (req, res) => {
     try {
@@ -346,20 +306,6 @@ exports.getWabaProfile = async (req, res) => {
             { headers: { Authorization: `Bearer ${accessToken}` } }
         );
 
-        //DisplayName status 
-
-        // const displayNameStatus =
-        //     `${META_GRAPH_URL}/${phoneNumberId}` +
-        //     `?fields=new_display_name,new_name_status`;
-
-        // const { data: displayNameStatusRes } = await axios.get(
-        //     displayNameStatus,
-        //     { headers: { Authorization: `Bearer ${accessToken}` } }
-        // );
-
-        // console.log("displayNameStatusRes", displayNameStatusRes);
-
-
         /* -------------------------------------------------- */
         /* 3️⃣ QUALITY + LIMIT */
         /* -------------------------------------------------- */
@@ -372,7 +318,6 @@ exports.getWabaProfile = async (req, res) => {
             headers: { Authorization: `Bearer ${accessToken}` },
         });
 
-        console.log("qualityRes", qualityRes);
         /* -------------------------------------------------- */
         /* 4️⃣ ACCOUNT STATUS (WABA LEVEL) */
         /* -------------------------------------------------- */
@@ -388,8 +333,6 @@ exports.getWabaProfile = async (req, res) => {
                 accountUrl,
                 { headers: { Authorization: `Bearer ${accessToken}` } }
             );
-
-            console.log("accountRes.business_verification_status", accountRes.business_verification_status);
 
             accountStatus = accountRes;
         }
@@ -439,11 +382,6 @@ exports.getWabaProfile = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(
-            "Get WABA Profile Error:",
-            error.response?.data || error
-        );
-
         res.status(500).json({
             success: false,
             message: "Failed to fetch WABA profile",
@@ -505,10 +443,6 @@ const uploadProfilePictureHandleToMeta = async ({
 
         return uploadRes.data.h; // 🔥 4::aW...
     } catch (err) {
-        console.error(
-            "Handle Upload Error:",
-            err.response?.data || err.message
-        );
         throw err;
     }
 };
@@ -590,12 +524,6 @@ exports.updateWabaProfile = async (req, res) => {
                 }
             );
 
-            console.log("Display Name Update Response:", displayNameRes.data);
-            console.log(
-                "Display name update requested:",
-                displayName
-            );
-
             /* Save requested name locally */
 
             user.whatsappWaba.displayNameRequested =
@@ -628,8 +556,6 @@ exports.updateWabaProfile = async (req, res) => {
                     mimeType: req.file.mimetype,
                     appId: process.env.META_APP_ID,
                 });
-
-            console.log("Profile Handle:", handle);
 
             /* Set DP in Meta */
 
@@ -697,11 +623,6 @@ exports.updateWabaProfile = async (req, res) => {
             data: user.whatsappWaba,
         });
     } catch (error) {
-        console.error(
-            "Update Profile Error:",
-            error.response?.data || error
-        );
-
         res.status(500).json({
             success: false,
             message: "Failed to update profile",
@@ -742,8 +663,6 @@ exports.refreshWabaToken = async (req, res) => {
             w => w.id === wabaId
         );
 
-        console.log("wabaExists with new token", wabaExists);
-
         if (!wabaExists) {
             return res.status(400).json({
                 status: "error",
@@ -769,7 +688,6 @@ exports.refreshWabaToken = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Token Refresh Error:", error.response?.data || error);
         res.status(500).json({
             success: false,
             message: "Failed to refresh token",
@@ -786,10 +704,8 @@ exports.webhookVerify = (req, res) => {
     const challenge = req.query["hub.challenge"];
 
     if (mode === "subscribe" && token === WHATSAPP_VERIFY_TOKEN) {
-        console.log("Webhook verified");
         return res.status(200).send(challenge);
     }
-    console.log("Invalid webhook verification");
     return res.sendStatus(403);
 };
 
@@ -823,11 +739,6 @@ function normalizeWhatsAppNumber(waId) {
 /** Helper: Find name from CRM (Contact/Lead) based on WhatsApp ID
  */
 async function findNameFromCRM({ userId, role, waId }) {
-
-    console.log("findNameFromCRM userId", userId);
-    console.log("findNameFromCRM role", role);
-    console.log("findNameFromCRM waId", waId);
-
     const { countryCode, number } = normalizeWhatsAppNumber(waId);
 
     // 🔹 Query helper
@@ -868,9 +779,6 @@ async function findNameFromCRM({ userId, role, waId }) {
             return `${record.firstname || ""} ${record.lastname || ""}`.trim();
         }
 
-        console.log("record is found in company admin", record);
-
-
         // 2️⃣ Check agents under this admin
         const agentIds = await User.find(
             { createdByWhichCompanyAdmin: userId },
@@ -878,9 +786,6 @@ async function findNameFromCRM({ userId, role, waId }) {
         ).lean();
 
         const agentIdList = agentIds.map(a => a._id);
-
-        console.log("agentIdList of this company admin", agentIdList);
-
 
         record =
             await Contact.findOne({
@@ -891,9 +796,6 @@ async function findNameFromCRM({ userId, role, waId }) {
                 ...phoneQuery,
                 createdBy: { $in: agentIdList }
             });
-
-        console.log("record found in its company admin agent", record);
-
         if (record) {
             return `${record.firstname || ""} ${record.lastname || ""}`.trim();
         }
@@ -1005,15 +907,8 @@ function getAttachmentName(msg, mimeType) {
 }
 
 exports.webhookReceive = async (req, res) => {
-    console.log("🔥🔥 WHATSAPP WEBHOOK HIT 🔥🔥");
 
     try {
-        console.log("Forwarding raw payload to WABA Connect...");
-
-        console.log("Invoked waba-connect successfully");
-        console.log(req.body);
-        console.log(req.body.entry);
-
         const entry = req.body.entry?.[0];
         const change = entry?.changes?.[0];
         const value = change?.value;
@@ -1022,9 +917,6 @@ exports.webhookReceive = async (req, res) => {
 📌 MESSAGE STATUS UPDATES (sent/delivered/read)
 ───────────────────────────────────────────── */
         if (Array.isArray(value.statuses) && value.statuses.length > 0) {
-
-            console.log("📊 STATUS WEBHOOK RECEIVED");
-
             for (const statusObj of value.statuses) {
 
                 const {
@@ -1036,35 +928,6 @@ exports.webhookReceive = async (req, res) => {
                     pricing,
                     errors
                 } = statusObj;
-
-                console.log(
-                    `📌 ${metaMessageId} → ${status}`
-                );
-
-                console.log("all the message from webhook of status", status,
-                    timestamp,
-                    recipient_id,
-                    conversation,
-                    pricing,
-                    errors);
-
-                /* 🔹 UPDATE MESSAGE STATUS */
-                // const updated = await WhatsAppMessage.findOneAndUpdate(
-                //     { metaMessageId },
-                //     {
-                //         status,
-                //         messageStatusTimestamp: new Date(timestamp * 1000),
-
-                //         ...(errors && {
-                //             error: {
-                //                 code: errors?.[0]?.code,
-                //                 message: errors?.[0]?.title
-                //             }
-                //         })
-                //     },
-                //     { new: true }
-                // ).lean();
-
 
                 const statusDate = new Date(timestamp * 1000);
 
@@ -1105,25 +968,27 @@ exports.webhookReceive = async (req, res) => {
                     { new: true }
                 ).lean();
 
-                console.log("updated", updated)
 
                 if (!updated) {
-                    console.warn(
-                        "⚠️ Message not found for status:",
-                        metaMessageId
-                    );
                     continue;
                 }
 
                 const fullMessage = updated;
 
                 /* 🔹 REAL-TIME PUSH (Socket/Lambda) */
+
+                // 1️⃣ Find all users having same phoneNumberId
+                const allUsers = await User.find({
+                    "whatsappWaba.phoneNumberId": updated.phoneNumberId
+                }).select("_id");
+
+                // 2️⃣ Extract all userIds
+                const allUserIds = allUsers.map(u => u._id);
+
+                // 3️⃣ Find all websocket connections
                 const connections = await WsConnection.find({
-                    userId: updated.userId
+                    userId: { $in: allUserIds }
                 });
-
-
-                console.log("connections", connections)
 
                 if (connections.length > 0) {
 
@@ -1140,22 +1005,16 @@ exports.webhookReceive = async (req, res) => {
                         }))
                     };
 
-                    console.log(eventPayload, "eventPayload")
-
                     await lambdaClient.send(new InvokeCommand({
                         FunctionName: "waba-webhook",
                         InvocationType: "RequestResponse",
                         Payload: JSON.stringify(eventPayload)
                     }));
-
-                    console.log("🚀 Status pushed to realtime layer");
                 }
             }
 
             return res.status(200).send("STATUS_UPDATED");
         }
-
-        console.log("change", value.contacts);
 
         const contact = value.contacts?.[0];
         let senderName = "";
@@ -1168,87 +1027,65 @@ exports.webhookReceive = async (req, res) => {
             senderWabaID = contact.wa_id || "";
         }
 
-        console.log("Sender Name:", senderName);
-        console.log("Original Name:", originalName);
-        console.log("Sender WA ID:", senderWabaID);
-
         if (!value) {
-            console.log("No value in webhook");
             return { statusCode: 200 };
         }
 
-        console.log("value.metadata", value.metadata);
         const phoneNumberId = value?.metadata?.phone_number_id?.toString();
-        console.log("phoneNumberId:", phoneNumberId);
-        console.log("Webhook keys:", Object.keys(value));
 
         if (!Array.isArray(value.messages) || value.messages.length === 0) {
-            console.log("ℹ️ No incoming messages");
             return { statusCode: 200 };
         }
 
-        const user = await User.findOne({
+        // 1️⃣ Find ALL users (admin + agents)
+        const users = await User.find({
             "whatsappWaba.phoneNumberId": phoneNumberId
-        });
+        }).select("_id role whatsappWaba accessToken");
 
-        if (!user) {
-            console.warn("❌ No user for phoneNumberId:", phoneNumberId);
+        if (!users.length) {
             return { statusCode: 200 };
         }
 
-        console.log("✅ User found:", user._id);
+        // 2️⃣ Find company admin (message owner)
+        const companyAdmin = users.find(u => u.role === "companyAdmin");
 
-        console.log("full user", user);
+        if (!companyAdmin) {
+            return { statusCode: 200 };
+        }
 
+        // 3️⃣ Extract all userIds
+        const allUserIds = users.map(u => u._id);
 
         const crmName = await findNameFromCRM({
-            userId: user._id,
-            role: user.role,
+            userId: companyAdmin._id,
+            role: companyAdmin.role,
             waId: senderWabaID
         });
 
         // ✅ Final senderName decision
         const finalSenderName = crmName || senderName;
 
-        console.log("Final Sender Name:", finalSenderName);
+        // const connections = await WsConnection.find({ userId: user._id });
 
-        const connections = await WsConnection.find({ userId: user._id });
-
-        console.log("connections", connections);
+        const connections = await WsConnection.find({
+            userId: { $in: allUserIds }
+        });
 
         if (connections.length === 0) {
-            console.log("No active WebSocket connections for user:", user._id);
             return { statusCode: 200 };
         }
 
         for (const msg of value.messages || []) {
-            console.log(`� New message from ${msg.from}`);
-            // Save to permanent collection
-            // await WhatsAppMessage.create({
-            //     userId: user._id,
-            //     phoneNumberId: phoneNumberId,
-            //     from: msg.from,
-            //     message: msg,
-            //     timestamp: msg.timestamp
-            // });
-
             const { messageType, content } = parseWhatsAppMessage(msg);
-            console.log("content.mediaId", content.mediaId);
-
             let s3dataurl = "";
             let attachmentName = "";
             let mimeType = "";
             let fileSize = 0;
 
             if (content.mediaId) {
-                // const { buffer, mimeType } = await downloadMetaMedia({
-                //     mediaId: content.mediaId,
-                //     accessToken: user.whatsappWaba.accessToken
-                // });
-
                 const downloaded = await downloadMetaMedia({
                     mediaId: content.mediaId,
-                    accessToken: user.whatsappWaba.accessToken
+                    accessToken: companyAdmin.whatsappWaba.accessToken
                 });
 
                 mimeType = downloaded.mimeType;
@@ -1256,15 +1093,8 @@ exports.webhookReceive = async (req, res) => {
 
                 attachmentName = getAttachmentName(msg, mimeType);
 
-                // const s3Url = await uploadWhatsAppMediaToS3({
-                //     userId: user._id,
-                //     messageType,
-                //     buffer,
-                //     mimeType
-                // });
-
                 const s3Url = await uploadWhatsAppMediaToS3({
-                    userId: user._id,
+                    userId: companyAdmin._id,
                     messageType,
                     buffer: downloaded.buffer,
                     mimeType,
@@ -1279,11 +1109,10 @@ exports.webhookReceive = async (req, res) => {
                 content.mediaUrl = s3Url;
                 content.sha256 = msg[messageType]?.sha256;
                 content.isVoice = msg.type === "voice";
-                console.log("final content", content);
             }
 
             await WhatsAppMessage.create({
-                userId: user._id,
+                userId: companyAdmin._id,
                 phoneNumberId,
                 conversationId: msg.from,
                 senderName: finalSenderName,
@@ -1292,10 +1121,6 @@ exports.webhookReceive = async (req, res) => {
                 direction: "incoming",
                 from: msg.from,
                 to: phoneNumberId,
-                // messageType: "text",
-                // content: {
-                //     text: msg.text.body
-                // },
                 messageType,
                 content,
                 s3dataurl,
@@ -1306,9 +1131,16 @@ exports.webhookReceive = async (req, res) => {
                 raw: msg
             });
 
+            await updateChatLastMessage({
+                userId: companyAdmin._id,
+                chatNumber: msg.from,
+                direction: "incoming",
+                timestamp: new Date(msg.timestamp * 1000)
+            });
+
             const eventPayload = {
                 whatsappEvent: req.body,          // full Meta webhook
-                userId: user._id.toString(),      // user reference
+                userId: companyAdmin._id.toString(),      // user reference
                 finalSenderName: finalSenderName,
                 s3dataurl,
                 attachmentName,
@@ -1322,60 +1154,56 @@ exports.webhookReceive = async (req, res) => {
                 InvocationType: "RequestResponse",
                 Payload: JSON.stringify(eventPayload)
             }));
-            console.log("Invoked waba-webhook successfully");
-            console.log(responce);
         }
         res.status(200).send("EVENT_RECEIVED");
     } catch (err) {
-        console.error("Webhook Error:", err);
         res.sendStatus(200);
     }
 };
 
+
 /** STEP 5: Send Text Message
  */
 exports.sendTextMessage = async (req, res) => {
-    console.log("========== SEND TEXT MESSAGE API START ==========");
-
     try {
         const { to, text, name } = req.body;
         const userId = req.user?._id;
 
-        console.log("Request body:", { to, text, name });
-        console.log("Authenticated userId:", userId);
-
         // 1️⃣ Basic validation
         if (!to || !text) {
-            console.warn("Validation failed: 'to' or 'text' missing");
             return res.status(400).json({
                 success: false,
                 message: "'to' and 'text' are required",
             });
         }
 
-
         // 2️⃣ Fetch user
-        console.log("Fetching user from DB...");
         const user = await User.findById(userId);
 
         if (!user) {
-            console.error("User not found for userId:", userId);
             return res.status(404).json({
                 success: false,
                 message: "User not found",
             });
         }
 
-        const { phoneNumberId, accessToken } = user.whatsappWaba || {};
+        let companyAdminDetails;
+        let companyAdminId;
 
-        console.log("WhatsApp WABA details:", {
-            phoneNumberId,
-            hasAccessToken: !!accessToken,
-        });
+
+        if (user.role == "user") {
+            companyAdminId = user.createdByWhichCompanyAdmin;
+
+            companyAdminDetails = await User.findById(companyAdminId);
+        } else if (user.role == "companyAdmin") {
+            companyAdminDetails = user;
+        }
+
+
+        const { phoneNumberId, accessToken } = companyAdminDetails.whatsappWaba || {};
 
         // 3️⃣ Validate WABA config
         if (!phoneNumberId || !accessToken) {
-            console.error("WhatsApp WABA configuration missing");
             return res.status(400).json({
                 success: false,
                 message: "WhatsApp WABA is not configured for this user",
@@ -1392,10 +1220,6 @@ exports.sendTextMessage = async (req, res) => {
             text: { body: text },
         };
 
-        console.log("Sending WhatsApp message...");
-        console.log("Meta API URL:", url);
-        console.log("Payload:", payload);
-
         // 5️⃣ Send message
         const response = await axios.post(url, payload, {
             headers: {
@@ -1404,21 +1228,17 @@ exports.sendTextMessage = async (req, res) => {
             },
         });
 
-        console.log("WhatsApp API response status:", response.status);
-        console.log("WhatsApp API response data:", response.data);
-        console.log("response.data.messages", response);
-
         // 6️⃣ Extract Meta message ID
         const metaMessageId = response.data?.messages?.[0]?.id || null;
 
         // 7️⃣ Save outgoing message in DB
         await WhatsAppMessage.create({
-            userId: user._id,
+            userId: companyAdminDetails._id,
             phoneNumberId,
             conversationId: to,              // chat grouping
             senderName: name || to, // business name/number
             direction: "outgoing",
-            from: user.whatsappWaba.phoneNumber, // business number
+            from: companyAdminDetails.whatsappWaba.phoneNumber, // business number
             to,
             messageType: "text",
             content: {
@@ -1428,6 +1248,13 @@ exports.sendTextMessage = async (req, res) => {
             status: "sent",
             messageTimestamp: new Date(),
             raw: response.data
+        });
+
+        await updateChatLastMessage({
+            userId: companyAdminDetails._id,
+            chatNumber: to,
+            direction: "outgoing",
+            timestamp: new Date()
         });
 
         const phoneNumberObj = parsePhoneNumberFromString("+" + to);
@@ -1449,7 +1276,7 @@ exports.sendTextMessage = async (req, res) => {
                     number: number,
                 },
             },
-            createdBy: user._id,
+            createdBy: companyAdminDetails._id,
         });
 
         let lead = null;
@@ -1462,7 +1289,7 @@ exports.sendTextMessage = async (req, res) => {
                         number: number,
                     },
                 },
-                createdBy: user._id,
+                createdBy: companyAdminDetails._id,
             });
         }
 
@@ -1491,13 +1318,8 @@ exports.sendTextMessage = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error while sending WhatsApp message");
-
         // Axios / Meta API error
         if (error.response) {
-            console.error("Meta API error status:", error.response.status);
-            console.error("Meta API error data:", error.response.data);
-
             return res.status(400).json({
                 success: false,
                 message: "Failed to send WhatsApp message",
@@ -1506,15 +1328,12 @@ exports.sendTextMessage = async (req, res) => {
         }
 
         // Network / unknown error
-        console.error("Unexpected error:", error.message);
-        console.error(error.stack);
 
         res.status(500).json({
             success: false,
             message: "Internal server error",
         });
     } finally {
-        console.log("========== SEND TEXT MESSAGE API END ==========");
     }
 };
 
@@ -1587,7 +1406,23 @@ exports.sendMessage = async (req, res) => {
         }
 
         const user = await User.findById(userId);
-        const { phoneNumberId, accessToken, phoneNumber } = user.whatsappWaba;
+
+
+        let companyAdminDetails;
+        let companyAdminId;
+
+
+        if (user.role == "user") {
+            companyAdminId = user.createdByWhichCompanyAdmin;
+
+            companyAdminDetails = await User.findById(companyAdminId);
+        } else if (user.role == "companyAdmin") {
+            companyAdminDetails = user;
+        }
+
+        companyAdminId = companyAdminDetails._id;
+
+        const { phoneNumberId, accessToken, phoneNumber } = companyAdminDetails.whatsappWaba;
 
         // let mediaId = null;
         let mediaId = null;
@@ -1609,25 +1444,7 @@ exports.sendMessage = async (req, res) => {
             let uploadMime = file.mimetype;
             let uploadName = file.originalname;
 
-            // // 🎧 convert if audio
-            // if (type === "audio") {
-            //     const converted = await convertAudioToOgg(
-            //         file.buffer,
-            //         file.originalname
-            //     );
-
-            //     uploadBuffer = converted.buffer;
-            //     uploadMime = converted.mimetype;
-            //     uploadName = converted.filename;
-            // }
-
             const form = new FormData();
-            // form.append("file", fs.createReadStream(file.path));
-            // form.append("file", file.buffer, {
-            //     filename: file.originalname,
-            //     contentType: file.mimetype
-            // });
-            // form.append("type", file.mimetype);
             form.append("file", uploadBuffer, {
                 filename: uploadName,
                 contentType: uploadMime
@@ -1650,11 +1467,8 @@ exports.sendMessage = async (req, res) => {
 
             // 🔥 NEW: upload same file to S3
             s3dataurl = await uploadWhatsAppMediaToS3({
-                userId,
+                companyAdminId,
                 messageType: type,
-                // buffer: file.buffer,
-                // mimeType: file.mimetype,
-                // originalName: file.originalname
                 buffer: uploadBuffer,
                 mimeType: uploadMime,
                 originalName: uploadName
@@ -1662,8 +1476,6 @@ exports.sendMessage = async (req, res) => {
 
             mimeType = file.mimetype;
             fileSize = file.size;
-            console.log("s3dataurl", s3dataurl);
-
         }
 
         // 🔹 STEP 2: Build payload
@@ -1694,7 +1506,7 @@ exports.sendMessage = async (req, res) => {
 
         // 🔹 STEP 4: Save to DB
         await WhatsAppMessage.create({
-            userId,
+            userId: companyAdminId,
             phoneNumberId,
             conversationId: to,
             senderName: name || phoneNumber,
@@ -1718,6 +1530,13 @@ exports.sendMessage = async (req, res) => {
             raw: response.data
         });
 
+        await updateChatLastMessage({
+            userId: companyAdminId,
+            chatNumber: to,
+            direction: "outgoing",
+            timestamp: new Date()
+        });
+
         const phoneNumberObj = parsePhoneNumberFromString("+" + to);
 
         if (!phoneNumberObj) {
@@ -1737,7 +1556,7 @@ exports.sendMessage = async (req, res) => {
                     number: number,
                 },
             },
-            createdBy: user._id,
+            createdBy: companyAdminId,
         });
 
         let lead = null;
@@ -1750,7 +1569,7 @@ exports.sendMessage = async (req, res) => {
                         number: number,
                     },
                 },
-                createdBy: user._id,
+                createdBy: companyAdminId,
             });
         }
 
@@ -1787,7 +1606,6 @@ exports.sendMessage = async (req, res) => {
         });
 
     } catch (err) {
-        console.error(err);
         res.status(500).json({ success: false });
     }
 };
@@ -1796,8 +1614,6 @@ exports.sendMessage = async (req, res) => {
  * SEND WHATSAPP TEMPLATE MESSAGE (FINAL & SAFE)
  */
 exports.sendTemplateMessage = async (req, res) => {
-    console.log("\n========== SEND TEMPLATE MESSAGE START ==========");
-
     try {
         const {
             to,
@@ -1818,14 +1634,28 @@ exports.sendTemplateMessage = async (req, res) => {
         /* ───────── USER / WABA ───────── */
         const user = await User.findById(userId);
 
-        if (!user?.whatsappWaba) {
+        let companyAdminDetails;
+
+        let companyAdminId;
+
+        if (user.role == "user") {
+            companyAdminId = user.createdByWhichCompanyAdmin;
+
+            companyAdminDetails = await User.findById(companyAdminId);
+        } else if (user.role == "companyAdmin") {
+            companyAdminDetails = user;
+        }
+
+        companyAdminId = companyAdminDetails._id;
+
+        if (!companyAdminDetails?.whatsappWaba) {
             return res.status(400).json({
                 success: false,
                 message: "WABA not connected"
             });
         }
 
-        const { phoneNumberId, accessToken } = user.whatsappWaba;
+        const { phoneNumberId, accessToken } = companyAdminDetails.whatsappWaba;
 
         /* ───────── TEMPLATE ───────── */
         const template = await WabaTemplate.findById(templateId);
@@ -1886,24 +1716,6 @@ exports.sendTemplateMessage = async (req, res) => {
                 });
             }
         }
-
-        /* ===== BODY ===== */
-        // const body = template.components.find(c => c.type === "BODY");
-
-        // if (body) {
-        //     const hasVars = /{{.*?}}/.test(body.text || "");
-
-        //     if (hasVars && Array.isArray(params.body)) {
-        //         const abc = components.push({
-        //             type: "body",
-        //             parameters: params.body.map(t => ({
-        //                 type: "text",
-        //                 text: t
-        //             }))
-        //         });
-        //         console.log(abc, "body params added");
-        //     }
-        // }
 
         const body = template.components.find(c => c.type === "BODY");
 
@@ -2038,7 +1850,7 @@ exports.sendTemplateMessage = async (req, res) => {
 
         /* ───────── STORE MESSAGE ───────── */
         await WhatsAppMessage.create({
-            userId,
+            userId: companyAdminId,
             to,
             from: phoneNumberId,
             phoneNumberId,
@@ -2047,6 +1859,7 @@ exports.sendTemplateMessage = async (req, res) => {
             messageType: "template",
             conversationId: to,
             metaMessageId: data.messages?.[0]?.id,
+            messageTimestamp: new Date(),
             content: {
                 template: {
                     name: template.name,
@@ -2072,6 +1885,13 @@ exports.sendTemplateMessage = async (req, res) => {
             raw: data
         });
 
+        await updateChatLastMessage({
+            userId: companyAdminId,
+            chatNumber: to,
+            direction: "outgoing",
+            timestamp: new Date()
+        });
+
 
         const phoneNumberObj = parsePhoneNumberFromString("+" + to);
 
@@ -2092,7 +1912,7 @@ exports.sendTemplateMessage = async (req, res) => {
                     number: number,
                 },
             },
-            createdBy: user._id,
+            createdBy: companyAdminId,
         });
 
         let lead = null;
@@ -2105,7 +1925,7 @@ exports.sendTemplateMessage = async (req, res) => {
                         number: number,
                     },
                 },
-                createdBy: user._id,
+                createdBy: companyAdminId,
             });
         }
 
@@ -2129,49 +1949,12 @@ exports.sendTemplateMessage = async (req, res) => {
         return res.json({ success: true, data });
 
     } catch (error) {
-        console.error(error.response?.data || error);
         return res.status(500).json({
             success: false,
             error: error.response?.data || error.message
         });
     }
 };
-
-// const extractNumbersWithNames = (records, type = "contact") => {
-//     const data = [];
-
-//     records.forEach(r => {
-
-//         // Build display name
-//         let name = "";
-
-//         if (type === "contact") {
-//             name = `${r.firstname || ""} ${r.lastname || ""}`.trim();
-//         }
-
-//         if (type === "lead") {
-//             name = `${r.firstname || ""} ${r.lastname || ""}`.trim();
-//         }
-
-//         // Fallbacks
-//         if (!name) {
-//             name = r.company || "Unknown";
-//         }
-
-//         r.phoneNumbers?.forEach(p => {
-//             if (p.number) {
-//                 data.push({
-//                     number: `${p.countryCode || ""}${p.number}`,
-//                     name
-//                 });
-//             }
-//         });
-
-//     });
-
-//     return data;
-// };
-
 
 const extractNumbersWithNames = (records, type = "contact") => {
     const data = [];
@@ -2236,8 +2019,6 @@ const resolveDynamicParams = (params = {}, recipient) => {
 };
 
 exports.sendTemplateBulkMessage = async (req, res) => {
-    console.log("\n========== SEND TEMPLATE MESSAGE START ==========");
-
     try {
         const {
             // to,
@@ -2267,19 +2048,45 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         }
 
         // Normalize numbers to array
-        // const numbers = Array.isArray(to) ? to : [to];
-
         /* ───────── USER / WABA ───────── */
         const user = await User.findById(userId);
 
-        if (!user?.whatsappWaba) {
+        let companyAdminDetails;
+
+        let companyAdminId;
+
+        if (user.role == "user") {
+            companyAdminId = user.createdByWhichCompanyAdmin;
+
+            companyAdminDetails = await User.findById(companyAdminId);
+        } else if (user.role == "companyAdmin") {
+            companyAdminDetails = user;
+        }
+
+        companyAdminId = companyAdminDetails._id;
+
+        /* ───────── RESOLVE CREATED BY IDS ───────── */
+
+        let allowedUserIds = [];
+
+        if (user.role === "companyAdmin") {
+            // Admin sees only his own contacts
+            allowedUserIds = [companyAdminId];
+        } else if (user.role === "user") {
+            // Agent sees both:
+            // 1. Company Admin contacts
+            // 2. His own contacts
+            allowedUserIds = [companyAdminId, user._id];
+        }
+
+        if (!companyAdminDetails?.whatsappWaba) {
             return res.status(400).json({
                 success: false,
                 message: "WABA not connected"
             });
         }
 
-        const { phoneNumberId, accessToken } = user.whatsappWaba;
+        const { phoneNumberId, accessToken } = companyAdminDetails.whatsappWaba;
 
         /* ───────── TEMPLATE ───────── */
         const template = await WabaTemplate.findById(templateId);
@@ -2296,10 +2103,6 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         let numbers = [];
 
         /* ===== CASE 1: Direct numbers ===== */
-        // if (to) {
-        //     numbers = Array.isArray(to) ? to : [to];
-        // }
-
         /* ===== CASE 2: Group / Tag based ===== */
 
         let contacts = [];
@@ -2313,14 +2116,15 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 : [groupName];
 
             /* --- FIND CONTACTS --- */
+
             contacts = await Contact.find({
-                createdBy: userId,
+                createdBy: { $in: allowedUserIds },
                 "tags.tag": { $in: tagsArray }
             });
 
             /* --- FIND LEADS --- */
             leads = await Lead.find({
-                createdBy: userId,
+                createdBy: { $in: allowedUserIds },
                 "tags.tag": { $in: tagsArray }
             });
 
@@ -2340,15 +2144,6 @@ exports.sendTemplateBulkMessage = async (req, res) => {
 
                 return nums;
             };
-
-            // numbers = [
-            //     ...numbers,
-            //     ...extractNumbers(contacts),
-            //     ...extractNumbers(leads)
-            // ];
-
-
-
         }
 
         let recipients = [
@@ -2368,8 +2163,6 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         }
 
         const campaignId = new mongoose.Types.ObjectId();
-
-        console.log("recipients", recipients.number);
 
         const campaignData = {
             campaignId,
@@ -2547,16 +2340,13 @@ exports.sendTemplateBulkMessage = async (req, res) => {
 
             // 1️⃣ Save campaign
             await User.updateOne(
-                { _id: userId },
+                { _id: companyAdminId },
                 { $push: { campaigns: campaignData } }
             );
 
             // 2️⃣ Remove milliseconds
             const isoTime =
                 schedule.replace(/\.\d{3}Z$/, "Z");
-
-            console.log("UTC Time:", isoTime);
-            console.log("Expression:", `at(${isoTime})`);
 
             // 3️⃣ Create AWS schedule
             await createCampaignSchedule({
@@ -2565,7 +2355,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 payload: {
                     type: "SEND_SCHEDULED_CAMPAIGN",
                     campaignId: campaignId.toString(),
-                    userId: userId.toString(),
+                    userId: companyAdminId.toString(),
                     templateId: templateId.toString(),
                     params,
                     groupName,
@@ -2586,109 +2376,10 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         const results = [];
 
 
-
-        // for (const r of recipients) {
-
-        //     const toNumber = r.number;
-        //     const senderName = r.name;
-
-        //     console.log(`Sending to ${toNumber} (${senderName})`);
-
-        //     // /* ───── SEND TEMPLATE ───── */
-        //     // const response = await sendWhatsAppTemplate({
-        //     //     to: toNumber,
-        //     //     template,
-        //     //     params,
-        //     //     phoneNumberId,
-        //     //     accessToken
-        //     // });
-
-        //     const payload = {
-        //         messaging_product: "whatsapp",
-        //         to: toNumber,
-        //         type: "template",
-        //         template: {
-        //             name: template.name,
-        //             language: { code: template.language || "en_US" },
-        //             ...(components.length && { components })
-        //         }
-        //     };
-
-        //     try {
-        //         /* ───────── SEND ───────── */
-        //         const { data } = await axios.post(
-        //             `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
-        //             payload,
-        //             {
-        //                 headers: {
-        //                     Authorization: `Bearer ${accessToken}`,
-        //                     "Content-Type": "application/json"
-        //                 }
-        //             }
-        //         );
-
-        //         const metaId = data.messages?.[0]?.id;
-
-        //         campaignData.messageRefs.push({
-        //             metaMessageId: metaId,
-        //             chatNumber: toNumber,
-        //             chatName: senderName || toNumber
-        //         });
-
-        //         /* ───── STORE MESSAGE ───── */
-        //         await WhatsAppMessage.create({
-        //             userId,
-        //             phoneNumberId,
-
-        //             conversationId: toNumber,
-        //             direction: "outgoing",
-
-        //             from: phoneNumberId,
-        //             to: toNumber,
-
-        //             senderName, // ✅ STORE NAME HERE
-
-        //             messageType: "template",
-
-        //             content: {
-        //                 template: {
-        //                     name: template.name,
-        //                     language: template.language,
-        //                     components: template.components,
-        //                     params
-        //                 }
-        //             },
-
-        //             // metaMessageId: response?.messages?.[0]?.id,
-        //             metaMessageId: data?.messages?.[0]?.id,
-        //             status: "sent",
-        //             messageTimestamp: new Date()
-        //         });
-
-        //         results.push({
-        //             to: toNumber,
-        //             success: true,
-        //             messageId: data.messages?.[0]?.id
-        //         });
-
-        //     } catch (err) {
-
-        //         console.error(`Failed for ${toNumber}`, err.response?.data);
-
-        //         results.push({
-        //             to: toNumber,
-        //             success: false,
-        //             error: err.response?.data || err.message
-        //         });
-        //     }
-        // }
-
         for (const r of recipients) {
 
             const toNumber = r.number;
             const senderName = r.name;
-
-            console.log(`Sending to ${toNumber} (${senderName})`);
 
             /* ===== RESOLVE DYNAMIC PARAMS ===== */
             const resolvedParams = resolveDynamicParams(params, r);
@@ -2699,14 +2390,6 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             const bodyIndex = dynamicComponents.findIndex(
                 c => c.type === "body"
             );
-
-            // if (bodyIndex !== -1) {
-            //     dynamicComponents[bodyIndex].parameters =
-            //         (resolvedParams.body || []).map(text => ({
-            //             type: "text",
-            //             text
-            //         }));
-            // }
 
             if (bodyIndex !== -1) {
 
@@ -2773,7 +2456,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 });
 
                 await WhatsAppMessage.create({
-                    userId,
+                    userId: companyAdminId,
                     phoneNumberId,
                     conversationId: toNumber,
                     direction: "outgoing",
@@ -2814,7 +2497,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                             number: number,
                         },
                     },
-                    createdBy: user._id,
+                    createdBy: companyAdminId,
                 });
 
                 let lead = null;
@@ -2827,7 +2510,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                                 number: number,
                             },
                         },
-                        createdBy: user._id,
+                        createdBy: companyAdminId,
                     });
                 }
 
@@ -2855,9 +2538,6 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 });
 
             } catch (err) {
-
-                console.error(`Failed for ${toNumber}`, err.response?.data);
-
                 results.push({
                     to: toNumber,
                     success: false,
@@ -2867,7 +2547,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         }
 
         await User.updateOne(
-            { _id: userId },
+            { _id: companyAdminId },
             {
                 $push: {
                     campaigns: campaignData,
@@ -2885,8 +2565,6 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error.response?.data || error);
-
         return res.status(500).json({
             success: false,
             error: error.response?.data || error.message
@@ -2898,139 +2576,6 @@ exports.sendTemplateBulkMessage = async (req, res) => {
 GET /api/campaigns
 Campaign List (from User.campaigns)
 */
-// exports.getAllCampaigns = async (req, res) => {
-//     try {
-//         const userId = req.user._id;
-
-//         const { page = 1, limit = 10, search = "" } = req.body;
-
-//         const pageNumber = parseInt(page);
-//         const limitNumber = parseInt(limit);
-//         const skip = (pageNumber - 1) * limitNumber;
-
-//         /* 1️⃣ Get User Campaigns */
-//         const user = await User.findById(userId).lean();
-
-//         if (!user) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "User not found",
-//             });
-//         }
-
-//         // const campaigns = user.campaigns || [];
-//         let campaigns = user.campaigns || [];
-
-//         /* 🔹 FULL COUNT (no search, no pagination) */
-//         const fullCount = campaigns.length;
-
-//         /* 🔽 SEARCH FILTER ADD */
-//         if (search) {
-//             const searchLower = search.toLowerCase();
-
-//             campaigns = campaigns.filter(c =>
-//                 (c.campaignName || "")
-//                     .toLowerCase()
-//                     .includes(searchLower) ||
-//                 (c.templateName || "")
-//                     .toLowerCase()
-//                     .includes(searchLower)
-//             );
-//         }
-
-//         const totalRecords = campaigns.length;
-
-//         campaigns = campaigns.slice(skip, skip + limitNumber);
-
-//         const results = [];
-
-//         /* 2️⃣ Loop Campaigns */
-//         for (const camp of campaigns) {
-
-//             const messageIds = camp.messageRefs.map(
-//                 m => m.metaMessageId
-//             );
-
-//             /* 3️⃣ Get Messages From WhatsAppMessage */
-//             const messages = await WhatsAppMessage.find({
-//                 metaMessageId: { $in: messageIds },
-//             }).lean();
-
-//             const total = messageIds.length;
-
-//             /* 4️⃣ Counts */
-//             // const delivered = messages.filter(
-//             //     m => m.status === "delivered"
-//             // ).length;
-
-//             // const read = messages.filter(
-//             //     m => m.status === "read"
-//             // ).length;
-
-//             /* 4️⃣ Counts (CUMULATIVE) */
-//             let delivered = 0;
-//             let read = 0;
-
-//             messages.forEach(m => {
-
-//                 // Delivered includes delivered + read
-//                 if (m.status === "delivered" || m.status === "read") {
-//                     delivered++;
-//                 }
-
-//                 // Read only read
-//                 if (m.status === "read") {
-//                     read++;
-//                 }
-
-//             });
-
-//             /* 5️⃣ Rates */
-//             const deliveryRate = total
-//                 ? ((delivered / total) * 100).toFixed(0)
-//                 : 0;
-
-//             const readRate = total
-//                 ? ((read / total) * 100).toFixed(0)
-//                 : 0;
-
-//             /* 6️⃣ Push Result */
-//             results.push({
-//                 campaignId: camp.campaignId,
-//                 campaignName: camp.campaignName,
-//                 templateName: camp.templateName,
-//                 status: camp.status || "unknown",
-//                 templateId: camp.templateId,
-//                 totalMessages: total,
-//                 deliveryRate: `${deliveryRate}%`,
-//                 readRate: `${readRate}%`,
-//                 createdAt: camp.createdAt,
-//             });
-//         }
-
-//         /* 7️⃣ Sort Latest First */
-//         results.sort(
-//             (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-//         );
-
-//         return res.json({
-//             success: true,
-//             count: fullCount,
-//             campaigns: totalRecords,//results,
-//             totalPages: Math.ceil(totalRecords / limitNumber),
-//             currentPage: pageNumber,
-//             campaigns: results,
-//         });
-
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({
-//             success: false,
-//             message: error.message,
-//         });
-//     }
-// };
-
 exports.getAllCampaigns = async (req, res) => {
     try {
         const userId = req.user._id;
@@ -3045,6 +2590,28 @@ exports.getAllCampaigns = async (req, res) => {
         /* 1️⃣ Get User */
         const user = await User.findById(userId).lean();
 
+        let companyAdminDetails;
+
+        let companyAdminId;
+
+        if (user.role == "user") {
+            companyAdminId = user.createdByWhichCompanyAdmin;
+
+            companyAdminDetails = await User.findById(companyAdminId);
+        } else if (user.role == "companyAdmin") {
+            companyAdminDetails = user;
+        }
+
+        companyAdminId = companyAdminDetails._id;
+
+        if (!companyAdminDetails?.whatsappWaba) {
+            return res.status(400).json({
+                success: false,
+                message: "WABA not connected"
+            });
+        }
+
+
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -3052,7 +2619,7 @@ exports.getAllCampaigns = async (req, res) => {
             });
         }
 
-        let campaigns = user.campaigns || [];
+        let campaigns = companyAdminDetails.campaigns || [];
 
         /* 🔹 TOTAL COUNT (before search) */
         const fullCount = campaigns.length;
@@ -3179,8 +2746,6 @@ exports.getAllCampaigns = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Get Campaigns Error:", error);
-
         return res.status(500).json({
             success: false,
             message: error.message,
@@ -3197,10 +2762,34 @@ exports.getCampaignDetails = async (req, res) => {
         const userId = req.user._id;
         const { campaignId } = req.body;
 
+        let companyAdminDetails;
+
+        let companyAdminId;
+
+        const user = await User.findById(userId).lean();
+
+        if (user.role == "user") {
+            companyAdminId = user.createdByWhichCompanyAdmin;
+
+            companyAdminDetails = await User.findById(companyAdminId);
+        } else if (user.role == "companyAdmin") {
+            companyAdminDetails = user;
+        }
+
+        companyAdminId = companyAdminDetails._id;
+
+        if (!companyAdminDetails?.whatsappWaba) {
+            return res.status(400).json({
+                success: false,
+                message: "WABA not connected"
+            });
+        }
+
+
         /* 1️⃣ Find Campaign */
-        const user = await User.findOne(
+        companyAdminDetails = await User.findOne(
             {
-                _id: userId,
+                _id: companyAdminId,
                 "campaigns.campaignId": campaignId,
             },
             {
@@ -3208,14 +2797,14 @@ exports.getCampaignDetails = async (req, res) => {
             }
         ).lean();
 
-        if (!user || !user.campaigns.length) {
+        if (!companyAdminDetails || !companyAdminDetails.campaigns.length) {
             return res.status(404).json({
                 success: false,
                 message: "Campaign not found",
             });
         }
 
-        const campaign = user.campaigns[0];
+        const campaign = companyAdminDetails.campaigns[0];
 
         /* 2️⃣ Get Message IDs */
         const messageIds = campaign.messageRefs.map(
@@ -3228,25 +2817,6 @@ exports.getCampaignDetails = async (req, res) => {
         })
             .sort({ createdAt: -1 })
             .lean();
-
-        /* 4️⃣ Counts */
-        // const total = messageIds.length;
-
-        // const sent = messages.filter(
-        //     m => m.status === "sent"
-        // ).length;
-
-        // const delivered = messages.filter(
-        //     m => m.status === "delivered"
-        // ).length;
-
-        // const read = messages.filter(
-        //     m => m.status === "read"
-        // ).length;
-
-        // const failed = messages.filter(
-        //     m => m.status === "failed"
-        // ).length;
 
         /* 4️⃣ Counts (CUMULATIVE) */
         const total = messageIds.length;
@@ -3318,7 +2888,6 @@ exports.getCampaignDetails = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
         res.status(500).json({
             success: false,
             message: error.message,
@@ -3348,7 +2917,6 @@ exports.deleteCampaign = async (req, res) => {
             message: "Campaign deleted successfully",
         });
     } catch (error) {
-        console.error(error);
         res.status(500).json({
             success: false,
             message: error.message,
@@ -3356,51 +2924,72 @@ exports.deleteCampaign = async (req, res) => {
     }
 };
 
-/** STEP 7: Get WhatsApp Conversations
- */
+
 exports.getWhatsappConversations = async (req, res) => {
     try {
         const userId = req.user._id;
-        const type = req.body.type || "history"; // default chats
+        const type = req.body.type || "history";
+        const page = parseInt(req.body.page) || 1;
+        const limit = parseInt(req.body.limit) || 10;
+        const search = req.body.search || "";
+
+        const skip = (page - 1) * limit;
+
+        const user = await User.findById(userId);
+        let companyAdminId;
+
+        if (user.role === "user") {
+            companyAdminId = user.createdByWhichCompanyAdmin;
+        } else if (user.role === "companyAdmin") {
+            companyAdminId = user._id;
+        } else {
+            companyAdminId = user._id; // fallback
+        }
+
+        const companyAdminObjectId = new mongoose.Types.ObjectId(companyAdminId);
+
+        // 🔥 Get all agents under this company admin
+        const agentUsers = await User.find(
+            { createdByWhichCompanyAdmin: companyAdminId, role: "user" },
+            { _id: 1 }
+        );
+
+        const agentIds = agentUsers.map(a => a._id);
+
+        // 🔥 Include company admin also
+        const ownerIds = [companyAdminObjectId, ...agentIds];
 
         const now = new Date();
         const before24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-        const conversations = await WhatsAppMessage.aggregate([
-
-            {
-                $match: {
-                    userId: new mongoose.Types.ObjectId(userId),
-                },
-            },
-
-            // ✅ Ensure timestamp exists
+        const aggregationPipeline = [
+            { $match: { userId: companyAdminObjectId } },
             {
                 $addFields: {
                     sortTime: {
-                        $ifNull: ["$messageTimestamp", "$createdAt"]
+                        $ifNull: [
+                            "$messageTimestamp",
+                            { $ifNull: ["$messageSentTimestamp", "$createdAt"] }
+                        ]
+                    },
+                    normalizedConvNumber: {
+                        $arrayElemAt: [{ $split: ["$conversationId", "@"] }, 0]
                     }
                 }
             },
-
-            // ✅ OLDEST → NEWEST (correct chat order)
-            {
-                $sort: { sortTime: 1 }
-            },
-
+            { $sort: { sortTime: 1 } },
             {
                 $group: {
-                    _id: "$conversationId",
-
-                    from: { $first: "$conversationId" },
-
+                    _id: "$normalizedConvNumber",
+                    from: { $first: "$normalizedConvNumber" },
                     originalName: {
                         $max: {
                             $cond: [
                                 {
                                     $and: [
                                         { $eq: ["$direction", "incoming"] },
-                                        { $ne: ["$originalName", null] }
+                                        { $ne: ["$originalName", null] },
+                                        { $ne: ["$originalName", ""] }
                                     ]
                                 },
                                 "$originalName",
@@ -3408,349 +2997,627 @@ exports.getWhatsappConversations = async (req, res) => {
                             ]
                         }
                     },
-
-                    /* ---------------- NEW FIELDS START ---------------- */
-
-                    // Count outgoing template messages
                     templateMessagesCount: {
                         $sum: {
                             $cond: [
-                                {
-                                    $and: [
-                                        { $eq: ["$direction", "outgoing"] },
-                                        { $eq: ["$messageType", "template"] }
-                                    ]
-                                },
-                                1,
-                                0
+                                { $and: [{ $eq: ["$direction", "outgoing"] }, { $eq: ["$messageType", "template"] }] },
+                                1, 0
                             ]
                         }
                     },
-
-                    // Count all messages (incoming + outgoing)
                     sessionMessagesCount: { $sum: 1 },
-
-                    // First incoming message text
-                    firstIncomingMessage: {
-                        $first: {
+                    firstIncomingMessageArray: {
+                        $push: {
                             $cond: [
                                 { $eq: ["$direction", "incoming"] },
-                                "$content.text",
-                                null
+                                { $ifNull: ["$content.text", { $concat: ["[", "$messageType", "]"] }] },
+                                "$$REMOVE"
                             ]
                         }
                     },
-
-                    /* ---------------- NEW FIELDS END ---------------- */
-
-                    // last message = newest
                     lastMessageTime: { $last: "$sortTime" },
-
-                    // last incoming
+                    lastMessage: { $last: "$$ROOT" },
                     lastIncomingTime: {
                         $max: {
-                            $cond: [
-                                { $eq: ["$direction", "incoming"] },
-                                "$sortTime",
-                                null
-                            ]
+                            $cond: [{ $eq: ["$direction", "incoming"] }, "$sortTime", null]
                         }
                     },
-
-                    messages: {
-                        $push: {
-                            _id: "$_id",
-                            direction: "$direction",
-                            from: "$from",
-                            to: "$to",
-                            senderName: "$senderName",
-                            originalName: "$originalName",
-                            senderWabaId: "$senderWabaId",
-                            s3dataurl: "$s3dataurl",
-                            messageType: "$messageType",
-                            content: "$content",
-                            metaMessageId: "$metaMessageId",
-                            status: "$status",
-                            messageTimestamp: "$sortTime",
-                        }
-                    }
                 }
             },
-
-            // {
-            //     $project: {
-            //         _id: 0,
-            //         from: 1,
-            //         originalName: 1,
-            //         lastMessageTime: 1,
-            //         lastIncomingTime: 1,
-            //         messages: 1,
-            //     }
-            // },
-
             {
-                $project: {
-                    _id: 0,
-                    from: 1,
-                    originalName: 1,
-
-                    isWabaChat: {
-                        $cond: [
-                            {
-                                $gte: [
-                                    "$lastIncomingTime",
-                                    new Date(now.getTime() - 24 * 60 * 60 * 1000)
-                                ]
-                            },
-                            true,
-                            false
-                        ]
-                    },
-
-                    /* -------- ACTIVE STATUS -------- */
-
-                    userActiveStatus: {
-                        $let: {
-                            vars: {
-                                diffMs: {
-                                    $subtract: [new Date(), "$lastIncomingTime"]
-                                }
-                            },
-                            in: {
-                                $switch: {
-                                    branches: [
-
-                                        /* -------- MINUTES (< 60) -------- */
+                $lookup: {
+                    from: "contacts",
+                    let: { convNumber: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $in: ["$createdBy", ownerIds] },
                                         {
-                                            case: {
-                                                $lt: [
-                                                    { $divide: ["$$diffMs", 60000] },
-                                                    60
-                                                ]
-                                            },
-                                            then: {
-                                                $concat: [
-                                                    {
-                                                        $toString: {
-                                                            $floor: {
-                                                                $divide: ["$$diffMs", 60000]
+                                            $in: [
+                                                "$$convNumber",
+                                                {
+                                                    $map: {
+                                                        input: "$phoneNumbers",
+                                                        as: "p",
+                                                        in: {
+                                                            $replaceAll: {
+                                                                input: { $concat: [{ $ifNull: ["$$p.countryCode", ""] }, { $ifNull: ["$$p.number", ""] }] },
+                                                                find: "+", replacement: ""
                                                             }
                                                         }
-                                                    },
-                                                    " min ago"
-                                                ]
-                                            }
-                                        },
-
-                                        /* -------- HOURS (< 24) -------- */
-                                        {
-                                            case: {
-                                                $lt: [
-                                                    { $divide: ["$$diffMs", 3600000] },
-                                                    24
-                                                ]
-                                            },
-                                            then: {
-                                                $concat: [
-                                                    {
-                                                        $toString: {
-                                                            $floor: {
-                                                                $divide: ["$$diffMs", 3600000]
-                                                            }
-                                                        }
-                                                    },
-                                                    " hr ago"
-                                                ]
-                                            }
-                                        }
-
-                                    ],
-
-                                    /* -------- DAYS (>= 24 hr) -------- */
-                                    default: {
-                                        $concat: [
-                                            {
-                                                $toString: {
-                                                    $floor: {
-                                                        $divide: ["$$diffMs", 86400000]
                                                     }
                                                 }
-                                            },
-                                            " day ago"
-                                        ]
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        { $project: { firstname: 1, lastname: 1 } }
+                    ],
+                    as: "contactData"
+                }
+            },
+            {
+                $lookup: {
+                    from: "leads",
+                    let: { convNumber: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $in: ["$createdBy", ownerIds] },
+                                        {
+                                            $in: [
+                                                "$$convNumber",
+                                                {
+                                                    $map: {
+                                                        input: "$phoneNumbers",
+                                                        as: "p",
+                                                        in: {
+                                                            $replaceAll: {
+                                                                input: { $concat: [{ $ifNull: ["$$p.countryCode", ""] }, { $ifNull: ["$$p.number", ""] }] },
+                                                                find: "+", replacement: ""
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        { $project: { firstname: 1, lastname: 1 } }
+                    ],
+                    as: "leadData"
+                }
+            },
+            {
+                $addFields: {
+                    chatName: {
+                        $let: {
+                            vars: {
+                                contact: { $arrayElemAt: ["$contactData", 0] },
+                                lead: { $arrayElemAt: ["$leadData", 0] }
+                            },
+                            in: {
+                                $let: {
+                                    vars: {
+                                        contactName: {
+                                            $trim: {
+                                                input: {
+                                                    $concat: [
+                                                        { $ifNull: ["$$contact.firstname", ""] },
+                                                        " ",
+                                                        { $ifNull: ["$$contact.lastname", ""] }
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        leadName: {
+                                            $trim: {
+                                                input: {
+                                                    $concat: [
+                                                        { $ifNull: ["$$lead.firstname", ""] },
+                                                        " ",
+                                                        { $ifNull: ["$$lead.lastname", ""] }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    },
+                                    in: {
+                                        $switch: {
+                                            branches: [
+                                                { case: { $and: [{ $ne: ["$$contactName", null] }, { $ne: ["$$contactName", ""] }] }, then: "$$contactName" },
+                                                { case: { $and: [{ $ne: ["$$leadName", null] }, { $ne: ["$$leadName", ""] }] }, then: "$$leadName" },
+                                                { case: { $and: [{ $ne: ["$originalName", null] }, { $ne: ["$originalName", ""] }] }, then: "$originalName" }
+                                            ],
+                                            default: "$from"
+                                        }
                                     }
                                 }
                             }
                         }
-                    },
-
-
-                    lastActiveConversation: "$lastIncomingTime",
-
-                    /* -------- COUNTS -------- */
-
-                    templateMessages: "$templateMessagesCount",
-                    sessionMessages: "$sessionMessagesCount",
-
-                    /* -------- FIRST MESSAGE -------- */
-
-                    firstUserMessage: "$firstIncomingMessage",
-
-                    /* -------- EXISTING -------- */
-
-                    lastMessageTime: 1,
-                    lastIncomingTime: 1,
-                    messages: 1,
+                    }
                 }
             },
+            {
+                $addFields: {
+                    lastMessageType: "$lastMessage.messageType",
 
-            // chats vs history filter
-            ...(type === "chats"
-                ? [{
-                    $match: {
-                        lastIncomingTime: { $gte: before24Hours }
-                    }
-                }]
-                : type === "history"
-                    ? [{
-                        $match: {
-                            $or: [
-                                { lastIncomingTime: { $lt: before24Hours } },
-                                { lastIncomingTime: null }
-                            ]
+                    lastMessage: {
+                        $switch: {
+                            branches: [
+
+                                {
+                                    case: { $eq: ["$lastMessage.messageType", "text"] },
+                                    then: "$lastMessage.content.text"
+                                },
+
+                                {
+                                    case: { $eq: ["$lastMessage.messageType", "image"] },
+                                    then: "📷 Photo"
+                                },
+
+                                {
+                                    case: { $eq: ["$lastMessage.messageType", "video"] },
+                                    then: "🎥 Video"
+                                },
+
+                                {
+                                    case: {
+                                        $in: ["$lastMessage.messageType", ["audio", "voice"]]
+                                    },
+                                    then: "🎤 Voice message"
+                                },
+
+                                {
+                                    case: { $eq: ["$lastMessage.messageType", "document"] },
+                                    then: "📎 Document"
+                                },
+
+                                {
+                                    case: { $eq: ["$lastMessage.messageType", "location"] },
+                                    then: "📍 Location"
+                                },
+
+                                {
+                                    case: { $eq: ["$lastMessage.messageType", "contacts"] },
+                                    then: "👤 Contact"
+                                },
+
+                                {
+                                    case: { $eq: ["$lastMessage.messageType", "template"] },
+                                    then: {
+                                        $ifNull: [
+                                            "$lastMessage.content.template.resolved.body",
+                                            "Template message"
+                                        ]
+                                    }
+                                }
+
+                            ],
+                            default: "New message"
                         }
-                    }]
-                    : []),
+                    }
+                }
+            },
+            {
+                $match: {
+                    $and: [
+                        search ? {
+                            $or: [
+                                { chatName: { $regex: search, $options: "i" } },
+                                { from: { $regex: search, $options: "i" } }
+                            ]
+                        } : {},
+                        type === "chats"
+                            ? { lastIncomingTime: { $gte: before24Hours } }
+                            : type === "history"
+                                ? { $or: [{ lastIncomingTime: { $lt: before24Hours } }, { lastIncomingTime: null }] }
+                                : {}
+                    ]
+                }
+            },
+            { $sort: { lastMessageTime: -1 } },
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    data: [
+                        { $skip: skip },
+                        { $limit: limit },
+                        {
+                            $project: {
+                                _id: 0,
+                                from: 1,
+                                originalName: 1,
+                                chatName: 1,
+                                lastMessageTime: 1,
+                                lastIncomingTime: 1,
+                                lastMessage: 1,
+                                lastMessageType: 1,
+                                templateMessages: "$templateMessagesCount",
+                                sessionMessages: "$sessionMessagesCount",
+                                firstUserMessage: { $arrayElemAt: ["$firstIncomingMessageArray", 0] },
+                                isWabaChat: { $cond: [{ $gte: ["$lastIncomingTime", before24Hours] }, true, false] },
+                                userActiveStatus: {
+                                    $let: {
+                                        vars: { diffMs: { $subtract: [new Date(), "$lastIncomingTime"] } },
+                                        in: {
+                                            $switch: {
+                                                branches: [
+                                                    {
+                                                        case: { $lt: [{ $divide: ["$$diffMs", 60000] }, 60] },
+                                                        then: { $concat: [{ $toString: { $floor: { $divide: ["$$diffMs", 60000] } } }, " min ago"] }
+                                                    },
+                                                    {
+                                                        case: { $lt: [{ $divide: ["$$diffMs", 3600000] }, 24] },
+                                                        then: { $concat: [{ $toString: { $floor: { $divide: ["$$diffMs", 3600000] } } }, " hr ago"] }
+                                                    }
+                                                ],
+                                                default: { $concat: [{ $toString: { $floor: { $divide: ["$$diffMs", 86400000] } } }, " day ago"] }
+                                            }
+                                        }
+                                    }
+                                },
+                                lastActiveConversation: "$lastIncomingTime",
+                            }
+                        }
+                    ]
+                }
+            }
+        ];
 
-            { $sort: { lastMessageTime: -1 } }
-
-        ]);
+        const result = await WhatsAppMessage.aggregate(aggregationPipeline);
+        const conversations = result[0].data;
+        const totalCount = result[0].metadata[0]?.total || 0;
 
         /* -------------------------------------------------- */
         /* STEP 🔥 Sync isWabaChat with Contact & Lead        */
         /* -------------------------------------------------- */
 
-        // Arrays for numbers
-        const activeNumbers = [];
-        const inactiveNumbers = [];
+        const foundUser = await User.findById(companyAdminId).select("whatsappWaba.chats");
 
-        // Loop conversations
-        conversations.forEach(conv => {
+        if (foundUser && foundUser.whatsappWaba) {
+            const chats = foundUser.whatsappWaba.chats || [];
+            const activeNumbers = [];
+            const inactiveNumbers = [];
 
-            // If chats API → all are active
-            if (type === "chats") {
-                activeNumbers.push(conv.from);
-            }
-
-            // If history API → all inactive
-            else if (type === "history") {
-                inactiveNumbers.push(conv.from);
-            }
-
-            // If no filter → decide via lastIncomingTime
-            else {
-                if (conv.lastIncomingTime && conv.lastIncomingTime >= before24Hours) {
-                    activeNumbers.push(conv.from);
+            chats.forEach(chat => {
+                const lastIncoming = chat.lastIncomingTime;
+                if (lastIncoming && new Date(lastIncoming) >= before24Hours) {
+                    activeNumbers.push(chat.chatNumber);
                 } else {
-                    inactiveNumbers.push(conv.from);
+                    inactiveNumbers.push(chat.chatNumber);
                 }
-            }
-        });
+            });
 
-        /* ---------------- CONTACT UPDATE ---------------- */
+            const updateCRM = async (Model, numbers, isWaba) => {
+                if (numbers.length === 0) return;
+                await Model.updateMany(
+                    {
+                        createdBy: { $in: ownerIds },
+                        $expr: {
+                            $gt: [
+                                {
+                                    $size: {
+                                        $filter: {
+                                            input: "$phoneNumbers",
+                                            as: "p",
+                                            cond: {
+                                                $in: [
+                                                    {
+                                                        $replaceAll: {
+                                                            input: { $concat: [{ $ifNull: ["$$p.countryCode", ""] }, { $ifNull: ["$$p.number", ""] }] },
+                                                            find: "+", replacement: ""
+                                                        }
+                                                    },
+                                                    numbers
+                                                ]
+                                            }
+                                        }
+                                    }
+                                },
+                                0
+                            ]
+                        }
+                    },
+                    { $set: { isWabaChat: isWaba } }
+                );
+            };
 
-        // TRUE → Active Chats
-        if (activeNumbers.length > 0) {
-            await Contact.updateMany(
-                {
-                    $expr: {
-                        $in: [
-                            {
-                                $concat: [
-                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.countryCode", 0] }, ""] },
-                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.number", 0] }, ""] }
-                                ]
-                            },
-                            activeNumbers
-                        ]
-                    }
-                },
-                { $set: { isWabaChat: true } }
-            );
-        }
-
-        // FALSE → History
-        if (inactiveNumbers.length > 0) {
-            await Contact.updateMany(
-                {
-                    $expr: {
-                        $in: [
-                            {
-                                $concat: [
-                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.countryCode", 0] }, ""] },
-                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.number", 0] }, ""] }
-                                ]
-                            },
-                            inactiveNumbers
-                        ]
-                    }
-                },
-                { $set: { isWabaChat: false } }
-            );
-        }
-
-        /* ---------------- LEAD UPDATE ---------------- */
-
-        // TRUE → Active Chats
-        if (activeNumbers.length > 0) {
-            await Lead.updateMany(
-                {
-                    $expr: {
-                        $in: [
-                            {
-                                $concat: [
-                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.countryCode", 0] }, ""] },
-                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.number", 0] }, ""] }
-                                ]
-                            },
-                            activeNumbers
-                        ]
-                    }
-                },
-                { $set: { isWabaChat: true } }
-            );
-        }
-
-        // FALSE → History
-        if (inactiveNumbers.length > 0) {
-            await Lead.updateMany(
-                {
-                    $expr: {
-                        $in: [
-                            {
-                                $concat: [
-                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.countryCode", 0] }, ""] },
-                                    { $ifNull: [{ $arrayElemAt: ["$phoneNumbers.number", 0] }, ""] }
-                                ]
-                            },
-                            inactiveNumbers
-                        ]
-                    }
-                },
-                { $set: { isWabaChat: false } }
-            );
+            await updateCRM(Contact, inactiveNumbers, false);
+            await updateCRM(Contact, activeNumbers, true);
+            await updateCRM(Lead, inactiveNumbers, false);
+            await updateCRM(Lead, activeNumbers, true);
         }
 
         res.json({
             status: "success",
             message: "chats received",
             data: conversations,
+            totalCount
         });
     } catch (error) {
-        console.error("❌ Get WhatsApp conversations error:", error);
         res.status(500).json({
             success: false,
             message: "Failed to fetch conversations",
+        });
+    }
+};
+
+/** STEP 8: Get WhatsApp Messages for a Chat
+ */
+exports.getWhatsappMessages = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { chatNumber } = req.body;
+        let messagePage = parseInt(req.body.messagePage);
+        const limit = parseInt(req.body.messagePageLimit) || 15; // default 15 for better chat feel
+        const search = req.body.messageSearch || "";
+
+        if (!chatNumber) {
+            return res.status(400).json({
+                success: false,
+                message: "chatNumber is required"
+            });
+        }
+
+        const user = await User.findById(userId);
+        let companyAdminId;
+
+        if (user.role === "user") {
+            companyAdminId = user.createdByWhichCompanyAdmin;
+        } else if (user.role === "companyAdmin") {
+            companyAdminId = user._id;
+        } else {
+            companyAdminId = user._id;
+        }
+
+        const companyAdminObjectId = new mongoose.Types.ObjectId(companyAdminId);
+
+        // Match messages for this chat within the company's scope
+        // We look for chatNumber within conversationId, from, or to fields
+        const conversationFilter = {
+            userId: companyAdminObjectId,
+            $or: [
+                { conversationId: { $regex: chatNumber } },
+                { from: { $regex: chatNumber } },
+                { to: { $regex: chatNumber } }
+            ]
+        };
+
+        const searchFilter = search ? {
+            $or: [
+                { "content.text": { $regex: search, $options: "i" } },
+                { "content.caption": { $regex: search, $options: "i" } },
+                { "content.fileName": { $regex: search, $options: "i" } },
+                { "content.address": { $regex: search, $options: "i" } },
+                { "content.name": { $regex: search, $options: "i" } },
+                { "content.template.resolved.header": { $regex: search, $options: "i" } },
+                { "content.template.resolved.body": { $regex: search, $options: "i" } }
+            ]
+        } : {};
+
+        const filter = {
+            ...conversationFilter,
+            ...searchFilter
+        };
+
+        const totalCount = await WhatsAppMessage.countDocuments(filter);
+        const totalPages = Math.ceil(totalCount / limit);
+
+        // Accumulative (Upend) Pagination Logic:
+        // Page 1 = Latest 15 messages (Page 1)
+        // Page 2 = Latest 30 messages (Page 1 + Page 2)
+        // Page 3 = Latest 45 messages (Page 1 + Page 2 + Page 3)
+        if (!messagePage || isNaN(messagePage)) {
+            messagePage = 1;
+        }
+
+        const accumulativeLimit = messagePage * limit;
+
+        const pipeline = [
+            { $match: filter },
+            {
+                $addFields: {
+                    sortTime: {
+                        $ifNull: [
+                            "$messageTimestamp",
+                            { $ifNull: ["$messageSentTimestamp", "$createdAt"] }
+                        ]
+                    }
+                }
+            },
+            { $sort: { sortTime: -1 } }, // Newest first for slicing
+            { $limit: accumulativeLimit } // Fetch all pages from 1 to current
+        ];
+
+        const messages = await WhatsAppMessage.aggregate(pipeline);
+
+        // Reverse to return Chronological order (Oldest -> Newest) for the entire set
+        const chronologicalMessages = messages.reverse();
+
+        res.json({
+            status: "success",
+            message: "messages received",
+            data: chronologicalMessages,
+            pagination: {
+                totalCount,
+                totalPages,
+                currentPage: messagePage,
+                limit,
+                hasMore: messagePage < totalPages
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch messages",
+        });
+    }
+};
+
+exports.deleteChats = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { conversationIds } = req.body;
+        await WhatsAppMessage.deleteMany({
+            userId,
+            conversationId: { $in: conversationIds },
+        });
+        res.json({
+            status: "success",
+            message: "Chats deleted successfully",
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to delete conversations",
+        });
+    }
+};
+
+exports.manageWabaAssignment = async (req, res) => {
+    try {
+        const companyAdminId = req.user._id;
+        const { wabaAssigned } = req.body;
+
+        /* ================================
+           1️⃣ Validate Input
+        =================================*/
+        if (!wabaAssigned || !Array.isArray(wabaAssigned) || wabaAssigned.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "agentIds array is required",
+            });
+        }
+
+        /* ================================
+           2️⃣ Verify Company Admin
+        =================================*/
+        const companyAdmin = await User.findOne({
+            _id: companyAdminId,
+            role: "companyAdmin",
+        });
+
+        if (!companyAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: "Only company admin can manage WABA assignment",
+            });
+        }
+
+        /* ================================
+           3️⃣ Get Agent IDs List
+        =================================*/
+        const ids = wabaAssigned.map(a => a.agentId);
+
+        const agents = await User.find({
+            _id: { $in: ids },
+            role: "user",
+            createdByWhichCompanyAdmin: companyAdminId,
+        });
+
+        if (agents.length !== ids.length) {
+            return res.status(400).json({
+                success: false,
+                message: "Some agents do not belong to this company admin",
+            });
+        }
+
+        /* ================================
+           4️⃣ Process Each Agent
+        =================================*/
+        const bulkOps = [];
+
+        for (const item of wabaAssigned) {
+            const { agentId, assigned } = item;
+
+            if (typeof assigned !== "boolean") {
+                return res.status(400).json({
+                    success: false,
+                    message: `Assigned flag must be true/false for agent ${agentId}`,
+                });
+            }
+
+            // ASSIGN
+            if (assigned === true) {
+                if (!companyAdmin.whatsappWaba?.isConnected) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Company admin has no connected WABA",
+                    });
+                }
+
+                const wabaData = {
+                    ...companyAdmin.whatsappWaba.toObject(),
+                    chats: [],
+                    isConnected: true,
+                };
+
+                bulkOps.push({
+                    updateOne: {
+                        filter: { _id: agentId },
+                        update: { $set: { whatsappWaba: wabaData } },
+                    },
+                });
+            }
+
+            // UNASSIGN
+            else {
+                bulkOps.push({
+                    updateOne: {
+                        filter: { _id: agentId },
+                        update: {
+                            $set: {
+                                whatsappWaba: {
+                                    isConnected: false,
+                                    wabaId: null,
+                                    phoneNumberId: null,
+                                    businessAccountId: null,
+                                    accessToken: null,
+                                    tokenExpiresAt: null,
+                                    phoneNumber: null,
+                                    displayName: null,
+                                    qualityRating: null,
+                                    messagingLimit: null,
+                                    businessVerificationStatus: null,
+                                    accountReviewStatus: null,
+                                    status: null,
+                                    profile: {},
+                                    webhook: {},
+                                    chats: [],
+                                },
+                            },
+                        },
+                    },
+                });
+            }
+        }
+
+        /* ================================
+           5️⃣ Execute Bulk Update
+        =================================*/
+        if (bulkOps.length > 0) {
+            await User.bulkWrite(bulkOps);
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "WABA assignment updated successfully",
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
         });
     }
 };

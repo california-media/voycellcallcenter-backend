@@ -1,111 +1,3 @@
-// const User = require("../models/userModel");
-// const mongoose = require("mongoose");
-// const axios = require("axios");
-// const { META_GRAPH_URL } = require("../config/whatsapp");
-// const WsConnection = require("../models/wsConnection");
-// const WhatsAppMessage = require("../models/whatsappMessage");
-// const WabaTemplate = require("../models/wabaTemplateModel");
-// const Contact = require("../models/contactModel");
-// const fs = require("fs");
-// const FormData = require("form-data");
-// const Lead = require("../models/leadModel");
-// const { downloadMetaMedia } = require("../services/metaMedia");
-// const { uploadWhatsAppMediaToS3, uploadWhatsAppMediaProfileToS3 } = require("../utils/uploadWhatsAppMedia");
-// const { createCampaignSchedule } = require("../services/awsScheduler");
-// const dotenv = require("dotenv");
-// dotenv.config();
-
-// exports.sendScheduledCampaignService = async ({
-//   campaignId,
-//   userId,
-//   templateId,
-//   params,
-//   groupName,
-// }) => {
-
-//   console.log("Processing scheduled campaign:", campaignId);
-
-//   const user = await User.findById(userId);
-//   if (!user) throw new Error("User not found");
-
-//   const { phoneNumberId, accessToken } = user.whatsappWaba;
-
-//   /* ───────── TEMPLATE ───────── */
-//   const template = await WabaTemplate.findById(templateId);
-//   if (!template) throw new Error("Template not found");
-
-//   /* ───────── REBUILD RECIPIENTS ───────── */
-//   const contacts = await Contact.find({
-//     createdBy: userId,
-//     "tags.tag": { $in: groupName }
-//   });
-
-//   const leads = await Lead.find({
-//     createdBy: userId,
-//     "tags.tag": { $in: groupName }
-//   });
-
-//   let recipients = [
-//     ...extractNumbersWithNames(contacts, "contact"),
-//     ...extractNumbersWithNames(leads, "lead"),
-//   ];
-
-//   /* ───────── BUILD COMPONENTS ───────── */
-//   const components = buildTemplateComponents(template, params);
-
-//   const results = [];
-
-//   for (const r of recipients) {
-
-//     const resolvedParams = resolveDynamicParams(params, r);
-//     const dynamicComponents =
-//       applyDynamicParams(template, components, resolvedParams);
-
-//     const payload = {
-//       messaging_product: "whatsapp",
-//       to: r.number,
-//       type: "template",
-//       template: {
-//         name: template.name,
-//         language: { code: template.language },
-//         components: dynamicComponents,
-//       },
-//     };
-
-//     try {
-//       const { data } = await axios.post(
-//         `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
-//         payload,
-//         {
-//           headers: {
-//             Authorization: `Bearer ${accessToken}`,
-//             "Content-Type": "application/json",
-//           },
-//         }
-//       );
-
-//       results.push({ success: true });
-
-//     } catch (err) {
-//       console.error(err.response?.data);
-//       results.push({ success: false });
-//     }
-//   }
-
-//   /* ───────── UPDATE CAMPAIGN ───────── */
-//   const campaign =
-//     user.campaigns.find(
-//       c => c.campaignId.toString() === campaignId
-//     );
-
-//   campaign.status = "completed";
-
-//   await user.save();
-
-//   console.log("✅ Scheduled campaign completed");
-// };
-
-
 const User = require("../models/userModel");
 const mongoose = require("mongoose");
 const axios = require("axios");
@@ -201,35 +93,6 @@ const resolveDynamicParams = (
 /* ──────────────────────────────────────────────
    🔧 HELPER — Build Components
 ────────────────────────────────────────────── */
-// const buildTemplateComponents = (
-//     template,
-//     params
-// ) => {
-
-//     const components = [];
-
-//     const body =
-//         template.components.find(
-//             c => c.type === "BODY"
-//         );
-
-//     if (body) {
-
-//         components.push({
-//             type: "body",
-//             parameters: (params.body || []).map(
-//                 t => ({
-//                     type: "text",
-//                     text: t
-//                 })
-//             )
-//         });
-
-//     }
-
-//     return components;
-// };
-
 const buildTemplateComponents = (
     template,
     params
@@ -380,11 +243,6 @@ exports.sendScheduledCampaignService =
         groupName = [],
     }) => {
 
-        console.log(
-            "📨 Processing scheduled campaign:",
-            campaignId
-        );
-
         /* 1️⃣ USER */
         const user =
             await User.findById(userId);
@@ -430,11 +288,6 @@ exports.sendScheduledCampaignService =
             ),
         ];
 
-        console.log(
-            "Recipients count:",
-            recipients.length
-        );
-
         /* 4️⃣ COMPONENTS */
         const baseComponents =
             buildTemplateComponents(
@@ -445,77 +298,6 @@ exports.sendScheduledCampaignService =
         const results = [];
 
         let fullName = ""; // To store recipient name for campaign update
-
-        /* 5️⃣ SEND LOOP */
-        // for (const r of recipients) {
-
-        //     fullName = `${r.firstName} ${r.lastName}`.trim() || r.name || r.number;
-
-        //     const resolvedParams =
-        //         resolveDynamicParams(
-        //             params,
-        //             r
-        //         );
-
-        //     const dynamicComponents =
-        //         applyDynamicParams(
-        //             template,
-        //             baseComponents,
-        //             resolvedParams
-        //         );
-
-        //     const payload = {
-        //         messaging_product: "whatsapp",
-        //         to: r.number,
-        //         type: "template",
-        //         template: {
-        //             name: template.name,
-        //             language: {
-        //                 code: template.language
-        //             },
-        //             components: dynamicComponents,
-        //         },
-        //     };
-
-        //     try {
-
-        //         const { data } = await axios.post(
-        //             `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
-        //             payload,
-        //             {
-        //                 headers: {
-        //                     Authorization:
-        //                         `Bearer ${accessToken}`,
-        //                     "Content-Type":
-        //                         "application/json",
-        //                 },
-        //             }
-        //         );
-
-        //         results.push({
-        //             to: r.number,
-        //             success: true,
-        //             messageId: data.messages?.[0]?.id,
-        //             chatName:
-        //                 `${r.firstName} ${r.lastName}`.trim() ||
-        //                 r.name ||
-        //                 r.number
-        //         });
-
-        //     } catch (err) {
-
-        //         console.error(
-        //             "Send failed:",
-        //             err.response?.data ||
-        //             err.message
-        //         );
-
-        //         results.push({
-        //             to: r.number,
-        //             success: false
-        //         });
-        //     }
-        // }
 
         /* 5️⃣ SEND LOOP */
         for (const r of recipients) {
@@ -605,13 +387,6 @@ exports.sendScheduledCampaignService =
                 });
 
             } catch (err) {
-
-                console.error(
-                    "Send failed:",
-                    err.response?.data ||
-                    err.message
-                );
-
                 results.push({
                     to: r.number,
                     success: false
@@ -640,10 +415,6 @@ exports.sendScheduledCampaignService =
                 }));
             await user.save();
         }
-
-        console.log(
-            "✅ Scheduled campaign completed"
-        );
 
         return {
             success: true,

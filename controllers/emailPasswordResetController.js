@@ -32,7 +32,6 @@ exports.forgotPassword = async (req, res) => {
     const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:4004";
     // Reset link (unchanged)
     const resetLink = `${FRONTEND_URL + "/reset-password"}?token=${token}`;
-    console.log("resetLink:", resetLink);
 
     // HTML (unchanged from your original)
     const html = `
@@ -120,8 +119,6 @@ exports.resetPassword = async (req, res) => {
     }
 
     // // Hash password
-    // const saltRounds = 10;
-    // const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     user.password = password;
 

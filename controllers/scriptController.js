@@ -8,9 +8,6 @@ exports.generateScriptTag = async (req, res) => {
     const userId = req.user._id;
     const user = await User.findById(userId);
 
-    console.log("Generating script tag for user:", userId);
-    console.log("User Yeastar Details:", user.PBXDetails);
-
     if (!user || !user.PBXDetails.PBX_EXTENSION_NUMBER) {
       return res.status(400).json({ error: "User or extension not found" });
     }
@@ -24,13 +21,7 @@ exports.generateScriptTag = async (req, res) => {
 
     const pbxDeviceId = user.PBXDetails.assignedDeviceId || null;
 
-    console.log("PBX Device ID:", pbxDeviceId);
-
     // === 1️⃣ Normalize allowedOrigin (remove trailing slash + lowercase) ===
-    // const allowedOrigin = (req.body.allowedOrigin || "")
-    //   .trim()
-    //   .replace(/\/+$/, "")
-    //   .toLowerCase();
     const allowedOriginPopup = Array.isArray(req.body.allowedOriginPopup)
       ? req.body.allowedOriginPopup
         .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
@@ -39,7 +30,14 @@ exports.generateScriptTag = async (req, res) => {
 
     const allowedOriginContactForm = Array.isArray(req.body.allowedOriginContactForm)
       ? req.body.allowedOriginContactForm
-        .map(o => o.trim().replace(/\/+$/, "").toLowerCase())
+        .map(o =>
+          o
+            .toLowerCase()
+            .trim()
+            .split("#")[0]
+            .split("?")[0]
+            .replace(/\/+$/, "")
+        )
         .filter(Boolean)
       : [];
 
@@ -54,13 +52,13 @@ exports.generateScriptTag = async (req, res) => {
     // === 2️⃣ Update popup settings (always save) ===
     user.popupSettings = {
       themeColor:
-        req.body.themeColor || user.popupSettings?.themeColor || "#4CAF50",
+        req.body.themeColor || user.popupSettings?.themeColor || "#2249AA",
       headingColor:
-        req.body.headingColor || user.popupSettings?.headingColor || "#4CAF50",
+        req.body.headingColor || user.popupSettings?.headingColor || "#2249AA",
       floatingButtonColor:
         req.body.floatingButtonColor ||
         user.popupSettings?.floatingButtonColor ||
-        "#4CAF50",
+        "#2249AA",
       popupHeading:
         req.body.popupHeading ||
         user.popupSettings?.popupHeading ||
@@ -87,7 +85,6 @@ exports.generateScriptTag = async (req, res) => {
     if (allowedOriginContactForm.length > 0) {
       user.popupSettings.allowedOriginContactForm = allowedOriginContactForm;
     }
-    console.log();
 
     if (restrictedUrls.length > 0) {
       user.popupSettings.restrictedUrls = restrictedUrls;
@@ -113,17 +110,6 @@ exports.generateScriptTag = async (req, res) => {
         assignedDeviceId: pbxDeviceId,
         updatedAt: new Date(),
       };
-
-      // ✅ If allowedOrigins provided, overwrite array
-      // if (allowedOrigins.length > 0) {
-      //   updatePayload.allowedOrigin = allowedOrigins;
-      // }
-
-
-
-      // if (restrictedUrls.length > 0) {
-      //   updatePayload.restrictedUrls = restrictedUrls;
-      // }
 
       if (Array.isArray(allowedOriginContactForm)) {
         updatePayload.allowedOriginContactForm = allowedOriginContactForm; // can be []
@@ -165,9 +151,7 @@ exports.generateScriptTag = async (req, res) => {
 <script
   src="${loaderUrl}"
   data-voycell-token="${token}"
-  ${fieldName ? `data-voycell-field="${fieldName}"` : ""}
-  async
-  defer>
+  ${fieldName ? `data-voycell-field="${fieldName}"` : ""}>
 </script>
 `;
 
@@ -175,7 +159,6 @@ exports.generateScriptTag = async (req, res) => {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(scriptTag);
   } catch (err) {
-    console.error("generateScriptTag Error:", err);
     return res.status(500).json({ error: "Server Error" });
   }
 };

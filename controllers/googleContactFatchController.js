@@ -21,10 +21,6 @@ const redirectToGoogle = (req, res) => {
   const defaultCountryCode = req.query.defaultCountryCode || "971"; // Get from query param or default to 971
   const tags = req.query.tags || "[]"; // 👈 ADD
   const category = req.query.category || "contact"; // 👈 ADD (default)
-  console.log("user_id", user_id);
-  console.log("defaultCountryCode", defaultCountryCode);
-  console.log("tags", tags);
-  console.log("category", category);
 
   const params = querystring.stringify({
     client_id: process.env.GOOGLE_CLIENT_ID,
@@ -101,8 +97,6 @@ const handleGoogleCallback = async (req, res) => {
     } catch {
       parsedTags = [];
     }
-    console.log("userId:", userId, "defaultCountryCode:", defaultCountryCode);
-
     const user = await User.findById(userId);
     if (!user) {
       return res
@@ -239,14 +233,12 @@ const handleGoogleCallback = async (req, res) => {
       const lastname = lastArr.join(" ");
 
       if (firstname && /\d/.test(firstname) && !person.phoneNumbers) {
-        console.log("Email found in name, moving to emailAddresses");
 
         person.phoneNumbers = [{ value: firstname }];
       } else if (
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(firstname) &&
         !person.emailAddresses
       ) {
-        console.log("Email found in name, moving to emailAddresses");
         person.emailAddresses = [{ value: firstname }];
       }
 
@@ -346,31 +338,6 @@ const handleGoogleCallback = async (req, res) => {
       // ============================================================
       const _id = new mongoose.Types.ObjectId();
 
-      // contactsToInsert.push({
-      //   _id,
-      //   contact_id: _id,
-      //   firstname,
-      //   lastname,
-      //   emailAddresses: emailList,
-      //   phoneNumbers: phoneList,
-      //   company: "",
-      //   designation: "",
-      //   linkedin: "",
-      //   instagram: "",
-      //   telegram: "",
-      //   twitter: "",
-      //   facebook: "",
-      //   createdBy: userId,
-      //   activities: [
-      //     {
-      //       action: "contact_created",
-      //       type: "contact",
-      //       title: "Contact Imported from Google",
-      //       description: `${firstname} ${lastname}`,
-      //     },
-      //   ],
-      // });
-
       contactsToInsert.push({
         _id,
         contact_id: _id,
@@ -401,18 +368,11 @@ const handleGoogleCallback = async (req, res) => {
     // ============================================================
     // ✅ STEP 8: SAVE TO DB
     // ============================================================
-    console.log(`\n📊 Google Import Summary:`);
-    console.log(`Total Google contacts fetched: ${connections.length}`);
-    console.log(
-      `Contacts to insert (after deduplication): ${contactsToInsert.length}`
-    );
-    console.log(`Duplicates skipped: ${count}`);
 
     let savedContacts = [];
     if (contactsToInsert.length > 0) {
       // savedContacts = await Contact.insertMany(contactsToInsert);
       savedContacts = await TargetModel.insertMany(contactsToInsert);
-      console.log(`✅ Successfully saved: ${savedContacts.length} contacts`);
     } else {
       console.log(
         `ℹ️  No new contacts to import (all were duplicates or empty)`
@@ -424,7 +384,6 @@ const handleGoogleCallback = async (req, res) => {
     // ============================================================
     const resultData = {
       status: "success",
-      // message: "Google Contacts imported successfully",
       message: isLeadImport
         ? "Google Leads imported successfully"
         : "Google Contacts imported successfully",
