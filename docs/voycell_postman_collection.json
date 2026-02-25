@@ -1,0 +1,4757 @@
+{
+  "info": {
+    "_postman_id": "8a7f933d-8921-4577-8176-bda211b2328f",
+    "name": "voycellcallcenter-backend api",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "24694351",
+    "_collection_link": "https://go.postman.co/collection/24694351-8a7f933d-8921-4577-8176-bda211b2328f?source=collection_link",
+    "{{baseURL}}" : "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com",
+    "{{BaseUrlLive}}" : "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com",
+    "{{BaseUrlLocal}}" : "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
+
+  },
+  "item": [
+    {
+      "name": "account connect and disconnenct live Copy",
+      "item": [
+        {
+          "name": "disconnect smtp live",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODViZjg5YzU5ZGUyZDJlYjlhYjdhYTAiLCJpYXQiOjE3NTA5MzI1NTB9.Gk6my9YdTyF6vWGmBq3NBq_RxaE_2gbxiGfFBqabTrk",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/disconnect/smtp",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "disconnect",
+                "smtp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "disconnect google live",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODViZjg5YzU5ZGUyZDJlYjlhYjdhYTAiLCJpYXQiOjE3NTA5MzI1NTB9.Gk6my9YdTyF6vWGmBq3NBq_RxaE_2gbxiGfFBqabTrk",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/disconnect/google",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "disconnect",
+                "google"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "disconnect zoho live",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTQ5NDFhZmIyYjI3Yjk2MTc2OTdiMGYiLCJzZXNzaW9uSWQiOiIyYWFmMzIxMzM5NWY2ZGVmNTUzMjc5MTdlYTJjNGJmYjdmOWQ5MmE1NmMzNjY0MWI4ZjU4NTVlNzMyZWZjZWQwIiwiaWF0IjoxNzY2NzQ5ODg1LCJleHAiOjE3NjczNTQ2ODV9.SND-HzGLiOtxHm4VhKeZr-vP73HF8MHfJMtDrIhN1Tg",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLive}}/api/zoho/disconnect",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "api",
+                "zoho",
+                "disconnect"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "disconnect Microsoft live",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODY0YzJkN2I0NDkyNzY5OTE5MWI5ZjUiLCJpYXQiOjE3NTE0NDMxMzR9.rGThB0ijcKz8bEr-vmVZdoY2lcsORqyZe3r-FC4INbA",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/disconnect/microsoft",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "disconnect",
+                "microsoft"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "connect google account live",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI3NTEwOTN9.iQ2_hX8qmtIGlydSJnWbANCgvwVa8ng1kT1yPc-i1h0",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/connect/google",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "connect",
+                "google"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "connect smtp account live",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODViYTEyZjNiMDVkMjU4YTgyNDUyYjciLCJpYXQiOjE3NTA4MzU3NjZ9.US2PFlEHXV0bpKLurRhC89HF_aEEkQyKus5Wkk4xxUw",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"SMTP_HOST\" : \"smtp.titan.email\",\r\n    \"SMTP_PORT\" : \"465\",\r\n    \"SMTP_USER\" : \"noreply@contacts.management\",\r\n    \"SMTP_PASS\" : \"bZ}JTus_PQ{qWvA\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/connect/smtp",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "connect",
+                "smtp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "connect microsoft account live",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiIwNjZhMjU0MDFiMzBkZTMzNDkyMjBiZDFmOTU5ZWI2NjFkN2ViNmRjZTBiZWE4N2IzZmE5YmViYzM3MDQ2N2NjIiwiaWF0IjoxNzY3NDI0MjQxLCJleHAiOjE3NjgwMjkwNDF9.i2lg1yIRJ7Zr4o2SjVKhzZjSQ0RD0bytt5nSzGKsby4",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/connect/microsoft",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "connect",
+                "microsoft"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "connect zoho account live",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTQ5NDFhZmIyYjI3Yjk2MTc2OTdiMGYiLCJzZXNzaW9uSWQiOiIyYWFmMzIxMzM5NWY2ZGVmNTUzMjc5MTdlYTJjNGJmYjdmOWQ5MmE1NmMzNjY0MWI4ZjU4NTVlNzMyZWZjZWQwIiwiaWF0IjoxNzY2NzQ5ODg1LCJleHAiOjE3NjczNTQ2ODV9.SND-HzGLiOtxHm4VhKeZr-vP73HF8MHfJMtDrIhN1Tg",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/api/zoho/connect",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "api",
+                "zoho",
+                "connect"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "connect zoom ",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTk2YTRjNTU3Zjk3MTMwZmRhNTViOWEiLCJzZXNzaW9uSWQiOm51bGwsImlhdCI6MTc3MTQ4MDMyMiwiZXhwIjoxNzcyMDg1MTIyfQ.MbjeCFP6EqgQyM4ATtp71DSJKtPtDSFlVkBTr0CQ1bA",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/connect/zoom",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "connect",
+                "zoom"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "connect whatsapp waba account",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTk0NzY0NWU2OWM3ZjA2ZGY1YjVlZWMiLCJzZXNzaW9uSWQiOiI3ZDU0N2U4Y2FhNDI5MTlhYjExNWJmNzMzNjQzM2Y2ZDQxNTRhMGU2ZDIzNmNjODUzM2EwODlmNzcxZGE5MzhlIiwiaWF0IjoxNzcxNDEzNTUzLCJleHAiOjE3NzIwMTgzNTN9.lkVzsMpDpvmY__6mem_eqZenv0LvJysUf1U5tAuUGdI",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"accessToken\": \"EAAMfEKyGOYQBQoLPFCiiXNQNSDZAZC4xLVhw8MXJixVfJH8KDKGX9ZA0r6L2wRPWi8mgz4YCotv9rKY2cKO7aouTalmQSPGWgMX3w5I2yZBnnsPoZAYkNrg491xJmI9GbS84n4QOV0rDrH3NSjM6n23pZCy7QpatsMkHxFWSBFZCQm2dLI1ya5ACIk1NO8ZBstZCmMAZDZD\",\r\n    \"businessAccountId\": \"875907041694785\",\r\n    \"wabaId\": \"864626812852562\",\r\n    \"phoneNumberId\": \"972164729306813\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/api/whatsapp/connect",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "api",
+                "whatsapp",
+                "connect"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "disconnect whatspp waba account",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiI5Yjg5ZGVlZTAxNDU4MTRmMWQ2OGYzNTNiZDcyYjY2MWQzYjcwYTc2M2RlN2Y1ODI4Y2VhZjBiMTgzMjYzNjM2IiwiaWF0IjoxNzcwOTYzMjU1LCJleHAiOjE3NzE1NjgwNTV9.EB_RrMet1pExQnUwu7y73_uzJsElfUQtGNNmQu_Loxo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/api/whatsapp/disconnect",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "api",
+                "whatsapp",
+                "disconnect"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "signup and login api",
+      "item": [
+        {
+          "name": "email login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "// {\r\n//     \"email\" : \"superadmin@example.com\",\r\n//     \"password\" : \"SuperSecure123\"\r\n// }\r\n{\r\n    \"email\" : \"makvanayash2112@gmail.com\",\r\n    \"password\": \"12345\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/user/login",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "user",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "change password",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTE0NDQ5NDFkY2FmY2NjY2Y2YzBhNTgiLCJpYXQiOjE3NjI5Mzk1MTl9.oRLQ_bhd369j8AkTYLUUAkq6HdLoAwPmndtCqx3dxTw",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"newPassword\" : \"qwerty\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/changePassword",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "changePassword"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get admin details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTE0NDQ5NDFkY2FmY2NjY2Y2YzBhNTgiLCJpYXQiOjE3NjQxNDQ2MzV9.Ox_sqF6m5rnAGAB28KFCK8pl0zyIC-wnh5pIJLGOQ_g",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/admin/details",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "admin",
+                "details"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "company admin email signup",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"makvanayashcaliforniamedia2112@gmail.com\",\r\n    \"password\": \"12345\",\r\n    \"firstname\": \"yash\",\r\n    \"lastname\": \"makvana\"\r\n    // \"verifyToken\" : \"a904b66e8be2c50e3ec69d01f3ad60e7393567e4fc16ce7a34be001ce522763f\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/user/signup/email",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "user",
+                "signup",
+                "email"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "email forgot password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\" : \"makvanayash12@gmail.com\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/email/forgot-password",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "email",
+                "forgot-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "email reset password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"password\" : \"asdfgh\",\r\n    \"confirmPassword\" : \"asdfgh\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/email/reset-password?token=ec627d7a274b090a1cd4e6aa6a63380eddc02dd84fed47482a16d6095d802d60",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "email",
+                "reset-password"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "ec627d7a274b090a1cd4e6aa6a63380eddc02dd84fed47482a16d6095d802d60"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "register agent api",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjE4MTUxNjh9.Dg_Ehj-sfZiBfNUD-JL3JKJ1mzk6sGs_BiPQnuUYMNU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"makvanayash12@gmail.com\",\r\n    \"firstName\": \"Yash\",\r\n    \"lastName\": \"Makvana\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/admin/user/register",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "admin",
+                "user",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get companyAdmin agents",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiJhMjUwNjFkMjRhNWQ3NmM4OTViZDYwNTA5MDE3ZjAzYTdmZmRmOTc2Y2Y4ZDk0MDY3OTVjMTkwMzJmZWQ1Y2FlIiwiaWF0IjoxNzY4OTcxNTExLCJleHAiOjE3Njk1NzYzMTF9.AEozurbg8da7xtDB3AwADe0QAO59NnkOjizg04Bqcj8",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLive}}/admin/user/getAgent",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "admin",
+                "user",
+                "getAgent"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "verify agent api",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"verifyToken\" : \"3c61b4ca9edc6553d159551cb94939d35b5101801ee8f1dffc422569056c58ce\",\r\n    \"password\" : \"12345\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/admin/user/verify",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "admin",
+                "user",
+                "verify"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete user",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTA4NjQwNmQzNTI4MzY4Mzk3NTI1ZWIiLCJzZXNzaW9uSWQiOiJmMTIwYjliYjhiNTU5Njc1NTdjMWIyNjc4ZWRjYzM2Yzk0ZDNkYzNjNTQ4NGUyYTJlOTlkMWE0YjA0OGM5ZDE4IiwiaWF0IjoxNzY2NDAzMzkwLCJleHAiOjE3NjcwMDgxOTB9.N-x6WmulvYM-V1zuRFGI2DAKIt36INDdTUotWEAR374",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/deleteUser",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "deleteUser"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "active company admin and agent by supper admin",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OGVmMzY1ZThhOGM1OWRjODQ2ZTk4ODkiLCJpYXQiOjE3NjI5NDgwMzB9.kl47xdgVqeZuMBKWAYCJ-99ai6Av8uIFMW82G7M7e2I",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"user_id\" : \"69032996fc434f4104e3f57b\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/deleteUser/activate",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "deleteUser",
+                "activate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "magic link login ",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    // \"token\": \"68def0b3da2d1a817ea5af0f7092684a7aaa2a762dd2ffa1f9f91dec38641cda\"\r\n    \"magicLink\" : \"https://voycellcallcenter.vercel.app/link-login?token=4764ac3f3409d43122dc5be8e24d981bd79c0ff68868cab326361bac4efa092e\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/user/login/magic-link",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "user",
+                "login",
+                "magic-link"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "generate magic link",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\" : \"makvanayash2112@gmail.com\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/user/generateMagicLink",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "user",
+                "generateMagicLink"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "verify phone number",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJlYTk4MTMyNTZhNTJjMzZiM2RmZDExZGEzMDRiNDcxNjE0MGE5ZmFkM2YxM2JkZTk0YTgzOWRiYWNkNjQ3OTgxIiwiaWF0IjoxNzcxMjE5MDQ2LCJleHAiOjE3NzE4MjM4NDZ9.mfWyeeQi2rMJWFJdGcbFirY7K4gIqQJIaxHOXFmiQZc",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"countryCode\": \"91\",\r\n    \"phonenumber\": \"7046658651\",\r\n    \"otp\": \"915278\"\r\n    // \"resendOtp\": true\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/user/verify-phone-number",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "user",
+                "verify-phone-number"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "edit agent",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI1NTk1NjI5MTRjZjMwZWEyYmVlZDBjZjUwZDMwMDExYTA3YmZkOTIwYzJmODkxZDY0M2I5OTRjNzYyZTdhMTJiIiwiaWF0IjoxNzcxNTkwOTAxLCJleHAiOjE3NzIxOTU3MDF9.dglzwwh19KSmRI_lAjd1_UdKH1Wyy7Fg1G2J-zQUj10",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"firstname\" : \"\",\r\n    \"lastname\" : \"\",\r\n    \"email\" : \"\",\r\n    \"isWaba\" : true\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/admin/user/695cc3773241ed90635397e4",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "admin",
+                "user",
+                "695cc3773241ed90635397e4"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "yeastar call make and script genrate api",
+      "item": [
+        {
+          "name": "make call api",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"caller_extension\": \"1010\",\r\n    \"countryCode\": \"971\",\r\n    \"mob_number\": \"542396200\",\r\n    \"assignedDeviceId\": \"698b1b59a6bd6ec4b5924a63\",\r\n    \"pbxBaseUrl\": \"https://cmedia.ras.yeastar.com/openapi/v1.0\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/api/yeastar/make-call",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "api",
+                "yeastar",
+                "make-call"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get call",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"caller_extension\": \"1010\",\r\n  \"countryCode\": \"+971\",\r\n  \"mob_number\": \"542396200\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/api/yeastar/get-call?call_id=352343",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "api",
+                "yeastar",
+                "get-call"
+              ],
+              "query": [
+                {
+                  "key": "call_id",
+                  "value": "352343"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "script generate api",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJhMTIzMGM2NTJmMzgyMzBjZmExMmJiOTY3YjdiYTUxOGZmZTBiZDAxMzlmMzZkM2U0NWM3MWVjODM1MTU4ODFhIiwiaWF0IjoxNzcwOTg4ODE2LCJleHAiOjE3NzE1OTM2MTZ9.zYZbYRyy8LgZM2LOZAj5Wm-6egXnM1w7ZZJmzWLphsk",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"themeColor\": \"#ffd2c4\",\r\n    // \"popupHeading\": \"📞 yash a Call abc\",\r\n    \"headingColor\": \"#ffd2c4\",\r\n    \"floatingButtonColor\": \"#ffd2c4\",\r\n    // \"popupText\": \"Enter yash phone number and we'll call you back in 30 seconds!\",\r\n    // \"calltoaction\": \"📞 Call yash\",\r\n    \"phoneIconColor\": \"\",\r\n    \"allowedOriginPopup\": [\r\n        \"http://localhost\"\r\n    ],\r\n    \"allowedOriginContactForm\": [\r\n        \"http://localhost\"\r\n    ],\r\n    \"restrictedUrls\": [],\r\n    \"fieldName\": \"phone_number\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/api/script/generate",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "api",
+                "script",
+                "generate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "fetch calls",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI5ZDk0Zjg3ZDkxZTZlZDRhYWRkOWQ0OWVmNjU3NDkyYTEwYzRiOTcxMGUxNjYwMWFkYjNhNWUxMzE2NjBlYzQwIiwiaWF0IjoxNzcxMDY5NzUxLCJleHAiOjE3NzE2NzQ1NTF9.Kj91sE73W822SoCHCkkZAGZHllaCg-Ej4XQosE_GCsY",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/call/fetch-and-store",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "call",
+                "fetch-and-store"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "valid access token of yeastar ",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjMwOTg3NDJ9.2tthpexz9LZvq_pxzQo6-bO_Litt6OcDSHcC4ryzhEo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/integrations/token",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "integrations",
+                "token"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get call recording api",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjMwOTg3NDJ9.2tthpexz9LZvq_pxzQo6-bO_Litt6OcDSHcC4ryzhEo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"record_file\" : \"20251119121743-1763540257.72-1010-0503563778-Outbound.wav\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/call/recording",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "call",
+                "recording"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get calls for company admin",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiJhZGJkMzFkNWFhMDY0ZDg5NzllNGY4ZDczZDQ0NmQyMWY1MDQwMmJjOTkyN2I0NjA0NDk0YzFmOWZlZTNlM2MxIiwiaWF0IjoxNzY5MDAxMTkwLCJleHAiOjE3Njk2MDU5OTB9.QrE5eoLUwueFlqU3PsxMEHGeW8e4Up0uSJLJqhAU39c",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"page\": 1,\r\n    \"page_size\": 10,\r\n    \"search\": \"\",\r\n    \"status\": [],\r\n    \"callType\": [\r\n        \"inbound\",\r\n        \"outbound\",\r\n        \"internal\"\r\n    ],\r\n    \"direction\": \"\",\r\n    \"startDate\": \"2026-01-22T00:00:00.000Z\",\r\n    \"endDate\": \"2026-01-23T23:59:59.999Z\",\r\n    \"agentId\": [\r\n        \"696f78108f5a28f1ef7d719a\"\r\n    ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/call/company-call-history",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "call",
+                "company-call-history"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "phonenumber calls history",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTZmNzgxMDhmNWEyOGYxZWY3ZDcxOWEiLCJzZXNzaW9uSWQiOiI0YjlkMmUzZDZiN2U1ODdhZDQ5NTgxYmU3MTM0NDVkN2JlMjY5YTY4OGI5MWQ1NGFjM2QwOWM5NGM5YjZhM2E0IiwiaWF0IjoxNzY5MDYwMjQ5LCJleHAiOjE3Njk2NjUwNDl9.lPZwNiAvavlFo-fedBAPEZdcfFqKbFXBoxfjKaqP4pg",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"page\": 1,\r\n    \"page_size\": 20,\r\n    \"search\": \"\",\r\n    \"status\": [\r\n        \"answered\",\r\n        \"missedCall\",\r\n        \"noAnswered\",\r\n        \"cancelled\",\r\n        \"invalid\"\r\n    ],\r\n    \"callType\": [\r\n        \"inbound\",\r\n        \"outbound\",\r\n        \"internal\"\r\n    ],\r\n    \"direction\": \"\",\r\n    \"startDate\": \"2026-01-22T00:00:00.000Z\",\r\n    \"endDate\": \"2026-01-23T23:59:59.999Z\",\r\n    \"phonenumbers\": [\r\n        {\r\n            \"number\": \"542396200\",\r\n            \"countryCode\": \"971\"\r\n        }\r\n    ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/call/phone-number-call-history",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "call",
+                "phone-number-call-history"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get calls for agent",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTVjYzM3NzMyNDFlZDkwNjM1Mzk3ZTQiLCJzZXNzaW9uSWQiOiI2ZGQ5MmQyZDJjMWNiYTE1YTQ2Mzc5OGRlZWZkYzdmYzc0ODFmM2UxYTE2M2RkZTY3MzllMDY0YTZkNWI2OTI0IiwiaWF0IjoxNzcxNTY1MjU1LCJleHAiOjE3NzIxNzAwNTV9.WIFnGVYDQdfCjbSIBvFgcrHABbefdrsPPClKvkilMhw",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"page\": 1,\r\n    \"page_size\": 20,\r\n    \"search\": \"\",\r\n    \"status\": [\r\n        \"answered\",\r\n        \"missedCall\",\r\n        \"noAnswered\",\r\n        \"cancelled\",\r\n        \"invalid\"\r\n    ],\r\n    \"callType\": [\r\n        \"inbound\",\r\n        \"outbound\",\r\n        \"internal\"\r\n    ],\r\n    \"direction\": \"\",\r\n    \"startDate\": \"2025-11-18T00:00:00.000Z\",\r\n    \"endDate\": \"2026-02-20T23:59:59.999Z\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/call/agent-call-history",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "call",
+                "agent-call-history"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "dashboard call history",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTE0NDQ5NDFkY2FmY2NjY2Y2YzBhNTgiLCJpYXQiOjE3NjQyMzQwMzJ9.o87kydpWL5rrFcRsdqFhhQbCJDIMYxL5JxBYAx0kbc8",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"startDate\": \"2025-11-08\",\r\n    \"endDate\": \"2025-11-27\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/call/dashboard-call-history",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "call",
+                "dashboard-call-history"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "last 30 days call graph",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTE0NDQ5NDFkY2FmY2NjY2Y2YzBhNTgiLCJpYXQiOjE3NjQyMzQwMzJ9.o87kydpWL5rrFcRsdqFhhQbCJDIMYxL5JxBYAx0kbc8",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/call/inbound-outbound-call-graph",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "call",
+                "inbound-outbound-call-graph"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get login signature of yeaster",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiIxNzMxZTkyZjRkMTUzMjQ4Mzg0YTg0OTYyNDYyYjQyMzg2MWQzMmNmNzA2N2U2YmQyY2MyNWU1NmQ3MTA2ZGFmIiwiaWF0IjoxNzcxMDQ2MTEzLCJleHAiOjE3NzE2NTA5MTN9.DUQBYK4TkxaYDZtiwm7HNRfnjTIBqpuzs6les7pvBFU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/api/yeastar-login/get-signature",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "api",
+                "yeastar-login",
+                "get-signature"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "add form data after call end",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJiY2I5YWRiZWE1ZjkzYTNhODgxOWFiODJkYmEzN2YwZmZkNDFkNDlmOTlmNGI3NzFkMWE5NzE3OTQ1OWYxODJlIiwiaWF0IjoxNzcxMDczMzEwLCJleHAiOjE3NzE2NzgxMTB9.52RPqF1jF1ca-ds-F6FvynMiWKHOnCV5bGIygi2zDyE",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"phoneNumbers\": {\r\n        \"countryCode\": \"971\",\r\n        \"number\": \"542396200\"\r\n    },\r\n    // \"status\": \"call back\",\r\n    \"firstname\": \"waqaransari\"\r\n    // \"lastname\": \"abc\"\r\n    // \"note\": \"abc\",\r\n    // \"meeting\": {\r\n    //     \"meetingTitle\": \" test\",\r\n    //     \"meetingDescription\": \"test\",\r\n    //     \"meetingStartDate\": \"2025-11-26\",\r\n    //     \"meetingStartTime\": \"16:00\",\r\n    //     \"meetingType\": \"online\",\r\n    //     \"meetingProvider\": \"google\",\r\n    //     // \"meetingLink\": \"https://zoom.us/xyz\"\r\n    //     \"meetingLocation\": \"rajkot\"\r\n    // }\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/call/addFormDataAfterCallEnd",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "call",
+                "addFormDataAfterCallEnd"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "change sip secret",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjQzOTMwMTR9.M24fmEBAbLx_czNIVz46rEip9pSA5Cu5ZnbtVithS7M",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"password\": \"2112Yas@\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/changePassword/sip-secret",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "changePassword",
+                "sip-secret"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "from call script genrate",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiI4NTJhOTcyMWRkNmQxNmViMWZhNThlMWIyOGQ2ODE0ODVkZWViZjYxY2MzMzFkMWVmZGUwNzM3Nzc5ODJlYjVhIiwiaWF0IjoxNzY3MDgwNjk4LCJleHAiOjE3Njc2ODU0OTh9.2m32iw0oXIdtLATv34LA7d9LgEbdaZlpkcHnd_6LNi8",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"allowedOrigin\" : [\r\n        \"http://localhost\"\r\n    ],\r\n    \"restrictedUrls\" :[\r\n        \"http://localhost/callback_system/contact-us.html\"\r\n    ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/api/script/generateFormCall",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "api",
+                "script",
+                "generateFormCall"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "incoming call webhook",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJiOTQ0NDBhMWFhNWMyZDc5ZjgwZThiNzdkNWRkYjMzY2E2OGY1MGQxZTdkYzY0YmY3YzViMWQ2NTMwZTYzM2RhIiwiaWF0IjoxNzY5Nzg1OTU2LCJleHAiOjE3NzAzOTA3NTZ9.lBHMYpjE9cjwAtXChAU1GqeI9xH7HGfjQ4Vw9uJ3xrQ",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLive}}/call/incoming-call-webhook",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "call",
+                "incoming-call-webhook"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "find phonenumber details of call",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJkNTc2MzIxMjA2OTI0ZmQ4OTQyOTE3MjFhYTQ5ZjAyZWM4ZTk1YTg0NDZjODg1OTEzMDU1YjgzYjc4NzU2YTZjIiwiaWF0IjoxNzcxMjI5ODE2LCJleHAiOjE3NzE4MzQ2MTZ9.wcgpQv7dnwfDpgLxKsXzkfpuHFDLpTurtzpv9XXCVXw",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"phoneNumbers\": {\r\n        \"countryCode\": \"91\",\r\n        \"number\": \"7046658651\"\r\n    }\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/call/find-by-phone-number",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "call",
+                "find-by-phone-number"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "contact leads api",
+      "item": [
+        {
+          "name": "fetch and save bulk contact live Copy",
+          "item": [
+            {
+              "name": "fetch google contacts live",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true,
+                "disabledSystemHeaders": {}
+              },
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiIyY2Q2YWI0ZDFkNjVjMTZlMjRmNTFjMTgyMGRhOWNlNDY2Yzk3MjQyMzk0OGJhMmIxYmFjZDdiNjRjZjIzYjJjIiwiaWF0IjoxNzY5MTUxNzUyLCJleHAiOjE3Njk3NTY1NTJ9.40lwUnvezU7bpXdXttnWPvRVHyFe34yL9H21M4_wph0",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLive}}/fetch-google-contacts?defaultCountryCode=971&category=contact",
+                  "host": [
+                    "{{BaseUrlLive}}"
+                  ],
+                  "path": [
+                    "fetch-google-contacts"
+                  ],
+                  "query": [
+                    {
+                      "key": "defaultCountryCode",
+                      "value": "971"
+                    },
+                    {
+                      "key": "tags",
+                      "value": "[{\"tag\": \"Premium\", \"emoji\": \"💎\"},{\"tag\": \"Call Back\",\"emoji\": \"📞\"}]",
+                      "disabled": true
+                    },
+                    {
+                      "key": "category",
+                      "value": "contact"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "save bulk contacts live",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiI4ZTJkZThiZDYyYWU4YjA2Y2Q1MjJjYjMxMDFkNjE3YmFiY2EwODk2YWYxOTliZTc1MjI4ZjFhNDJjZjVkYThkIiwiaWF0IjoxNzY5MTQ5MjA1LCJleHAiOjE3Njk3NTQwMDV9.pwsE3aTbdK07Sn9zOAhlJUq_farxeI_yAFh3QdP6RNs",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"category\": \"lead\",// category = contact/lead\r\n    \"defaultCountryCode\": \"91\",\r\n    \"tags\": [\r\n        {\r\n            \"tag\": \"abc\",\r\n            \"emoji\": \"💎\"\r\n        },\r\n        {\r\n            \"tag\": \"Call Back\",\r\n            \"emoji\": \"📞\"\r\n        }\r\n    ],\r\n    \"contacts\": [\r\n        {\r\n            \"firstname\": \"John\",\r\n            \"lastname\": \"Doe\",\r\n            \"company\": \"OpenAI\",\r\n            \"designation\": \"Engineer\",\r\n            \"linkedin\": \"https://linkedin.com/in/johndoe\",\r\n            \"instagram\": \"johndoe_ig\",\r\n            \"telegram\": \"johndoe\",\r\n            \"twitter\": \"johndoe_tw\",\r\n            \"facebook\": \"johndoe.fb\",\r\n            \"emailaddresses\": [\r\n                \"john.doe@example.com\"\r\n            ],\r\n            \"phonenumbers\": [\r\n                \"+1 (555) 123-4567\"\r\n            ]\r\n        },\r\n        {\r\n            \"firstname\": \"Jane\",\r\n            \"lastname\": \"Smith\",\r\n            \"company\": \"Tech Corp\",\r\n            \"designation\": \"Manager\",\r\n            \"linkedin\": \"\",\r\n            \"instagram\": \"\",\r\n            \"telegram\": \"\",\r\n            \"twitter\": \"\",\r\n            \"facebook\": \"\",\r\n            \"emailaddresses\": [\r\n                \"jane.smith@example.com\"\r\n            ],\r\n            \"phonenumbers\": [\r\n                \"9876543210\"\r\n            ]\r\n        },\r\n        {\r\n            \"firstname\": \"Same\",\r\n            \"lastname\": \"Contact\",\r\n            \"company\": \"Repeat Ltd\",\r\n            \"designation\": \"\",\r\n            \"linkedin\": \"\",\r\n            \"instagram\": \"\",\r\n            \"telegram\": \"\",\r\n            \"twitter\": \"\",\r\n            \"facebook\": \"\",\r\n            \"emailaddresses\": [\r\n                \"ravi@gmail.com.yahho\"\r\n            ],\r\n            \"phonenumbers\": [\r\n                \"9874563210442245\"\r\n            ] // Duplicate number to test update\r\n        }\r\n    ]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/save-bulk-contacts",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "save-bulk-contacts"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "fetch-zoho-contacts live",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              },
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiJhZGJkMzFkNWFhMDY0ZDg5NzllNGY4ZDczZDQ0NmQyMWY1MDQwMmJjOTkyN2I0NjA0NDk0YzFmOWZlZTNlM2MxIiwiaWF0IjoxNzY5MDAxMTkwLCJleHAiOjE3Njk2MDU5OTB9.QrE5eoLUwueFlqU3PsxMEHGeW8e4Up0uSJLJqhAU39c",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/fetch-zoho-contacts?defaultCountryCode=971&tags=[{\"tag\": \"abc\", \"emoji\": \"💎\"},{\"tag\": \"Call Back\",\"emoji\": \"📞\"}]&category=lead",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "fetch-zoho-contacts"
+                  ],
+                  "query": [
+                    {
+                      "key": "defaultCountryCode",
+                      "value": "971",
+                      "type": "text"
+                    },
+                    {
+                      "key": "tags",
+                      "value": "[{\"tag\": \"abc\", \"emoji\": \"💎\"},{\"tag\": \"Call Back\",\"emoji\": \"📞\"}]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category",
+                      "value": "lead",
+                      "type": "text"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "fetch hub spot contact live",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiJhZGJkMzFkNWFhMDY0ZDg5NzllNGY4ZDczZDQ0NmQyMWY1MDQwMmJjOTkyN2I0NjA0NDk0YzFmOWZlZTNlM2MxIiwiaWF0IjoxNzY5MDAxMTkwLCJleHAiOjE3Njk2MDU5OTB9.QrE5eoLUwueFlqU3PsxMEHGeW8e4Up0uSJLJqhAU39c",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/fetch-hubspot-contacts?defaultCountryCode=971&tags=[{\"tag\": \"Premium\", \"emoji\": \"💎\"},{\"tag\": \"Call Back\",\"emoji\": \"📞\"}]&category=lead",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "fetch-hubspot-contacts"
+                  ],
+                  "query": [
+                    {
+                      "key": "defaultCountryCode",
+                      "value": "971",
+                      "type": "text"
+                    },
+                    {
+                      "key": "tags",
+                      "value": "[{\"tag\": \"Premium\", \"emoji\": \"💎\"},{\"tag\": \"Call Back\",\"emoji\": \"📞\"}]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category",
+                      "value": "lead",
+                      "type": "text"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "tag apis",
+          "item": [
+            {
+              "name": "assign & unassign tag live",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiIyY2Q2YWI0ZDFkNjVjMTZlMjRmNTFjMTgyMGRhOWNlNDY2Yzk3MjQyMzk0OGJhMmIxYmFjZDdiNjRjZjIzYjJjIiwiaWF0IjoxNzY5MTUxNzUyLCJleHAiOjE3Njk3NTY1NTJ9.40lwUnvezU7bpXdXttnWPvRVHyFe34yL9H21M4_wph0",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"contact_id\": \"69707744977979a42a8a1d67\",\r\n    \"category\": \"lead\",\r\n    \"tags\": [\r\n        {\r\n            \"tag\": \"Premium\",\r\n            \"emoji\": \"💎\"\r\n        },\r\n        {\r\n            \"tag\": \"Call Back\",\r\n            \"emoji\": \"📞\"\r\n        },\r\n        {\r\n            \"tag\": \"New Lead\",\r\n            \"emoji\": \"🆕\"\r\n        },\r\n        {\r\n            \"tag\": \"avi\",\r\n            \"emoji\": \"🆕\"\r\n        }\r\n    ]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/tag/assignedToContact",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "tag",
+                    "assignedToContact"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "assign & unassign tag to multiple contact live",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiIyY2Q2YWI0ZDFkNjVjMTZlMjRmNTFjMTgyMGRhOWNlNDY2Yzk3MjQyMzk0OGJhMmIxYmFjZDdiNjRjZjIzYjJjIiwiaWF0IjoxNzY5MTUxNzUyLCJleHAiOjE3Njk3NTY1NTJ9.40lwUnvezU7bpXdXttnWPvRVHyFe34yL9H21M4_wph0",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"contact_id\": [\r\n        \"696f8842796b9ff6c117586c\"\r\n    ],\r\n    \"category\": \"contact\",\r\n    \"tags\": [\r\n        {\r\n            \"tag\": \"raj abc\",\r\n            \"emoji\": \"🆕\"\r\n        }\r\n    ]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/tag/assignedToMultipleContacts",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "tag",
+                    "assignedToMultipleContacts"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "add Tag live",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTVjY2JmN2RkNDNhMTAyOGVjOTYyMjQiLCJzZXNzaW9uSWQiOiI5ODhlZjMwNGM4YjA3ZTJiOWE2NTAyNTk1MTFkM2M3Nzg3MjQ2ZGM0MTY0MWUxYjhlZWNjODBjYTlkYWRhNTVlIiwiaWF0IjoxNzY3NzA0OTY4LCJleHAiOjE3NjgzMDk3Njh9.EsjQh7NJcoP3jx6deKCkmtIDdP8zPLHx-DX9SIuVZso",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "[\r\n    {\r\n        \"tag\": \"xyz\",\r\n        \"emoji\": \"💼\"\r\n    },\r\n    {\r\n        \"tag\": \"new\",\r\n        \"emoji\": \"🎨\"\r\n    },\r\n    {\r\n        \"tag\": \"Sales\",\r\n        \"emoji\": \"📈\"\r\n    }\r\n]",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/tag/addTagToUser",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "tag",
+                    "addTagToUser"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete Tag live",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTVjY2JmN2RkNDNhMTAyOGVjOTYyMjQiLCJzZXNzaW9uSWQiOiI5ODhlZjMwNGM4YjA3ZTJiOWE2NTAyNTk1MTFkM2M3Nzg3MjQ2ZGM0MTY0MWUxYjhlZWNjODBjYTlkYWRhNTVlIiwiaWF0IjoxNzY3NzA0OTY4LCJleHAiOjE3NjgzMDk3Njh9.EsjQh7NJcoP3jx6deKCkmtIDdP8zPLHx-DX9SIuVZso",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"tag_id\" : \"695f5f907a84c6603ebca8df\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/tag/deleteTagOfUser",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "tag",
+                    "deleteTagOfUser"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get Tag live",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTVjY2JmN2RkNDNhMTAyOGVjOTYyMjQiLCJzZXNzaW9uSWQiOiI5ODhlZjMwNGM4YjA3ZTJiOWE2NTAyNTk1MTFkM2M3Nzg3MjQ2ZGM0MTY0MWUxYjhlZWNjODBjYTlkYWRhNTVlIiwiaWF0IjoxNzY3NzA0OTY4LCJleHAiOjE3NjgzMDk3Njh9.EsjQh7NJcoP3jx6deKCkmtIDdP8zPLHx-DX9SIuVZso",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/tag/getTagsOfUser",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "tag",
+                    "getTagsOfUser"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get Tag With Contact live",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              },
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTVjY2JmN2RkNDNhMTAyOGVjOTYyMjQiLCJzZXNzaW9uSWQiOiI5ODhlZjMwNGM4YjA3ZTJiOWE2NTAyNTk1MTFkM2M3Nzg3MjQ2ZGM0MTY0MWUxYjhlZWNjODBjYTlkYWRhNTVlIiwiaWF0IjoxNzY3NzA0OTY4LCJleHAiOjE3NjgzMDk3Njh9.EsjQh7NJcoP3jx6deKCkmtIDdP8zPLHx-DX9SIuVZso",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    // \"tag_id\": \"695f512ab84dce59e4a96f47\",\r\n    // \"order\": \"3\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/tag/getTagWithContact",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "tag",
+                    "getTagWithContact"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "edit Tag live",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTVjY2JmN2RkNDNhMTAyOGVjOTYyMjQiLCJzZXNzaW9uSWQiOiI5ODhlZjMwNGM4YjA3ZTJiOWE2NTAyNTk1MTFkM2M3Nzg3MjQ2ZGM0MTY0MWUxYjhlZWNjODBjYTlkYWRhNTVlIiwiaWF0IjoxNzY3NzA0OTY4LCJleHAiOjE3NjgzMDk3Njh9.EsjQh7NJcoP3jx6deKCkmtIDdP8zPLHx-DX9SIuVZso",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"tag_id\": \"695f512ab84dce59e4a96f47\",\r\n    \"tag\": \"xyz\",\r\n    \"emoji\": \"🎨\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/tag/editTagOfUser",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "tag",
+                    "editTagOfUser"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "add edit contact & lead",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiI2NTUyOTVjYjhhMTgzOGJmNTY3ZTIyMDA3MDhhOWIxMjgwOTcwMjJlZGU5NDZiZGEwNTU4ODNmMDc4NDI0OTRmIiwiaWF0IjoxNzY5NjcyMDQ2LCJleHAiOjE3NzAyNzY4NDZ9.oDE4E87w6oYIwhtI2TYqtsCyOtMUGIpawVK99F29a8U",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "contact_id",
+                  "value": "6974b0012e121042bcfddcee",
+                  "type": "text",
+                  "uuid": "428550a6-42e5-4f33-ba9a-bede7ec417a0"
+                },
+                {
+                  "key": "firstname",
+                  "value": "papa",
+                  "type": "text",
+                  "uuid": "4d1ff1bd-3c22-4269-ba5b-300a8870dc36",
+                  "disabled": true
+                },
+                {
+                  "key": "lastname",
+                  "value": "papa",
+                  "type": "text",
+                  "uuid": "b9c84629-5979-4873-a4a5-5948752cd92c",
+                  "disabled": true
+                },
+                {
+                  "key": "company",
+                  "value": "abc2",
+                  "type": "text",
+                  "uuid": "db958f95-7dff-4a79-a1e8-6bdac1545c05",
+                  "disabled": true
+                },
+                {
+                  "key": "designation",
+                  "value": "abc3",
+                  "type": "text",
+                  "uuid": "612a6a33-0a51-4dcb-9bda-4560de271dc8",
+                  "disabled": true
+                },
+                {
+                  "key": "emailAddresses",
+                  "value": "[\"makv77@gmail.com\"]",
+                  "type": "text",
+                  "uuid": "82dd6627-7eb4-4caf-bf93-2c082053eafb",
+                  "disabled": true
+                },
+                {
+                  "key": "phoneNumbers",
+                  "value": "[{\"number\":\"7802086195\",\"countryCode\":\"91\"}]",
+                  "type": "text",
+                  "uuid": "fa597294-73c9-475a-b21b-8d868f754df1",
+                  "disabled": true
+                },
+                {
+                  "key": "isLead",
+                  "value": "true",
+                  "type": "text",
+                  "uuid": "b542643d-29f9-4058-8927-c657dd8cdf27",
+                  "disabled": true
+                },
+                {
+                  "key": "isFavourite",
+                  "value": "true",
+                  "type": "text",
+                  "uuid": "2a997885-ee42-420c-88cc-aab6751092e9"
+                },
+                {
+                  "key": "notes",
+                  "value": "test ",
+                  "type": "text",
+                  "uuid": "ab9f3cde-1cf4-4e88-8861-ac5f2319a4fa",
+                  "disabled": true
+                },
+                {
+                  "key": "website",
+                  "value": "www.test.com",
+                  "type": "text",
+                  "uuid": "24a8d897-a497-4f8d-a2e4-efef61a42bfa",
+                  "disabled": true
+                },
+                {
+                  "key": "contactImage",
+                  "type": "file",
+                  "uuid": "507952b1-2871-4e78-8a14-794e0a7a5319",
+                  "src": "/C:/Users/makva/OneDrive/Pictures/Screenshots/asdfgh.png",
+                  "disabled": true
+                },
+                {
+                  "key": "linkedin",
+                  "value": "",
+                  "type": "text",
+                  "uuid": "ad9a5ad0-3a9d-4a09-b96b-b15b596105cc",
+                  "disabled": true
+                },
+                {
+                  "key": "instagram",
+                  "value": "",
+                  "type": "text",
+                  "uuid": "0e281dc5-71d1-4e0e-ac3a-7f04aabb8265",
+                  "disabled": true
+                },
+                {
+                  "key": "telegram",
+                  "value": "",
+                  "type": "text",
+                  "uuid": "dcf5a582-61ea-4eac-9710-5ac8dfbe9606",
+                  "disabled": true
+                },
+                {
+                  "key": "twitter",
+                  "value": "",
+                  "type": "text",
+                  "uuid": "8b23f1db-88d5-423a-a464-3ce429a86c48",
+                  "disabled": true
+                },
+                {
+                  "key": "facebook",
+                  "value": "",
+                  "type": "text",
+                  "uuid": "96113dcb-48fa-4ffb-99f2-9632e0167c1e",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "lead",
+                  "type": "text",
+                  "uuid": "777bda8a-9e11-4016-a38f-2636b58bab39"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/addEditContactLeads",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "addEditContactLeads"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get contact and lead api",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJlYTk4MTMyNTZhNTJjMzZiM2RmZDExZGEzMDRiNDcxNjE0MGE5ZmFkM2YxM2JkZTk0YTgzOWRiYWNkNjQ3OTgxIiwiaWF0IjoxNzcxMjE5MDQ2LCJleHAiOjE3NzE4MjM4NDZ9.mfWyeeQi2rMJWFJdGcbFirY7K4gIqQJIaxHOXFmiQZc",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"page\": 1,\r\n    \"limit\": 30,\r\n    \"search\": \"\",\r\n    \"tag\": [\r\n       \r\n    ],\r\n    \"isFavourite\": false,\r\n    \"category\": \"lead\",\r\n    \"agentId\": []\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/getAllContactsOrLeads",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "getAllContactsOrLeads"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "change status api",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjM2MTQwODV9.0285zbI_HpURcmq4Kp5lNKDtsm_W9tRlAXKuPz_ZZOo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"contact_id\" : \"691f1660f1c085e8fa3d08be\",\r\n    \"newStatus\" : \"interested\" \r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:4004/contactAndLeadStatusPipline/status",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "4004",
+              "path": [
+                "contactAndLeadStatusPipline",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get lead pipline",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjM2MTQwODV9.0285zbI_HpURcmq4Kp5lNKDtsm_W9tRlAXKuPz_ZZOo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"lead_id\": \"691f1660f1c085e8fa3d08be\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:4004/contactAndLeadStatusPipline/pipeline",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "4004",
+              "path": [
+                "contactAndLeadStatusPipline",
+                "pipeline"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "add update meeting api",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI2Y2M3ZDM2Mzg1ZDkwMGFjYmRhZjUwMDU1MjlkMzVhMGJhMjY3NzBkNmNmMWExZTZhYTg0NDQ2MGQ5NDQxZWZjIiwiaWF0IjoxNzY5NjcyMjEzLCJleHAiOjE3NzAyNzcwMTN9.zUDH00zD0LtxUoXPbNWAveS7ach_qyWzqpoAL_oVn-I",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"contact_id\": \"697b08dad5a8ed5e4926b808\",\r\n    // \"meeting_id\": \"\",\r\n    \"meetingTitle\": \"abc\",\r\n    \"meetingDescription\": \"abc\",\r\n    \"meetingStartDate\": \"2025-07-10\",\r\n    \"meetingStartTime\": \"15:00\",\r\n    \"meetingType\": \"online\",\r\n    // \"meetingLocation\": \"rajkot\",\r\n    // \"meetingProvider\": \"google\",\r\n    \"category\": \"lead\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/meeting/addUpdateMeeting",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "meeting",
+                "addUpdateMeeting"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete meeting",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI5NDg1ODF9.Fdpzv-Qp5NTDgsk6aYghvSTxBzlA1laeSO0J4BQ0_sE",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"contact_id\" : \"691ea57434f8e29d713e5cb3\",\r\n    \"meeting_id\" : \"691eac5de8dbfba0d87902a7\",\r\n    \"category\" : \"lead\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/meeting/deleteMeeting",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "meeting",
+                "deleteMeeting"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "task addEdit",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI1NzcyNTd9.Y715zsxCXw2stM88Hfsv5ZCeRCxVLZ-IYxYFkFbX2hM",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"contact_id\" : \"690b67a35f7ba9cfbebbf306\",\r\n    \"task_id\" : \"690ed3ae74b0ad98469adb80\",\r\n    \"taskDescription\" : \"abc\",\r\n    \"taskDueDate\" : \"2025-05-20\",\r\n    \"taskDueTime\" : \"14:00\",\r\n    \"taskIsCompleted\" : \"true\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/task/addEdit",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "task",
+                "addEdit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "task delete",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI1NzcyNTd9.Y715zsxCXw2stM88Hfsv5ZCeRCxVLZ-IYxYFkFbX2hM",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"contact_id\" : \"690b67a35f7ba9cfbebbf306\",\r\n    \"task_id\" : \"690ed3ae74b0ad98469adb80\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}task/delete",
+              "host": [
+                "{{BaseUrlLocal}}task"
+              ],
+              "path": [
+                "delete"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get profile event",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI5NDg1ODF9.Fdpzv-Qp5NTDgsk6aYghvSTxBzlA1laeSO0J4BQ0_sE",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"category\" : \"lead\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/getProfileEvent",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "getProfileEvent"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get all meeting",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjM2MTQwODV9.0285zbI_HpURcmq4Kp5lNKDtsm_W9tRlAXKuPz_ZZOo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"contact_id\":\"691ea57434f8e29d713e5cb3\",\r\n    \"sortBy\" : \"\",\r\n    \"filterBy\" : \"\",\r\n    \"category\" : \"lead\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/meeting/getAll",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "meeting",
+                "getAll"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get contact and lead for event api",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI2YmQ2YTM3MGRjYTVlNjI4ZTM1Y2Y1NjYzZmIzODIzNjRiMmJjNjE4ZTRlZTE0MTc3ZGI5NmUwYTRjODBjNWM3IiwiaWF0IjoxNzcwNzI5MDczLCJleHAiOjE3NzEzMzM4NzN9.5v83iczO3gjCi9ycEkeM9rMayqYufbAuy2Mpp1VCN6M",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/getAllContactsOrLeads/ForEvent?search=7046658651",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "getAllContactsOrLeads",
+                "ForEvent"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "7046658651"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "search contact using number",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJzZXNzaW9uSWQiOiJmNDkyNmExYmZlYzI0OTllOGI3MjhhMmMyMTZmZmE2NjJjYjcwZDIwOTY1MjdhNmZlZDUxMmRhODVmZjQ0NzY1IiwiaWF0IjoxNzY1MjU2MDU5LCJleHAiOjE3NjU4NjA4NTl9.WJJcyf81Llzmelpbkjppr_GPY7uEu_fnclK_1r2qchY",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"phone\" : \"56213\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/getAllContactsOrLeads/searchByPhone",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "getAllContactsOrLeads",
+                "searchByPhone"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get single contact and lead",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiJhZGJkMzFkNWFhMDY0ZDg5NzllNGY4ZDczZDQ0NmQyMWY1MDQwMmJjOTkyN2I0NjA0NDk0YzFmOWZlZTNlM2MxIiwiaWF0IjoxNzY5MDAxMTkwLCJleHAiOjE3Njk2MDU5OTB9.QrE5eoLUwueFlqU3PsxMEHGeW8e4Up0uSJLJqhAU39c",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"contact_id\": \"696f8842796b9ff6c117586c\",\r\n    \"category\": \"lead\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/getAllContactsOrLeads/single",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "getAllContactsOrLeads",
+                "single"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete multiple contact ya lead",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiIyY2Q2YWI0ZDFkNjVjMTZlMjRmNTFjMTgyMGRhOWNlNDY2Yzk3MjQyMzk0OGJhMmIxYmFjZDdiNjRjZjIzYjJjIiwiaWF0IjoxNzY5MTUxNzUyLCJleHAiOjE3Njk3NTY1NTJ9.40lwUnvezU7bpXdXttnWPvRVHyFe34yL9H21M4_wph0",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"contact_ids\": [\r\n        \"696f8842796b9ff6c117586c\"\r\n    ],\r\n    \"category\": \"contact\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/addEditContactLeads/batch-delete",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "addEditContactLeads",
+                "batch-delete"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "toggle favorite add",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJhMTgzNDE2MzQzNDRiMjgwYjUzNTNhNDdmY2NmNGEzOTcxN2RkNjgyYzExODYwZGVjNTAzYzI5MzM2ODNlZWE3IiwiaWF0IjoxNzcxNDc3MTQwLCJleHAiOjE3NzIwODE5NDB9.m1uXoiVgBnDTZHHYCs2X0CTeILiJIIEH6LdRLHy7qcA",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"contact_id\": \"698db57d333a236c80b4be8b\",\r\n    \"isFavourite\": true,\r\n    \"category\": \"lead\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/addEditContactLeads/toggle-favorite",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "addEditContactLeads",
+                "toggle-favorite"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "help and support for agent and companyadmin",
+      "item": [
+        {
+          "name": "create help and support ticket by company admin and agent",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMmFiNjAyMmFmYzc3ZTg4ODc5YjIiLCJpYXQiOjE3NjI4NjI5MDl9.zmrpuBeX6TxAYk1dkTggKhhd51rvYcqyVqUqUzUTT0k",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "jatin",
+                  "type": "text",
+                  "uuid": "11a1763c-51d1-4980-b28e-956edee1611a"
+                },
+                {
+                  "key": "subject",
+                  "value": "Login issue",
+                  "type": "text",
+                  "uuid": "54333ede-368e-4f38-b1aa-d549185af7ac"
+                },
+                {
+                  "key": "emailaddresses",
+                  "value": "makvanayash12@gmail.com",
+                  "type": "text",
+                  "uuid": "651d168c-eb08-4424-bbaf-940683d26441"
+                },
+                {
+                  "key": "phonenumbers",
+                  "value": "[{\"countryCode\":\"+91\",\"number\":\"9876543210\"}]",
+                  "type": "text",
+                  "uuid": "0e3b2d7c-8569-4c19-a71e-d91b14c0c25a"
+                },
+                {
+                  "key": "inquiryType",
+                  "value": "Support",
+                  "type": "text",
+                  "uuid": "01d977b8-c6ac-42d8-b3a6-328a8e02cc88"
+                },
+                {
+                  "key": "message",
+                  "value": "I am unable to log in with my email ID.",
+                  "type": "text",
+                  "uuid": "1919457a-2e5d-467b-ae47-c3ebe77c9d55"
+                },
+                {
+                  "key": "subscribe",
+                  "value": "true",
+                  "type": "text",
+                  "uuid": "d24fda67-006b-4466-82fb-81e13f747e2f"
+                },
+                {
+                  "key": "file",
+                  "value": "",
+                  "type": "text",
+                  "uuid": "8036e97a-bc5f-4e0c-a11f-746f6baf3836",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/help-support/create",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "help-support",
+                "create"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get ticket by id",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI4NjM4MTB9.2clbV5VVF7FljT-xlNyyr0oJQ8iCt8-gmta50UQmSBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/help-support/691326a2aae6e80591b76b88",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "help-support",
+                "691326a2aae6e80591b76b88"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get help and support ticket",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI4NjM4MTB9.2clbV5VVF7FljT-xlNyyr0oJQ8iCt8-gmta50UQmSBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/help-support/get",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "help-support",
+                "get"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "reply to ticket ",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI4NjM4MTB9.2clbV5VVF7FljT-xlNyyr0oJQ8iCt8-gmta50UQmSBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"message\" : \"\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/help-support/691326a2aae6e80591b76b88/reply",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "help-support",
+                "691326a2aae6e80591b76b88",
+                "reply"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete ticket ",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI4NjM4MTB9.2clbV5VVF7FljT-xlNyyr0oJQ8iCt8-gmta50UQmSBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/help-support/691326a2aae6e80591b76b88",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "help-support",
+                "691326a2aae6e80591b76b88"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "help and support for supper admin",
+      "item": [
+        {
+          "name": "get stats",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/admin/help-support/stats",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "admin",
+                "help-support",
+                "stats"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get all help and support ",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/admin/help-support",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "admin",
+                "help-support"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get by id",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/admin/help-support/691326a2aae6e80591b76b88",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "admin",
+                "help-support",
+                "691326a2aae6e80591b76b88"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "reply to ticket ",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI4NjM4MTB9.2clbV5VVF7FljT-xlNyyr0oJQ8iCt8-gmta50UQmSBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"message\" : \"\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/admin/help-support/691326a2aae6e80591b76b88/reply",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "admin",
+                "help-support",
+                "691326a2aae6e80591b76b88",
+                "reply"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete ticket",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI4NjM4MTB9.2clbV5VVF7FljT-xlNyyr0oJQ8iCt8-gmta50UQmSBU",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/admin/help-support/691326a2aae6e80591b76b88",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "admin",
+                "help-support",
+                "691326a2aae6e80591b76b88"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "faq apis",
+      "item": [
+        {
+          "name": "add edit faq by companyAdmin",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI3NjY2Mzd9.6FQCtX9X8CNI7Q5AInxUJeOx9JOvqfnlnuRkfVdit_k",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"faqId\": \"6914790592e37b3789ed6f67\",\r\n    \"question\": \"How can I reset my email?\",\r\n    \"answer\": \"Go to settings and click on 'Forgot Password'.\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/faq/addEdit",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "faq",
+                "addEdit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get faq for all",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjQ4NDI3Njl9.KnuCAlOA8TboHicxHfiVXPzu_6tSy7ekyeEnqjIb0Tw",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/faq/get",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "faq",
+                "get"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete faq",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI5NDg1ODF9.Fdpzv-Qp5NTDgsk6aYghvSTxBzlA1laeSO0J4BQ0_sE",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"faqId\" : \"6914790592e37b3789ed6f67\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/faq/delete",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "faq",
+                "delete"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "super admin apis",
+      "item": [
+        {
+          "name": "get all company admin",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTA4NjQwNmQzNTI4MzY4Mzk3NTI1ZWIiLCJzZXNzaW9uSWQiOiI0YjdiMDM4M2RiNTBhYzY0MTIxYzViMDE2ZDU0MjE0MjAzYWE0NTdiY2ZmZWE4NzJjOWNjMWIwNDhhNWM2YTgzIiwiaWF0IjoxNzcwNzI0NzY1LCJleHAiOjE3NzEzMjk1NjV9.x5rXprU5dsX17HpC6p4dsJR0kE6O12uJIAXtbGi0OUY",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"page\": 2,\r\n  \"limit\": 10,\r\n  \"search\": \"\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/allCompanyAdmin",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "allCompanyAdmin"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "company admin details by id",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTA4NjQwNmQzNTI4MzY4Mzk3NTI1ZWIiLCJzZXNzaW9uSWQiOiI0YjdiMDM4M2RiNTBhYzY0MTIxYzViMDE2ZDU0MjE0MjAzYWE0NTdiY2ZmZWE4NzJjOWNjMWIwNDhhNWM2YTgzIiwiaWF0IjoxNzcwNzI0NzY1LCJleHAiOjE3NzEzMjk1NjV9.x5rXprU5dsX17HpC6p4dsJR0kE6O12uJIAXtbGi0OUY",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"adminId\" : \"695cc3773241ed90635397e4\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/superAdmin/companyAdminDetailsById",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "superAdmin",
+                "companyAdminDetailsById"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "suspend agent and company admin by supper admin",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTAzMjk5NmZjNDM0ZjQxMDRlM2Y1N2IiLCJpYXQiOjE3NjI5NTE1NDN9.YpgyznArla-5qR-SLZ7BuxkA0dBiB1Yl4hABFqaEZGQ",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"user_id\" : \"69032996fc434f4104e3f57b\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/deleteUser/suspend",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "deleteUser",
+                "suspend"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "all agents of company admin ",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OGVmMzY1ZThhOGM1OWRjODQ2ZTk4ODkiLCJpYXQiOjE3NjQwNjUyNTd9.5H9p5ZmZrpiMa2OxQbMVaHbxxG9_hU2YnWwC-XDzObQ",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"adminId\": \"69032996fc434f4104e3f57b\",\r\n  \"page\": 1,\r\n  \"limit\": 10,\r\n  \"search\": \"\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/allAgentsOfCompanyAdmin",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "allAgentsOfCompanyAdmin"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "agent details by id",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OGVmMzY1ZThhOGM1OWRjODQ2ZTk4ODkiLCJpYXQiOjE3NjQwNjUyNTd9.5H9p5ZmZrpiMa2OxQbMVaHbxxG9_hU2YnWwC-XDzObQ",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"agentId\" : \"69032ab6022afc77e88879b2\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/agentDetailsById",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "agentDetailsById"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "edit company admin and agent",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiI2NDE3ODk3ODI0NDA4NTFhM2ExNmIwOTY3NTc1ZjNlYjY5MTdjNjU3NDE5NThlMmE5ZTRmYThmYzMxNDE2MTEzIiwiaWF0IjoxNzcwNjk2OTMwLCJleHAiOjE3NzEzMDE3MzB9.2jsm1fjpdUy_EQbmn9guXjY5OXlQEH56U7V2BjMpjXo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"userId\": \"698578cfeede17e1cd73effa\",\r\n    \"extensionNumber\": \"1010\",\r\n    \"telephone\": \"971585990233\",\r\n    \"status\": true,\r\n    \"assignedDeviceId\": \"698b14ecbad5bbb17e257801\",\r\n    \"PBX_EXTENSION_ID\": \"\",\r\n    \"PBX_SIP_SECRET\": \"\",\r\n    \"newEmail\": \"\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/editCompanyAdminAndAgent",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "editCompanyAdminAndAgent"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete user data permenant",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTA4NjQwNmQzNTI4MzY4Mzk3NTI1ZWIiLCJzZXNzaW9uSWQiOiI2NjhiZDhmZDEyYWIxZTliODliNzA1ZWQ3ZTc5MDg3ZmVkMDQ3NWIzYzEzYmU0NzdhMmM2Mzc4YmNhM2RiMGRkIiwiaWF0IjoxNzY2NDA3ODc5LCJleHAiOjE3NjcwMTI2Nzl9.SRArHcbyrZnL_7MUYGwDsMadvbAe_opDC97pd45Rr70",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"user_id\" : \"69032ab6022afc77e88879b2\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/deleteAllUserData",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "deleteAllUserData"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "assigned yeaster details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTU4Yjk5OTkwNmRhZGJkYTkyMGY4ZjAiLCJzZXNzaW9uSWQiOiI1MjQyMDkyNTE0ZTYwMTM1OGZkOTkyN2U4NTIxZGU1MGExYzAyZDE5YTBjMDhhNTY1YzM0MGI1MTg5NmNmNWYxIiwiaWF0IjoxNzcxMDQyMzEwLCJleHAiOjE3NzE2NDcxMTB9.IaBc9AV6pGWfGrItBNo5B5cGNjyl1kaIVLKYVXBxr-c",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"users\": [\r\n        {\r\n            \"userId\": \"694fa161b3baf744f1aa2d03\",\r\n            \"PBX_EXTENSION_NUMBER\": \"1015\",\r\n            // \"PBX_EXTENSION_ID\": \"87\",\r\n            // \"PBX_SIP_SECRET\": \"SIP@101\",\r\n            // \"PBX_TELEPHONE\": \"+919876543210\",\r\n            \"deviceId\": \"698ff649174f0462891dbe83\"\r\n        }\r\n    ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/updateMultipleYeastarUsers",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "updateMultipleYeastarUsers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "add yeaster device ",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTU4Yjk5OTkwNmRhZGJkYTkyMGY4ZjAiLCJzZXNzaW9uSWQiOiI1MjQyMDkyNTE0ZTYwMTM1OGZkOTkyN2U4NTIxZGU1MGExYzAyZDE5YTBjMDhhNTY1YzM0MGI1MTg5NmNmNWYxIiwiaWF0IjoxNzcxMDQyMzEwLCJleHAiOjE3NzE2NDcxMTB9.IaBc9AV6pGWfGrItBNo5B5cGNjyl1kaIVLKYVXBxr-c",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"deviceName\": \"voycell\",\r\n    \"PBX_BASE_URL\": \"https://cmedia.ras.yeastar.com/openapi/v1.0\",\r\n    \"PBX_USERNAME\": \"inekQ0iUcc6DoFlBIC0XYxL5lCOhl9Zy\",\r\n    \"PBX_PASSWORD\": \"PKFcoTS4Tn4hTVanQKJPiZBLNaMKUrRL\",\r\n    \"PBX_SDK_ACCESS_ID\": \"5RtvBHtumNDCawauIn9bstm8dlByPufP\",\r\n    \"PBX_SDK_ACCESS_KEY\": \"8iVco0cqOzUAZCvBVZ8jwLJgW7SHY1eI\",\r\n    \"PBX_USER_AGENT\": \"Mozilla/5.0\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/addPBXDevice",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "addPBXDevice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "update yeastar device",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiJmYmZiMDAwMDU5YmVmZTM1ZDg2ZmMwNWE5MzJhMjBkY2U1MjI5ZDAzZDM5M2EwMWM3ZTNiNzZmYjUwYmJhMDNjIiwiaWF0IjoxNzcwNjE2NTIwLCJleHAiOjE3NzEyMjEzMjB9.9h_bKcvLjbIbjCVY0E9K9dYBUVvfd4JE6c6YOfvURFo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"deviceId\": \"6989a91b98418fb4f171d6a3\",\r\n    // \"deviceName\": \"1\",\r\n    \"PBX_BASE_URL\": \"xyz.com\"\r\n    // \"PBX_USERNAME\": \"abc/abc\",\r\n    // \"PBX_PASSWORD\": \"abc@abc\",\r\n    // \"PBX_SDK_ACCESS_ID\": \"abc\",\r\n    // \"PBX_SDK_ACCESS_KEY\": \"abc\",\r\n    // \"PBX_USER_AGENT\": \"abc\",\r\n    // \"isActive\" : \"false\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/updatePBXDevice",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "updatePBXDevice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete yeastar device",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiJmYmZiMDAwMDU5YmVmZTM1ZDg2ZmMwNWE5MzJhMjBkY2U1MjI5ZDAzZDM5M2EwMWM3ZTNiNzZmYjUwYmJhMDNjIiwiaWF0IjoxNzcwNjE2NTIwLCJleHAiOjE3NzEyMjEzMjB9.9h_bKcvLjbIbjCVY0E9K9dYBUVvfd4JE6c6YOfvURFo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"deviceId\" : \"698977d42a2bc95838bbe5c4\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/deletePBXDevice",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "deletePBXDevice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get all yeaster device",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiI2NDE3ODk3ODI0NDA4NTFhM2ExNmIwOTY3NTc1ZjNlYjY5MTdjNjU3NDE5NThlMmE5ZTRmYThmYzMxNDE2MTEzIiwiaWF0IjoxNzcwNjk2OTMwLCJleHAiOjE3NzEzMDE3MzB9.2jsm1fjpdUy_EQbmn9guXjY5OXlQEH56U7V2BjMpjXo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/getAllPBXDevices",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "getAllPBXDevices"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get yeaster device by id",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiI2ZGIxZTIzNTBkNTdhMDkwMTI4ZDI0MTEzZWUxM2NiNjY2ZWZkN2U5ZTFiYTZlZTcwY2U5NjZmMzUwYTc3ODVhIiwiaWF0IjoxNzcwMzc3ODc5LCJleHAiOjE3NzA5ODI2Nzl9.FG6HGI8Y5BIZ6VnHPRGhQb6S3je6TX7Z7Hi4UoX2JT4",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"deviceId\": \"6985e6f97408dd0cfc0f6638\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/getPBXDeviceById",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "getPBXDeviceById"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "all agents of company admin by device",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTRmYTE2MWIzYmFmNzQ0ZjFhYTJkMDMiLCJzZXNzaW9uSWQiOiJmYmZiMDAwMDU5YmVmZTM1ZDg2ZmMwNWE5MzJhMjBkY2U1MjI5ZDAzZDM5M2EwMWM3ZTNiNzZmYjUwYmJhMDNjIiwiaWF0IjoxNzcwNjE2NTIwLCJleHAiOjE3NzEyMjEzMjB9.9h_bKcvLjbIbjCVY0E9K9dYBUVvfd4JE6c6YOfvURFo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"adminId\": \"69032996fc434f4104e3f57b\",\r\n  \"deviceId\" : \"69897f5efa084471aa9a3871\",\r\n  \"page\": 1,\r\n  \"limit\": 10,\r\n  \"search\": \"\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLocal}}/superAdmin/getAgentsOfCompanyAdminByPBXDevice",
+              "host": [
+                "{{BaseUrlLocal}}"
+              ],
+              "path": [
+                "superAdmin",
+                "getAgentsOfCompanyAdminByPBXDevice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "getAllCompanyAdmins By PBXDevice",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTA4NjQwNmQzNTI4MzY4Mzk3NTI1ZWIiLCJzZXNzaW9uSWQiOiIwMWNiY2E5NGRjNjkyYzVjMTM2NzViMGJhNGMxZWYxYWRmYjRlOGU2ZTM0ZTczM2U3NjVhNTExNTU5MTU1ZTE4IiwiaWF0IjoxNzcwNjI4Mjk5LCJleHAiOjE3NzEyMzMwOTl9.uYcjrOQdHMgvXIHPeOeyQ5f-E9WC3CgnA7LVXWdo22E",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"deviceId\": \"6989ab1a5a0b7d1e800ed614\",\r\n    \"page\": 1,\r\n    \"limit\": 10,\r\n    \"search\": \"\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/superAdmin/getAllCompanyAdminsByPBXDevice",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "superAdmin",
+                "getAllCompanyAdminsByPBXDevice"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "whatsapp apis",
+      "item": [
+        {
+          "name": "chats",
+          "item": [
+            {
+              "name": "send text of whatsapp",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTk2YTRjNTU3Zjk3MTMwZmRhNTViOWEiLCJzZXNzaW9uSWQiOm51bGwsImlhdCI6MTc3MTQ4MDMyMiwiZXhwIjoxNzcyMDg1MTIyfQ.MbjeCFP6EqgQyM4ATtp71DSJKtPtDSFlVkBTr0CQ1bA",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"to\": \"917046658651\",\r\n    \"text\": \"hello sir\",\r\n    \"name\" : \"Yash Makvana\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/send-text",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "send-text"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get all chats",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiIwNzRkOTZkMGRiMTAzZDgxMGI4YTc5YzNhNzUzNTBmZmFkMGI5NTRkN2MxOGUwYjljOWY3YzM1MmY4Y2JiYTc3IiwiaWF0IjoxNzcxNTc3MzUyLCJleHAiOjE3NzIxODIxNTJ9.Tf-TpL05zeoCNiiVgUdtRD4q_XdvD9SFUesysoP0JjQ",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"type\": \"chats\", //default \"history\", \"chats\"\r\n    \"page\": \"1\",\r\n    \"limit\": \"10\",\r\n    \"search\": \"\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/conversations",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "conversations"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "send attechment of whatsapp",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTk2YTRjNTU3Zjk3MTMwZmRhNTViOWEiLCJzZXNzaW9uSWQiOm51bGwsImlhdCI6MTc3MTQ4MDMyMiwiZXhwIjoxNzcyMDg1MTIyfQ.MbjeCFP6EqgQyM4ATtp71DSJKtPtDSFlVkBTr0CQ1bA",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "uuid": "e88dc691-0291-46b8-bb45-0867ac9aa8a7",
+                      "src": "/C:/Users/makva/OneDrive/Pictures/abc.jpg"
+                    },
+                    {
+                      "key": "type",
+                      "value": "document",
+                      "type": "text",
+                      "uuid": "25f349ff-6a5d-4820-b9ff-d003723f3e68"
+                    },
+                    {
+                      "key": "to",
+                      "value": "917046658651",
+                      "type": "text",
+                      "uuid": "6a28f816-143f-4930-8553-2f22238330d9"
+                    },
+                    {
+                      "key": "name",
+                      "value": "yash makvana",
+                      "type": "text",
+                      "uuid": "a0cda718-cb61-432c-a3ca-a67ec5b5d463"
+                    },
+                    {
+                      "key": "caption",
+                      "value": "abc",
+                      "type": "text",
+                      "uuid": "21cf106d-9845-4b62-88f6-e81efc2cdc1f",
+                      "disabled": true
+                    },
+                    {
+                      "key": "text",
+                      "value": "yash makvanahdwugfuwfuwfhfihfihifhifhihfi",
+                      "type": "text",
+                      "uuid": "042da38e-b1e7-4b05-8dbc-ffe9df7dfdf2",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{BaseUrlLive}}/api/whatsapp/send-message",
+                  "host": [
+                    "{{BaseUrlLive}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "send-message"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "send templetes",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTk2YTRjNTU3Zjk3MTMwZmRhNTViOWEiLCJzZXNzaW9uSWQiOm51bGwsImlhdCI6MTc3MTQ4MDMyMiwiZXhwIjoxNzcyMDg1MTIyfQ.MbjeCFP6EqgQyM4ATtp71DSJKtPtDSFlVkBTr0CQ1bA",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"to\": \"917046658651\",\r\n    \"templateId\": \"6984a2e57874ae738d9ca02f\",\r\n    \"name\": \"waqar ansari test2\"\r\n    // \"params\": {\r\n    //     \"body\": [\r\n    //         \"{{firstname}}\",\r\n    //         \"{{lastname}}\"\r\n    //     ]\r\n    //     // \"buttons\": [\r\n    //     //     \"DELIVERY50\"\r\n    //     // ]\r\n    // }\r\n}\r\n// {\r\n// \"to\": \"917046658651\",\r\n// \"templateId\": \"65c9f3d8b12a4f001234abcd\",\r\n// \"name\": \"Demo Sender Name\",\r\n// \"params\": {\r\n// ```\r\n// /* ===== HEADER PARAM ===== */\r\n// \"header\": \"Yash Makvana\",\r\n// /* ===== BODY PARAMS ===== */\r\n// \"body\": [\r\n//   \"Yash Makvana\",\r\n//   \"Flat 50% OFF\",\r\n//   \"31 Dec 2026\"\r\n// ],\r\n// /* ===== BUTTON PARAMS ===== */\r\n// \"buttons\": [\r\n//   /* INDEX 0 → URL dynamic value */\r\n//   \"https://voycell.com/order/12345\",\r\n//   /* INDEX 1 → COPY CODE */\r\n//   \"SAVE50\",\r\n//   /* INDEX 2 → (skip if quick reply static) */\r\n//   null,\r\n//   /* INDEX 3 → QUICK REPLY payload auto from template */\r\n//   null\r\n// ]\r\n// ```\r\n// }\r\n// }",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/send-template",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "send-template"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "send campaign",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI0MDMyZGIyOTE4ZmZhYTVhZTcxZWI4ZTFlYjZjZGU3YmRkMGZhZjI1MzNmYjExM2I4ZmY2NWNhNGE2OTRkY2ExIiwiaWF0IjoxNzcxMDY3MjQzLCJleHAiOjE3NzE2NzIwNDN9.suFBmq67zLduVCQt8wGTW3rNu6JSPJ1UWxPc47Jp7ZE",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"groupName\": [\r\n        \"Dubai\"\r\n    ],\r\n    \"campaignName\": \"Waqar Ansari Test\",\r\n    // \"schedule\": \"2026-02-13T14:19:00.000Z\",\r\n    \"templateId\": \"6984a2e57874ae738d9ca02f\"\r\n    // \"name\": \"yash\",\r\n    // \"params\": {\r\n    //     \"body\": [\r\n    //         \"{{first_name}}\",\r\n    //        \"{{first_name}}\"\r\n    //     ]\r\n    //     // \"buttons\": [\r\n    //     //     \"DELIVERY50\"\r\n    //     // ]\r\n    // }\r\n}\r\n// {\r\n// \"to\": \"917046658651\",\r\n// \"templateId\": \"65c9f3d8b12a4f001234abcd\",\r\n// \"name\": \"Demo Sender Name\",\r\n// \"params\": {\r\n// ```\r\n// /* ===== HEADER PARAM ===== */\r\n// \"header\": \"Yash Makvana\",\r\n// /* ===== BODY PARAMS ===== */\r\n// \"body\": [\r\n//   \"Yash Makvana\",\r\n//   \"Flat 50% OFF\",\r\n//   \"31 Dec 2026\"\r\n// ],\r\n// /* ===== BUTTON PARAMS ===== */\r\n// \"buttons\": [\r\n//   /* INDEX 0 → URL dynamic value */\r\n//   \"https://voycell.com/order/12345\",\r\n//   /* INDEX 1 → COPY CODE */\r\n//   \"SAVE50\",\r\n//   /* INDEX 2 → (skip if quick reply static) */\r\n//   null,\r\n//   /* INDEX 3 → QUICK REPLY payload auto from template */\r\n//   null\r\n// ]\r\n// ```\r\n// }\r\n// }",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/send-campaign",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "send-campaign"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get all campaigns",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI1NjJiNDk0NjAyMmQwZWQzMTJjZGEyN2YzNDBkOTMzYjhlMjI1N2E0ODgzNTgwN2E1MjJmZWRiMjZmODI4ZTYxIiwiaWF0IjoxNzcwOTU4OTAyLCJleHAiOjE3NzE1NjM3MDJ9.J87pkmyYJG65HzxP3z5Yj9x6CCX3YSE-boGH7VnUF8Y",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"page\" : \"1\",\r\n    \"limit\" : \"10\",\r\n    \"search\" : \"\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/campaigns",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "campaigns"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get campaigns By Id",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI1NjJiNDk0NjAyMmQwZWQzMTJjZGEyN2YzNDBkOTMzYjhlMjI1N2E0ODgzNTgwN2E1MjJmZWRiMjZmODI4ZTYxIiwiaWF0IjoxNzcwOTU4OTAyLCJleHAiOjE3NzE1NjM3MDJ9.J87pkmyYJG65HzxP3z5Yj9x6CCX3YSE-boGH7VnUF8Y",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"campaignId\" : \"698eb8d30cb74e5637f3bac7\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLive}}/api/whatsapp/campaignsById",
+                  "host": [
+                    "{{BaseUrlLive}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "campaignsById"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete campaigns",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI2YmQ2YTM3MGRjYTVlNjI4ZTM1Y2Y1NjYzZmIzODIzNjRiMmJjNjE4ZTRlZTE0MTc3ZGI5NmUwYTRjODBjNWM3IiwiaWF0IjoxNzcwNzI5MDczLCJleHAiOjE3NzEzMzM4NzN9.5v83iczO3gjCi9ycEkeM9rMayqYufbAuy2Mpp1VCN6M",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"campaignId\" : \"698c3941534c70337ebbeff6\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/delete/campaigns",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "delete",
+                    "campaigns"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete chats",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJlYTk4MTMyNTZhNTJjMzZiM2RmZDExZGEzMDRiNDcxNjE0MGE5ZmFkM2YxM2JkZTk0YTgzOWRiYWNkNjQ3OTgxIiwiaWF0IjoxNzcxMjE5MDQ2LCJleHAiOjE3NzE4MjM4NDZ9.mfWyeeQi2rMJWFJdGcbFirY7K4gIqQJIaxHOXFmiQZc",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"conversationIds\" : [\r\n        \"917046658651\"\r\n    ]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/delete-chats",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "delete-chats"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "whatsapp message api ",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJhMTgzNDE2MzQzNDRiMjgwYjUzNTNhNDdmY2NmNGEzOTcxN2RkNjgyYzExODYwZGVjNTAzYzI5MzM2ODNlZWE3IiwiaWF0IjoxNzcxNDc3MTQwLCJleHAiOjE3NzIwODE5NDB9.m1uXoiVgBnDTZHHYCs2X0CTeILiJIIEH6LdRLHy7qcA",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"chatNumber\": \"917046658651\",\r\n    \"messagePage\": \"1\",\r\n    \"messagePageLimit\": 10,\r\n    \"messageSearch\": \"\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/messages",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "messages"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "templates",
+          "item": [
+            {
+              "name": "delete waba template",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTVjY2JmN2RkNDNhMTAyOGVjOTYyMjQiLCJzZXNzaW9uSWQiOiIzM2I3ZWMzOWU3OGNjN2U3ODVmOTg2YjUxNzcwNjhlMzkwOWY4Yjk1OTU3ODA0YTk1ZjJjOTM0YThjZmYzMGNiIiwiaWF0IjoxNzY4MzA5MzUwLCJleHAiOjE3Njg5MTQxNTB9._ZXfHMxJHaDKayIYZNkHcNPygbY9lC3VtgQhlUjMMxw",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{BaseUrlLive}}/api/whatsapp/connect",
+                  "host": [
+                    "{{BaseUrlLive}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "connect"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get all waba templates",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJlYTk4MTMyNTZhNTJjMzZiM2RmZDExZGEzMDRiNDcxNjE0MGE5ZmFkM2YxM2JkZTk0YTgzOWRiYWNkNjQ3OTgxIiwiaWF0IjoxNzcxMjE5MDQ2LCJleHAiOjE3NzE4MjM4NDZ9.mfWyeeQi2rMJWFJdGcbFirY7K4gIqQJIaxHOXFmiQZc",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"page\": \"1\",\r\n    \"limit\": \"10\",\r\n    \"search\": \"\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/get-waba-templates",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "get-waba-templates"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "create waba template",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJlYTk4MTMyNTZhNTJjMzZiM2RmZDExZGEzMDRiNDcxNjE0MGE5ZmFkM2YxM2JkZTk0YTgzOWRiYWNkNjQ3OTgxIiwiaWF0IjoxNzcxMjE5MDQ2LCJleHAiOjE3NzE4MjM4NDZ9.mfWyeeQi2rMJWFJdGcbFirY7K4gIqQJIaxHOXFmiQZc",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "voycell_order_1111",
+                      "type": "text",
+                      "uuid": "4f461fd0-e7d2-463c-a748-3f9a1d4bf4bd"
+                    },
+                    {
+                      "key": "category",
+                      "value": "utility",
+                      "type": "text",
+                      "uuid": "4f2d8fce-8ed5-4a68-873b-4f512f1afece"
+                    },
+                    {
+                      "key": "language",
+                      "value": "en_US",
+                      "type": "text",
+                      "uuid": "864886d4-8582-4c75-87f1-88fe9e3a45ae"
+                    },
+                    {
+                      "key": "components",
+                      "value": "[\n  {\n    \"type\": \"HEADER\",\n    \"format\": \"IMAGE\"\n  },\n  {\n    \"type\": \"BODY\",\n    \"text\": \"Give the Voycell order.\"\n  },\n  {\n    \"type\": \"FOOTER\",\n    \"text\": \"WhatsApp Business Platform sample message.\"\n  }]",
+                      "type": "text",
+                      "uuid": "87a297a6-9ed2-4ea5-8801-8ed78134e730"
+                    },
+                    {
+                      "key": "media_url",
+                      "type": "file",
+                      "uuid": "1615b7ac-ae58-4f10-b954-11e72a87b64c",
+                      "src": "/C:/Users/makva/OneDrive/Pictures/abc.jpg"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{BaseUrlLive}}/api/whatsapp/create-template",
+                  "host": [
+                    "{{BaseUrlLive}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "create-template"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get approved template",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJlZDY4MzM2NGMyNDM4OWNiYzA4NjNhMjkzOGYxZTA5MDIwZWUwZGQ4MDI2MDUyYTZjNWY0ODZmZDA4MDU1ZGVjIiwiaWF0IjoxNzcwNzg4NDEwLCJleHAiOjE3NzEzOTMyMTB9.9gk3tBBuGW0J5y8GN3tdpwMup0_A4kBTURobbEcffk8",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/approved-templates",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "approved-templates"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get template by id ",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              },
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJlZDY4MzM2NGMyNDM4OWNiYzA4NjNhMjkzOGYxZTA5MDIwZWUwZGQ4MDI2MDUyYTZjNWY0ODZmZDA4MDU1ZGVjIiwiaWF0IjoxNzcwNzg4NDEwLCJleHAiOjE3NzEzOTMyMTB9.9gk3tBBuGW0J5y8GN3tdpwMup0_A4kBTURobbEcffk8",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"templateId\" : \"6984a2e57874ae738d9ca02f\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/templateById",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "templateById"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "edit template ",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJlYTk4MTMyNTZhNTJjMzZiM2RmZDExZGEzMDRiNDcxNjE0MGE5ZmFkM2YxM2JkZTk0YTgzOWRiYWNkNjQ3OTgxIiwiaWF0IjoxNzcxMjE5MDQ2LCJleHAiOjE3NzE4MjM4NDZ9.mfWyeeQi2rMJWFJdGcbFirY7K4gIqQJIaxHOXFmiQZc",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "templateId",
+                      "value": "696e34e6bd06a792ecb53729",
+                      "type": "text",
+                      "uuid": "2bccca9f-9a38-4726-9abb-d9731523b73a"
+                    },
+                    {
+                      "key": "components",
+                      "value": "[\n  {\n    \"type\": \"HEADER\",\n    \"format\": \"IMAGE\"\n  },\n  {\n    \"type\": \"BODY\",\n    \"text\": \"Check our new product launch.\"\n  },\n  {\n    \"type\": \"BUTTONS\",\n    \"buttons\": [\n      {\n        \"type\": \"QUICK_REPLY\",\n        \"text\": \"Stop promotions\"\n      }\n    ]\n  }\n]\n",
+                      "type": "text",
+                      "uuid": "0cd48576-f027-4da4-825e-68323a944950"
+                    },
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "uuid": "607d0107-5bc8-45d7-923e-0a60abbc141b",
+                      "src": "postman-cloud:///1f00553c-5c12-47c0-a2a6-10ba9e600a15"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{BaseUrlLive}}/api/whatsapp/edit-template",
+                  "host": [
+                    "{{BaseUrlLive}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "edit-template"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "profile",
+          "item": [
+            {
+              "name": "get whatsapp profile",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJhNjU2MDk2ZTYxMmM5ZjFlOTgzNTM1YjE3NjMxYTIzMzVlNzdkMjRjZGNjMGJlNzRkYzdjZTE3YzM4NGJiN2M5IiwiaWF0IjoxNzcwOTYzNTIxLCJleHAiOjE3NzE1NjgzMjF9.twTEAIxHXFCH5M0fU3E1wWJuLVeB4sjoKfVIgKXiwNc",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/profile",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "profile"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "edit whatsapp profile",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI2N2E5MjMzZWVhM2E4ZGRiZmQ4NDBjMDkxZTUxNjE1OGE1MWNlZGEwN2E2MGVlOWI3ZjhlOGE5MjMxNTQ5OWFhIiwiaWF0IjoxNzcwMjYxOTY2LCJleHAiOjE3NzA4NjY3NjZ9.9GoY6dC7c0dsubvu24WBwBFd5Pf1di9V8pwM45rIsuc",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "profile",
+                      "type": "file",
+                      "uuid": "9c14dffd-897b-4c8c-bf38-b700e3004da8",
+                      "src": "/C:/Users/makva/OneDrive/Pictures/abc.jpg",
+                      "disabled": true
+                    },
+                    {
+                      "key": "about",
+                      "value": "voycell",
+                      "type": "text",
+                      "uuid": "d439ad26-43d7-4ad4-bc0f-02672f999671",
+                      "disabled": true
+                    },
+                    {
+                      "key": "address",
+                      "value": "dubai",
+                      "type": "text",
+                      "uuid": "3766ccf4-be37-4494-beb3-78e0587026f6",
+                      "disabled": true
+                    },
+                    {
+                      "key": "description",
+                      "value": "call management system",
+                      "type": "text",
+                      "uuid": "921fe163-d98a-4994-bbb5-e69219b7f26c",
+                      "disabled": true
+                    },
+                    {
+                      "key": "email",
+                      "value": "voycell@voycel.com",
+                      "type": "text",
+                      "uuid": "d072b426-8a3e-4ebe-a8b8-2d216ea277ac",
+                      "disabled": true
+                    },
+                    {
+                      "key": "vertical",
+                      "value": "RETAIL",
+                      "type": "text",
+                      "uuid": "622c62b9-363d-4a23-b04e-ce14c490a8e4",
+                      "disabled": true
+                    },
+                    {
+                      "key": "websites",
+                      "value": "https://voycell.com",
+                      "type": "text",
+                      "uuid": "9c62784a-fce4-4700-b7ed-b11812f8bf71",
+                      "disabled": true
+                    },
+                    {
+                      "key": "webhookUrl",
+                      "value": "",
+                      "type": "text",
+                      "uuid": "97da989e-6f63-4a29-9d72-233c242c64ee",
+                      "disabled": true
+                    },
+                    {
+                      "key": "verifyToken",
+                      "value": "",
+                      "type": "text",
+                      "uuid": "9b01f1e5-901a-4f93-b212-fd7b3e721f12",
+                      "disabled": true
+                    },
+                    {
+                      "key": "displayName",
+                      "value": "voycell",
+                      "type": "text",
+                      "uuid": "1056c64e-f12a-4600-a307-d8ad11c53d44"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/profile/edit",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "profile",
+                    "edit"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get whatsapp access token ",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiJjNWVkNDNkOGNkMGMwNGU2NDI0Njg0ZTMwYmFiMzIzMWY1ZWYzY2JiODM4OGFmOWJmNmJjMzMwOTRmMjVjN2JmIiwiaWF0IjoxNzcxMDQ2OTU5LCJleHAiOjE3NzE2NTE3NTl9.pAyqUFPnk0uAN2c2FZO9O7bViYgFg4L-OfJOi-y1Pl0",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"access_token_waba\": \"EAAMfEKyGOYQBQoLPFCiiXNQNSDZAZC4xLVhw8MXJixVfJH8KDKGX9ZA0r6L2wRPWi8mgz4YCotv9rKY2cKO7aouTalmQSPGWgMX3w5I2yZBnnsPoZAYkNrg491xJmI9GbS84n4QOV0rDrH3NSjM6n23pZCy7QpatsMkHxFWSBFZCQm2dLI1ya5ACIk1NO8ZBstZCmMAZDZD\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/refresh-token",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "refresh-token"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "assigned waba to agent",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiIwNzRkOTZkMGRiMTAzZDgxMGI4YTc5YzNhNzUzNTBmZmFkMGI5NTRkN2MxOGUwYjljOWY3YzM1MmY4Y2JiYTc3IiwiaWF0IjoxNzcxNTc3MzUyLCJleHAiOjE3NzIxODIxNTJ9.Tf-TpL05zeoCNiiVgUdtRD4q_XdvD9SFUesysoP0JjQ",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"wabaAssigned\": [\r\n        {\r\n            \"agentId\": \"6996a4c557f97130fda55b9a\",\r\n            \"assigned\": false\r\n        }\r\n    ]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/assignedUnassignedToAgent",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "assignedUnassignedToAgent"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "unassigned waba to agent",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiIwNzRkOTZkMGRiMTAzZDgxMGI4YTc5YzNhNzUzNTBmZmFkMGI5NTRkN2MxOGUwYjljOWY3YzM1MmY4Y2JiYTc3IiwiaWF0IjoxNzcxNTc3MzUyLCJleHAiOjE3NzIxODIxNTJ9.Tf-TpL05zeoCNiiVgUdtRD4q_XdvD9SFUesysoP0JjQ",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"agentIds\": [\r\n        \"6996a4c557f97130fda55b9a\"\r\n    ]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{BaseUrlLocal}}/api/whatsapp/unassignedToAgent",
+                  "host": [
+                    "{{BaseUrlLocal}}"
+                  ],
+                  "path": [
+                    "api",
+                    "whatsapp",
+                    "unassignedToAgent"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "test webhook of whatsapp",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTVjY2JmN2RkNDNhMTAyOGVjOTYyMjQiLCJzZXNzaW9uSWQiOiI5ODhlZjMwNGM4YjA3ZTJiOWE2NTAyNTk1MTFkM2M3Nzg3MjQ2ZGM0MTY0MWUxYjhlZWNjODBjYTlkYWRhNTVlIiwiaWF0IjoxNzY3NzA0OTY4LCJleHAiOjE3NjgzMDk3Njh9.EsjQh7NJcoP3jx6deKCkmtIDdP8zPLHx-DX9SIuVZso",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"object\": \"whatsapp_business_account\",\r\n  \"entry\": [\r\n    {\r\n      \"id\": \"123456789\",\r\n      \"changes\": [\r\n        {\r\n          \"value\": {\r\n            \"messaging_product\": \"whatsapp\",\r\n            \"metadata\": {\r\n              \"display_phone_number\": \"15551849335\",\r\n              \"phone_number_id\": \"936225916239326\"\r\n            },\r\n            \"contacts\": [\r\n              {\r\n                \"profile\": {\r\n                  \"name\": \"Test User\"\r\n                },\r\n                \"wa_id\": \"917046658651\"\r\n              }\r\n            ],\r\n            \"messages\": [\r\n              {\r\n                \"from\": \"917046658651\",\r\n                \"id\": \"wamid.HBgLM...\",\r\n                \"timestamp\": \"1715600000\",\r\n                \"text\": {\r\n                  \"body\": \"Ravi Send this message\"\r\n                },\r\n                \"type\": \"text\"\r\n              }\r\n            ]\r\n          },\r\n          \"field\": \"messages\"\r\n        }\r\n      ]\r\n    }\r\n  ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BaseUrlLive}}/api/whatsapp/webhook",
+              "host": [
+                "{{BaseUrlLive}}"
+              ],
+              "path": [
+                "api",
+                "whatsapp",
+                "webhook"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "editProfile api",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTE0NDQ5NDFkY2FmY2NjY2Y2YzBhNTgiLCJpYXQiOjE3NjQ0MTI5Nzl9.LKKsjNfvVGOl4ZSMHbRtvS3ullaVv6iJ3ZJVE35zy3I",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "multipart/form-data",
+            "type": "text",
+            "disabled": true
+          },
+          {
+            "key": "Authorization",
+            "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2N2UwZWRmYjIyOTJiOGVlN2ZhMDY5NTQiLCJpYXQiOjE3NDM2NTk1MjF9.Txdx4SN-RRbU8M9kbjW7d0kNqPbPPGGcyxJPu99z-K4",
+            "type": "text",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "firstName",
+              "value": "manish",
+              "type": "text",
+              "uuid": "37aebc60-cbea-402c-8bb7-312036dce934",
+              "disabled": true
+            },
+            {
+              "key": "lastName",
+              "value": "makvana",
+              "type": "text",
+              "uuid": "9b22306e-f772-4635-b846-912ed1179688",
+              "disabled": true
+            },
+            {
+              "key": "profileImage",
+              "type": "file",
+              "uuid": "dfad3e77-f3f1-4a85-93d0-363ea46dc21f",
+              "src": "postman-cloud:///1f00553c-5c12-47c0-a2a6-10ba9e600a15"
+            },
+            {
+              "key": "email",
+              "value": "makvanayash2112@gmail.com",
+              "type": "text",
+              "uuid": "fde54fbd-52aa-42a1-b8e8-edd305f07df7",
+              "disabled": true
+            },
+            {
+              "key": "phonenumbers",
+              "value": "[{\"countryCode\":\"91\",\"number\":\"12354\"}]",
+              "type": "text",
+              "uuid": "24c20621-7889-46f3-99e1-3ea3ac46d8a9",
+              "disabled": true
+            },
+            {
+              "key": "facebook",
+              "value": "",
+              "type": "text",
+              "uuid": "f53a52ca-c592-42f1-b2dc-aa4a7e2ac3a6",
+              "disabled": true
+            },
+            {
+              "key": "instagram",
+              "value": "",
+              "type": "text",
+              "uuid": "86cb1227-b0be-4aa0-81cd-7f7128a05449",
+              "disabled": true
+            },
+            {
+              "key": "telegram",
+              "value": "",
+              "type": "text",
+              "uuid": "a523e9bf-db88-47d1-82a5-31c31b9916d4",
+              "disabled": true
+            },
+            {
+              "key": "twitter",
+              "value": "",
+              "type": "text",
+              "uuid": "97ce50ca-bc4a-4db4-9e9a-225c9b423d75",
+              "disabled": true
+            },
+            {
+              "key": "designation",
+              "value": "",
+              "type": "text",
+              "uuid": "547324ed-2474-486c-ba2d-56f6def835a1",
+              "disabled": true
+            },
+            {
+              "key": "telephone",
+              "value": "",
+              "type": "text",
+              "uuid": "01013005-afc4-40db-9d79-7a2a6eab1be1",
+              "disabled": true
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{BaseUrlLive}}/editProfile",
+          "host": [
+            "{{BaseUrlLive}}"
+          ],
+          "path": [
+            "editProfile"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "get user details",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTMzZDBiZWUwNjkzZjY3NWYxYTk1MTAiLCJzZXNzaW9uSWQiOiI1NjJiNDk0NjAyMmQwZWQzMTJjZGEyN2YzNDBkOTMzYjhlMjI1N2E0ODgzNTgwN2E1MjJmZWRiMjZmODI4ZTYxIiwiaWF0IjoxNzcwOTU4OTAyLCJleHAiOjE3NzE1NjM3MDJ9.J87pkmyYJG65HzxP3z5Yj9x6CCX3YSE-boGH7VnUF8Y",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{BaseUrlLive}}/getUser",
+          "host": [
+            "{{BaseUrlLive}}"
+          ],
+          "path": [
+            "getUser"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

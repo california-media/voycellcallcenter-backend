@@ -1,56 +1,266 @@
 openapi: 3.1.0
 info:
-  title: Contacts Management API
-  version: 1.0.0
+  title: Voycell Call Center API
   description: |
-    REST API for contacts, tags, reminders.
-    Authentication uses JWT in Authorization header.
+    Comprehensive API documentation for Voycell Call Center Backend.
+    This specification includes detailed schemas for all core entities and documents endpoints for Authentication, CRM, WhatsApp, PBX, and Super Admin functionalities.
+  version: 1.0.0
 servers:
-  - url: https://100rjobf76.execute-api.eu-north-1.amazonaws.com
-    description: Production
-  - url: http://localhost:3003
-    description: Local
+  - url: https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com
+    description: Production Server
+  - url: http://localhost:4004
+    description: Local Development Server
+
 security:
   - bearerAuth: []
+
 tags:
-  - name: Contacts
-  - name: Tags
-  - name: Reminders
-  - name: Import
+  - name: Authentication
+    description: User registration, login, and password management.
+  - name: User Profile
+    description: Operations related to user profile and settings.
+  - name: CRM - Contacts & Leads
+    description: Management of contacts and leads.
+  - name: CRM - Tags
+    description: Management of tags for contacts and leads.
+  - name: CRM - Tasks
+    description: Management of tasks associated with contacts/leads.
+  - name: CRM - Meetings
+    description: Management of meetings (Google/Zoom).
+  - name: CRM - Pipeline
+    description: Pipeline and status management for contacts/leads.
+  - name: WhatsApp & WABA
+    description: WhatsApp Business API integration and messaging.
+  - name: Yeastar PBX
+    description: Yeastar PBX integration, call control, and history.
+  - name: Connections & Integrations
+    description: External service connections (Google, Zoho, HubSpot, SMTP, etc.).
+  - name: Script Generation
+    description: Generation of call-back and contact form scripts.
+  - name: Support & FAQ
+    description: Help & Support tickets and FAQ management.
+  - name: Super Admin
+    description: Global system administration.
+
 paths:
-  /addEditContact:
+  # --- Authentication ---
+  /user/signup/email:
     post:
-      tags: [Contacts]
-      summary: Add or edit contact
-      security: [{ bearerAuth: [] }]
+      tags: [Authentication]
+      summary: Company Admin Sign Up
+      security: []
       requestBody:
         required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstname, lastname, email, password]
+              properties:
+                firstname: { type: string }
+                lastname: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '201':
+          description: Registration successful
+  /user/login:
+    post:
+      tags: [Authentication]
+      summary: User Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+  /user/verify-phone-number:
+    post:
+      tags: [Authentication]
+      summary: Verify Phone Number OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [countryCode, phonenumber, otp]
+              properties:
+                countryCode: { type: string }
+                phonenumber: { type: string }
+                otp: { type: string }
+      responses:
+        '200':
+          description: Success
+  /user/generateMagicLink:
+    post:
+      tags: [Authentication]
+      summary: Generate magic login link
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: Magic link email sent
+  /auth/magic-link:
+    post:
+      tags: [Authentication]
+      summary: Login with Magic Link
+      security: []
+      responses:
+        '200':
+          description: Success
+  /auth/verify-magic-link:
+    get:
+      tags: [Authentication]
+      summary: Verify Magic Link
+      security: []
+      responses:
+        '200':
+          description: Success
+  /auth/logout-all-devices:
+    post:
+      tags: [Authentication]
+      summary: Logout from All Devices
+      responses:
+        '200':
+          description: Success
+
+  # --- User Profile ---
+  /getUser:
+    get:
+      tags: [User Profile]
+      summary: Get Current User Profile
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+  /editProfile:
+    post:
+      tags: [User Profile]
+      summary: Update Profile (Multipart)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                firstname: { type: string }
+                lastname: { type: string }
+                profileImage: { type: string, format: binary }
+      responses:
+        '200':
+          description: Success
+  /changePassword:
+    post:
+      tags: [User Profile]
+      summary: Change User Password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newPassword: { type: string }
+      responses:
+        '200':
+          description: Success
+  /changePassword/sip-secret:
+    post:
+      tags: [User Profile]
+      summary: Update SIP Password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password: { type: string }
+      responses:
+        '200':
+          description: Success
+  /user/logout:
+    post:
+      tags: [Authentication]
+      summary: User Logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+  /user/verifyEmailChange:
+    post:
+      tags: [Authentication]
+      summary: Verify Email Change
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: Email updated
+
+  # --- CRM - Contacts & Leads ---
+  /addEditContactLeads:
+    post:
+      tags: [CRM - Contacts & Leads]
+      summary: Create or Update Contact/Lead
+      requestBody:
         content:
           multipart/form-data:
             schema:
               type: object
               properties:
                 contact_id: { type: string }
+                category: { type: string, enum: ["contact", "lead"] }
                 firstname: { type: string }
                 lastname: { type: string }
-                emailaddresses:
-                  type: array
-                  items: { type: string, format: email }
-                phonenumbers:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      countryCode: { type: string }
-                      number: { type: string }
+                emailAddresses: { type: string, description: "JSON stringified array" }
+                phoneNumbers: { type: string, description: "JSON stringified array" }
+                isLead: { type: boolean }
+                isFavourite: { type: boolean }
+                notes: { type: string }
                 contactImage: { type: string, format: binary }
       responses:
-        "200": { description: OK }
-  /getContact:
+        '200':
+          description: Success
+  /getAllContactsOrLeads:
     post:
-      tags: [Contacts]
-      summary: List contacts
-      security: [{ bearerAuth: [] }]
+      tags: [CRM - Contacts & Leads]
+      summary: Fetch List of Contacts/Leads
       requestBody:
         content:
           application/json:
@@ -58,310 +268,168 @@ paths:
               type: object
               properties:
                 page: { type: integer, default: 1 }
-                limit: { type: integer, default: 10 }
+                limit: { type: integer, default: 30 }
                 search: { type: string }
-                tag: { type: string }
+                category: { type: string, enum: ["contact", "lead"] }
                 isFavourite: { type: boolean }
       responses:
-        "200": { description: OK }
-  /getContactById:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Contact' }
+  /getAllContactsOrLeads/single:
     post:
-      tags: [Contacts]
-      summary: Get contact by ID
-      security: [{ bearerAuth: [] }]
+      tags: [CRM - Contacts & Leads]
+      summary: Get Single Contact/Lead
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               type: object
               properties:
                 contact_id: { type: string }
-              required: [contact_id]
+                category: { type: string }
       responses:
-        "200": { description: OK }
-  /getAllContact:
-    post:
-      tags: [Contacts]
-      summary: Get all contacts
-      security: [{ bearerAuth: [] }]
+        '200':
+          description: Success
+  /getAllContactsOrLeads/searchByPhone:
+    get:
+      tags: [CRM - Contacts & Leads]
+      summary: Search Contacts by Phone Number
       responses:
-        "200": { description: OK }
-  /deleteContact:
+        '200':
+          description: Success
+  /getAllContactsOrLeads/ForEvent:
+    get:
+      tags: [CRM - Contacts & Leads]
+      summary: Get Contacts for Event
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Success
+  /addEditContactLeads/batch-delete:
     post:
-      tags: [Contacts]
-      summary: Delete contact
-      security: [{ bearerAuth: [] }]
+      tags: [CRM - Contacts & Leads]
+      summary: Batch Delete Contacts/Leads
       requestBody:
-        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_ids: { type: array, items: { type: string } }
+                category: { type: string }
+      responses:
+        '200':
+          description: Success
+  /addEditContactLeads/toggle-favorite:
+    put:
+      tags: [CRM - Contacts & Leads]
+      summary: Toggle Favorite Status
+      requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
                 contact_id: { type: string }
-              required: [contact_id]
+                isFavourite: { type: boolean }
+                category: { type: string }
       responses:
-        "200": { description: OK }
-  /deleteAllContacts:
-    post:
-      tags: [Contacts]
-      summary: Delete all contacts
-      security: [{ bearerAuth: [] }]
-      responses:
-        "200": { description: OK }
+        '200':
+          description: Success
   /save-bulk-contacts:
     post:
-      tags: [Contacts]
-      summary: Save bulk contacts
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                contacts:
-                  type: array
-                  items: { $ref: "#/components/schemas/ContactInput" }
-              required: [contacts]
+      tags: [CRM - Contacts & Leads]
+      summary: Save Bulk Contacts
       responses:
-        "200": { description: OK }
-
-  /addTag:
-    post:
-      tags: [Tags]
-      summary: Add tag
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                tag: { type: string }
-                emoji: { type: string }
-              required: [tag]
-      responses:
-        "200": { description: OK }
-  /getTag:
-    post:
-      tags: [Tags]
-      summary: Get tags
-      security: [{ bearerAuth: [] }]
-      responses:
-        "200": { description: OK }
-  /editTag:
-    post:
-      tags: [Tags]
-      summary: Edit tag
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                tag_id: { type: string }
-                tag: { type: string }
-                emoji: { type: string }
-              required: [tag_id]
-      responses:
-        "200": { description: OK }
-  /deleteTag:
-    post:
-      tags: [Tags]
-      summary: Delete tag
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                tag_id: { type: string }
-              required: [tag_id]
-      responses:
-        "200": { description: OK }
-  /assign-unassign-tag:
-    post:
-      tags: [Tags]
-      summary: Assign/Unassign tag to contact
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                contact_id: { type: string }
-                tag_id: { type: string }
-                action: { type: string, enum: [assign, unassign] }
-              required: [contact_id, tag_id, action]
-      responses:
-        "200": { description: OK }
-  /getTagWithContact:
-    post:
-      tags: [Tags]
-      summary: Get tags with contacts
-      security: [{ bearerAuth: [] }]
-      responses:
-        "200": { description: OK }
-
-  /getContactActivities:
-    post:
-      tags: [Contacts]
-      summary: Get contact activities
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                contact_id: { type: string }
-              required: [contact_id]
-      responses:
-        "200": { description: OK }
-
+        '200':
+          description: Success
   /fetch-google-contacts:
     get:
-      tags: [Import]
-      summary: Start Google contacts import (OAuth)
-      security: [{ bearerAuth: [] }]
+      tags: [CRM - Contacts & Leads]
+      summary: Fetch Google Contacts
       responses:
-        "200": { description: Redirect URL returned }
-  /fetch-google-contacts/google/callback:
-    get:
-      tags: [Import]
-      summary: Google OAuth callback (contacts import)
-      security: []
-      parameters:
-        - in: query
-          name: code
-          schema: { type: string }
-        - in: query
-          name: state
-          schema: { type: string }
-      responses:
-        "200": { description: HTML page }
-
-  /fetch-linkedin-contacts:
-    get:
-      tags: [Import]
-      summary: Start LinkedIn contacts import (OAuth)
-      security: [{ bearerAuth: [] }]
-      responses:
-        "200": { description: Redirect URL returned }
-  /fetch-linkedin-contacts/linkedin/callback:
-    get:
-      tags: [Import]
-      summary: LinkedIn OAuth callback (contacts import)
-      security: []
-      parameters:
-        - in: query
-          name: code
-          schema: { type: string }
-        - in: query
-          name: state
-          schema: { type: string }
-      responses:
-        "200": { description: HTML page }
-
-  /fetch-hubspot-contacts:
-    get:
-      tags: [Import]
-      summary: Start HubSpot contacts import (OAuth)
-      security: [{ bearerAuth: [] }]
-      responses:
-        "200": { description: Redirect URL returned }
-  /fetch-hubspot-contacts/hubspot/callback:
-    get:
-      tags: [Import]
-      summary: HubSpot OAuth callback (contacts import)
-      security: []
-      parameters:
-        - in: query
-          name: code
-          schema: { type: string }
-        - in: query
-          name: state
-          schema: { type: string }
-      responses:
-        "200": { description: HTML page }
-
+        '200':
+          description: Success
   /fetch-zoho-contacts:
     get:
-      tags: [Import]
-      summary: Start Zoho contacts import (OAuth)
-      security: [{ bearerAuth: [] }]
+      tags: [CRM - Contacts & Leads]
+      summary: Fetch Zoho Contacts
       responses:
-        "200": { description: Redirect URL returned }
-  /fetch-zoho-contacts/zoho/callback:
+        '200':
+          description: Success
+  /fetch-hubspot-contacts:
     get:
-      tags: [Import]
-      summary: Zoho OAuth callback (contacts import)
-      security: []
-      parameters:
-        - in: query
-          name: code
-          schema: { type: string }
-        - in: query
-          name: state
-          schema: { type: string }
+      tags: [CRM - Contacts & Leads]
+      summary: Fetch HubSpot Contacts
       responses:
-        "200": { description: HTML page }
+        '200':
+          description: Success
 
-  /reminders/getReminders:
+  # --- CRM - Tags ---
+  /tag/getTagsOfUser:
     get:
-      tags: [Reminders]
-      summary: Get reminders
-      security: [{ bearerAuth: [] }]
+      tags: [CRM - Tags]
+      summary: Get User's Tags
       responses:
-        "200": { description: OK }
-  /reminders/addEditReminder:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tag' }
+  /tag/assignedToMultipleContacts:
     post:
-      tags: [Reminders]
-      summary: Add or edit reminder
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                reminder_id: { type: string }
-                title: { type: string }
-                description: { type: string }
-                date: { type: string, format: date-time }
+      tags: [CRM - Tags]
+      summary: Assign Tags to Multiple Contacts
       responses:
-        "200": { description: OK }
-  /reminders/deleteReminder:
+        '200':
+          description: Success
+  /tag/addTagToUser:
+    post:
+      tags: [CRM - Tags]
+      summary: Add New Tag Definition
+      responses:
+        '200':
+          description: Success
+  /tag/deleteTagOfUser:
     delete:
-      tags: [Reminders]
-      summary: Delete reminder
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                reminder_id: { type: string }
+      tags: [CRM - Tags]
+      summary: Delete Tag Definition
       responses:
-        "200": { description: OK }
+        '200':
+          description: Success
+  /tag/editTagOfUser:
+    put:
+      tags: [CRM - Tags]
+      summary: Edit Tag Definition
+      responses:
+        '200':
+          description: Success
+  /tag/getTagWithContact:
+    get:
+      tags: [CRM - Tags]
+      summary: Get Tag with Contact Association
+      responses:
+        '200':
+          description: Success
 
-  /addToFavourite:
-    post:
-      tags: [Contacts]
-      summary: Add to favourite
-      security: [{ bearerAuth: [] }]
+  # --- CRM - Pipeline ---
+  /contactAndLeadStatusPipline/status:
+    put:
+      tags: [CRM - Pipeline]
+      summary: Change Status
       requestBody:
         content:
           application/json:
@@ -369,41 +437,645 @@ paths:
               type: object
               properties:
                 contact_id: { type: string }
-                isFavourite: { type: boolean }
+                newStatus: { type: string }
       responses:
-        "200": { description: OK }
+        '200':
+          description: Success
+  /contactAndLeadStatusPipline/pipeline:
+    post:
+      tags: [CRM - Pipeline]
+      summary: Get Pipeline for Lead
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lead_id: { type: string }
+      responses:
+        '200':
+          description: Success
+  /getContactActivities:
+    post:
+      tags: [CRM - Contacts & Leads]
+      summary: Get Activities for Contact
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contact_id: { type: string }
+      responses:
+        '200':
+          description: Success
+  /getProfileEvent:
+    post:
+      tags: [CRM - Contacts & Leads]
+      summary: Get Profile Events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category: { type: string }
+      responses:
+        '200':
+          description: Success
 
-  /deleteTask:
+  # --- CRM - Tasks ---
+  /task/addEdit:
     post:
-      tags: [Contacts]
-      summary: Delete task from contact
-      security: [{ bearerAuth: [] }]
+      tags: [CRM - Tasks]
+      summary: Add or Edit Task
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Task' }
+      responses:
+        '200':
+          description: Success
+
+  # --- CRM - Meetings ---
+  /meeting/deleteMeeting:
+    delete:
+      tags: [CRM - Meetings]
+      summary: Delete Meeting
+      responses:
+        '200':
+          description: Success
+  /meeting/getAll:
+    get:
+      tags: [CRM - Meetings]
+      summary: Get All Meetings
+      responses:
+        '200':
+          description: Success
+
+  # --- WhatsApp & WABA ---
+  /api/whatsapp/send-message:
+    post:
+      tags: [WhatsApp & WABA]
+      summary: Send WhatsApp Message (Multipart)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                to: { type: string }
+                message: { type: string }
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Success
+  /api/whatsapp/send-template:
+    post:
+      tags: [WhatsApp & WABA]
+      summary: Send WhatsApp Template Message
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                contact_id: { type: string }
-                task_id: { type: string }
+                to: { type: string }
+                templateName: { type: string }
+                language: { type: string }
+                components: { type: array, items: { type: object } }
       responses:
-        "200": { description: OK }
-  /deleteMeeting:
+        '200':
+          description: Success
+  /api/whatsapp/conversations:
     post:
-      tags: [Contacts]
-      summary: Delete meeting from contact
-      security: [{ bearerAuth: [] }]
+      tags: [WhatsApp & WABA]
+      summary: Get All WhatsApp Conversations
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                contact_id: { type: string }
-                meeting_id: { type: string }
+                page: { type: integer }
+                limit: { type: integer }
       responses:
-        "200": { description: OK }
-  
+        '200':
+          description: Success
+  /api/whatsapp/messages:
+    post:
+      tags: [WhatsApp & WABA]
+      summary: Get Messages for a Conversation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chatNumber: { type: string }
+      responses:
+        '200':
+          description: Success
+  /api/whatsapp/send-campaign:
+    post:
+      tags: [WhatsApp & WABA]
+      summary: Send Bulk Template Campaign
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                campaignName: { type: string }
+                templateId: { type: string }
+                groups: { type: array, items: { type: string } }
+      responses:
+        '200':
+          description: Success
+  /api/whatsapp/approved-templates:
+    get:
+      tags: [WhatsApp & WABA]
+      summary: Get Approved Meta Templates
+      responses:
+        '200':
+          description: Success
+  /api/whatsapp/create-template:
+    post:
+      tags: [WhatsApp & WABA]
+      summary: Create Meta Template
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                category: { type: string }
+                language: { type: string }
+                media_url: { type: string, format: binary }
+      responses:
+        '200':
+          description: Success
+  /api/whatsapp/refresh-token:
+    post:
+      tags: [WhatsApp & WABA]
+      summary: Refresh WABA Token
+      responses:
+        '200':
+          description: Success
+  /api/whatsapp/connect:
+    post:
+      tags: [WhatsApp & WABA]
+      summary: Connect WhatsApp WABA Account
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accessToken: { type: string }
+                businessAccountId: { type: string }
+                wabaId: { type: string }
+                phoneNumberId: { type: string }
+      responses:
+        '200':
+          description: Success
+  /api/whatsapp/disconnect:
+    post:
+      tags: [WhatsApp & WABA]
+      summary: Disconnect WhatsApp WABA Account
+      responses:
+        '200':
+          description: Success
+  /api/whatsapp/refresh-token:
+    post:
+      tags: [WhatsApp & WABA]
+      summary: Refresh WABA Token
+      responses:
+        '200':
+          description: Success
+
+  # --- Yeastar PBX ---
+  /api/yeastar/make-call:
+    post:
+      tags: [Yeastar PBX]
+      summary: Make Outbound Call
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                caller_extension: { type: string }
+                mob_number: { type: string }
+                assignedDeviceId: { type: string }
+      responses:
+        '200':
+          description: Success
+  /call/company-call-history:
+    post:
+      tags: [Yeastar PBX]
+      summary: Get Company History
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startDate: { type: string, format: date }
+                endDate: { type: string, format: date }
+                page: { type: integer }
+      responses:
+        '200':
+          description: Success
+  /call/phone-number-call-history:
+    post:
+      tags: [Yeastar PBX]
+      summary: Get Call History for specific Phone Number
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phonenumbers:
+                  type: array
+                  items: { $ref: '#/components/schemas/PhoneNumber' }
+      responses:
+        '200':
+          description: Success
+  /call/agent-call-history:
+    post:
+      tags: [Yeastar PBX]
+      summary: Get Call History for Agent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                page: { type: integer }
+                startDate: { type: string, format: date-time }
+                endDate: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Success
+  /call/recording:
+    post:
+      tags: [Yeastar PBX]
+      summary: Get Recording URL
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                record_file: { type: string }
+      responses:
+        '200':
+          description: Success
+  /call/inbound-outbound-call-graph:
+    get:
+      tags: [Yeastar PBX]
+      summary: Get Call Graph Data
+      responses:
+        '200':
+          description: Success
+  /api/yeastar-login/get-signature:
+    post:
+      tags: [Yeastar PBX]
+      summary: Get Yeastar Login Signature
+      responses:
+        '200':
+          description: Success
+  /call/fetch-and-store:
+    post:
+      tags: [Yeastar PBX]
+      summary: Fetch and Store Call History
+      responses:
+        '200':
+          description: Success
+  /integrations/token:
+    get:
+      tags: [Yeastar PBX]
+      summary: Get Integration Token
+      responses:
+        '200':
+          description: Success
+  /call/dashboard-call-history:
+    post:
+      tags: [Yeastar PBX]
+      summary: Get Dashboard Call History
+      responses:
+        '200':
+          description: Success
+  /call/addFormDataAfterCallEnd:
+    post:
+      tags: [Yeastar PBX]
+      summary: Add Form Data After Call End
+      responses:
+        '200':
+          description: Success
+  /call/incoming-call-webhook:
+    post:
+      tags: [Yeastar PBX]
+      summary: Incoming Call Webhook
+      responses:
+        '200':
+          description: Success
+  /call/find-by-phone-number:
+    get:
+      tags: [Yeastar PBX]
+      summary: Find Contact by Phone Number (PBX)
+      responses:
+        '200':
+          description: Success
+
+  # --- Connections & Integrations ---
+  /connect/google:
+    post:
+      tags: [Connections & Integrations]
+      summary: Initiate Google Connection
+      responses:
+        '200':
+          description: Success
+      responses:
+        '200':
+          description: Success
+  /connect/smtp:
+    post:
+      tags: [Connections & Integrations]
+      summary: Connect SMTP
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                SMTP_HOST: { type: string }
+                SMTP_PORT: { type: integer }
+                SMTP_USER: { type: string }
+                SMTP_PASS: { type: string }
+      responses:
+        '200':
+          description: Success
+  /disconnect/smtp:
+    post:
+      tags: [Connections & Integrations]
+      summary: Disconnect SMTP
+      responses:
+        '200':
+          description: Success
+  /disconnect/google:
+    post:
+      tags: [Connections & Integrations]
+      summary: Disconnect Google
+      responses:
+        '200':
+          description: Success
+  /disconnect/microsoft:
+    post:
+      tags: [Connections & Integrations]
+      summary: Disconnect Microsoft
+      responses:
+        '200':
+          description: Success
+  /connect/microsoft:
+    post:
+      tags: [Connections & Integrations]
+      summary: Connect Microsoft Account
+      responses:
+        '200':
+          description: Success
+  /api/zoho/connect:
+    post:
+      tags: [Connections & Integrations]
+      summary: Connect Zoho Account
+      responses:
+        '200':
+          description: Success
+  /api/zoho/disconnect:
+    post:
+      tags: [Connections & Integrations]
+      summary: Disconnect Zoho Account
+      responses:
+        '200':
+          description: Success
+  /connect/zoom:
+    post:
+      tags: [Connections & Integrations]
+      summary: Connect Zoom Account
+      responses:
+        '200':
+          description: Success
+
+  # --- Support & FAQ ---
+  /faq/get:
+    get:
+      tags: [Support & FAQ]
+      summary: Get All FAQs
+      responses:
+        '200':
+          description: Success
+  /faq/addEdit:
+    post:
+      tags: [Support & FAQ]
+      summary: Add or Edit FAQ
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                faq_id: { type: string }
+                question: { type: string }
+                answer: { type: string }
+      responses:
+        '200':
+          description: Success
+  /faq/delete:
+    delete:
+      tags: [Support & FAQ]
+      summary: Delete FAQ
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                faq_id: { type: string }
+      responses:
+        '200':
+          description: Success
+
+  /help-support/create:
+    post:
+      tags: [Support & FAQ]
+      summary: Create Support Ticket
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                subject: { type: string }
+                message: { type: string }
+                helpAndSupportAttachments: { type: string, format: binary }
+      responses:
+        '200':
+          description: Success
+  /help-support/get:
+    get:
+      tags: [Support & FAQ]
+      summary: Get User's Tickets
+      responses:
+        '200':
+          description: Success
+
+  /addEditTemplete:
+    post:
+      tags: [User Profile]
+      summary: Add or Edit Message Template
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                template_id: { type: string }
+                title: { type: string }
+                message: { type: string }
+                type: { type: string, enum: ["whatsapp", "email"] }
+      responses:
+        '200':
+          description: Success
+
+  # --- Script Generation ---
+  /api/script/generate:
+    post:
+      tags: [Script Generation]
+      summary: Generate Call-back Script
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                themeColor: { type: string }
+                popupHeading: { type: string }
+      responses:
+        '200':
+          description: Script URL returned
+  /api/script/generateFormCall:
+    post:
+      tags: [Script Generation]
+      summary: Generate Form Call Script
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                allowedOrigin: { type: array, items: { type: string } }
+      responses:
+        '200':
+          description: Script URL returned
+
+  # --- Super Admin ---
+  /superAdmin/allCompanyAdmin:
+    post:
+      tags: [Super Admin]
+      summary: List All Company Admins
+      responses:
+        '200':
+          description: Success
+  /superAdmin/addPBXDevice:
+    post:
+      tags: [Super Admin]
+      summary: Add PBX Device
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deviceName: { type: string }
+                PBX_BASE_URL: { type: string }
+                PBX_USERNAME: { type: string }
+                PBX_PASSWORD: { type: string }
+      responses:
+        '200':
+          description: Device added
+  /superAdmin/getAllPBXDevices:
+    get:
+      tags: [Super Admin]
+      summary: Get All PBX Devices
+      responses:
+        '200':
+          description: Success
+  /deleteUser/suspend:
+    post:
+      tags: [Super Admin]
+      summary: Suspend User
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id: { type: string }
+      responses:
+        '200':
+          description: Success
+  /admin/user/changeStatus:
+    post:
+      tags: [Super Admin]
+      summary: Change User Status
+      responses:
+        '200':
+          description: Success
+  /admin/user/delete:
+    post:
+      tags: [Super Admin]
+      summary: Delete User
+      responses:
+        '200':
+          description: Success
+  /admin/bulk-delete:
+    post:
+      tags: [Super Admin]
+      summary: Bulk Delete Users
+      responses:
+        '200':
+          description: Success
+  /admin/pbx/details:
+    get:
+      tags: [Super Admin]
+      summary: Get Admin PBX Details
+      responses:
+        '200':
+          description: Success
+  /admin/pbx/allDevices:
+    get:
+      tags: [Super Admin]
+      summary: Get All Admin PBX Devices
+      responses:
+        '200':
+          description: Success
+  /admin/pbx/deleteDevice:
+    post:
+      tags: [Super Admin]
+      summary: Delete Admin PBX Device
+      responses:
+        '200':
+          description: Success
+  /admin/pbx/toggleDeviceStatus:
+    put:
+      tags: [Super Admin]
+      summary: Toggle Admin PBX Device Status
+      responses:
+        '200':
+          description: Success
 
 components:
   securitySchemes:
@@ -411,25 +1083,64 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
   schemas:
-    ApiResponse:
+    User:
       type: object
       properties:
-        status: { type: string }
-        message: { type: string }
-        data: { type: object }
-    ContactInput:
-      type: object
-      properties:
+        _id: { type: string }
         firstname: { type: string }
         lastname: { type: string }
-        emailaddresses:
+        email: { type: string }
+        role: { type: string, enum: ["user", "companyAdmin", "superadmin"] }
+        isActive: { type: boolean }
+        lastSeen: { type: string, format: date-time }
+
+    Contact:
+      type: object
+      properties:
+        contact_id: { type: string }
+        firstname: { type: string }
+        lastname: { type: string }
+        emailAddresses: { type: array, items: { type: string } }
+        phoneNumbers:
           type: array
-          items: { type: string, format: email }
-        phonenumbers:
+          items: { $ref: '#/components/schemas/PhoneNumber' }
+        status: { type: string }
+        isLead: { type: boolean }
+        tags:
           type: array
-          items:
-            type: object
-            properties:
-              countryCode: { type: string }
-              number: { type: string }
+          items: { $ref: '#/components/schemas/Tag' }
+
+    PhoneNumber:
+      type: object
+      properties:
+        countryCode: { type: string }
+        number: { type: string }
+
+    Tag:
+      type: object
+      properties:
+        tag_id: { type: string }
+        tag: { type: string }
+        emoji: { type: string }
+
+    Task:
+      type: object
+      properties:
+        contact_id: { type: string }
+        task_id: { type: string }
+        taskDescription: { type: string }
+        taskDueDate: { type: string, format: date }
+        taskIsCompleted: { type: boolean }
+
+    Meeting:
+      type: object
+      properties:
+        contact_id: { type: string }
+        meetingTitle: { type: string }
+        meetingDescription: { type: string }
+        meetingStartDate: { type: string, format: date }
+        meetingStartTime: { type: string }
+        meetingType: { type: string, enum: ["online", "offline"] }
+        meetingProvider: { type: string, enum: ["google", "zoom"] }
