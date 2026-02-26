@@ -6,6 +6,7 @@ const {
   batchDeleteContacts,
   updateFirstPhoneOrEmail,
   updateAttachments,
+  assignContactOrLead,
 } = require("../controllers/addEditContact&LeadsController");
 const multer = require("multer");
 const checkAccountStatus = require("../middlewares/checkAccountStatus")
@@ -22,6 +23,7 @@ router.post("/delete", checkAccountStatus, deleteContactOrLead);
 router.put("/toggle-favorite", checkAccountStatus, toggleContactFavorite);
 router.post("/batch-delete", checkAccountStatus, batchDeleteContacts);
 router.put("/update-first-contact", checkAccountStatus, updateFirstPhoneOrEmail);
+router.post("/assignedContactLeadToAgent", checkAccountStatus, assignContactOrLead);
 router.put(
   "/update-attachments",
   upload.array("attachments", 10),

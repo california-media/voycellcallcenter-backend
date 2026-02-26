@@ -232,6 +232,12 @@ const contactSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
     },
+
+    assignedTo: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
+    },
   },
   { timestamps: true }
 );

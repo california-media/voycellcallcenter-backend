@@ -12,13 +12,31 @@ const getContactActivities = async (req, res) => {
   }
 
   try {
-    const contact = await Contact.findById(contact_id).select("activities");
+    const userId = req.user._id;
+    const contact = await Contact.findById(contact_id);
 
     if (!contact) {
       return res.status(404).json({
         status: "error",
         message: "Contact not found",
       });
+    }
+
+    // Permission Check
+    const isCreator = String(contact.createdBy) === String(userId);
+    const assignedArray = Array.isArray(contact.assignedTo) ? contact.assignedTo.map(id => String(id)) : [];
+    const isAssignee = assignedArray.includes(String(userId));
+    const isAdminOfCreator = async () => {
+      const creator = await mongoose.model("User").findById(contact.createdBy).select("createdByWhichCompanyAdmin role");
+      return creator && (String(creator._id) === String(userId) || String(creator.createdByWhichCompanyAdmin) === String(userId));
+    };
+
+    if (req.user.role === "user" && !isCreator && !isAssignee) {
+      return res.status(403).json({ status: "error", message: "Unauthorized access to these activities." });
+    }
+
+    if (req.user.role === "companyAdmin" && !(await isAdminOfCreator())) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
     }
 
     // Sort activities by timestamp descending (latest first)

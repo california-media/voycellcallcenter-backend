@@ -51,7 +51,7 @@ const checkForAuthentication = () => {
     try {
       const payload = validateToken(token);
 
-      const user = await User.findById(payload._id).select("activeSessions activeSessionId");
+      const user = await User.findById(payload._id).select("activeSessions activeSessionId firstname lastname role createdByWhichCompanyAdmin");
 
       if (!user) {
         return res.status(401).json({ message: "Unauthorized: User not found" });
@@ -69,7 +69,8 @@ const checkForAuthentication = () => {
         });
       }
 
-      req.user = payload;
+      req.user = user;
+      req.user.sessionId = payload.sessionId;
       next();
     } catch (error) {
       return res.status(401).json({ message: "Invalid or expired token" });

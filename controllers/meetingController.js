@@ -41,12 +41,8 @@ exports.getMeetingsForContact = async (req, res) => {
         message: "category is required: contact or lead",
       });
     }
-    var Model;
-    if (category === "lead") {
-      Model = Lead;
-    } else {
-      Model = Contact;
-    }
+    const Model = category === "lead" ? Lead : Contact;
+    const userId = req.user._id;
 
     const contact = await Model.findById(contact_id);
     if (!contact) {
@@ -54,6 +50,23 @@ exports.getMeetingsForContact = async (req, res) => {
         status: "error",
         message: "Contact not found.",
       });
+    }
+
+    // Permission Check
+    const isCreator = String(contact.createdBy) === String(userId);
+    const assignedArray = Array.isArray(contact.assignedTo) ? contact.assignedTo.map(id => String(id)) : [];
+    const isAssignee = assignedArray.includes(String(userId));
+    const isAdminOfCreator = async () => {
+      const creator = await User.findById(contact.createdBy).select("createdByWhichCompanyAdmin role");
+      return creator && (String(creator._id) === String(userId) || String(creator.createdByWhichCompanyAdmin) === String(userId));
+    };
+
+    if (req.user.role === "user" && !isCreator && !isAssignee) {
+      return res.status(403).json({ status: "error", message: "Unauthorized access to these meetings." });
+    }
+
+    if (req.user.role === "companyAdmin" && !(await isAdminOfCreator())) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
     }
 
     let meetings = [...contact.meetings];
@@ -149,6 +162,7 @@ exports.addOrUpdateMeeting = async (req, res) => {
     // SELECT MODEL BASED ON CATEGORY
     // ---------------------------------------------------------
     const Model = category === "lead" ? Lead : Contact;
+    const userId = req.user._id;
 
     const record = await Model.findById(contact_id);
     if (!record) {
@@ -156,6 +170,23 @@ exports.addOrUpdateMeeting = async (req, res) => {
         status: "error",
         message: `${category} not found.`,
       });
+    }
+
+    // Permission Check
+    const isCreator = String(record.createdBy) === String(userId);
+    const assignedArray = Array.isArray(record.assignedTo) ? record.assignedTo.map(id => String(id)) : [];
+    const isAssignee = assignedArray.includes(String(userId));
+    const isAdminOfCreator = async () => {
+      const creator = await User.findById(record.createdBy).select("createdByWhichCompanyAdmin role");
+      return creator && (String(creator._id) === String(userId) || String(creator.createdByWhichCompanyAdmin) === String(userId));
+    };
+
+    if (req.user.role === "user" && !isCreator && !isAssignee) {
+      return res.status(403).json({ status: "error", message: "Unauthorized access to this contact." });
+    }
+
+    if (req.user.role === "companyAdmin" && !(await isAdminOfCreator())) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
     }
 
     // ---------------------------------------------------------
@@ -352,11 +383,12 @@ exports.addOrUpdateMeeting = async (req, res) => {
     // =============================================================
     // 🚀 ACTIVITY LOGGING
     // =============================================================
+    const performerName = `${req.user.firstname} ${req.user.lastname}`;
     await logActivityToContact(category, record._id, {
       action: isUpdate ? "meeting_updated" : "meeting_created",
       type: "meeting",
       title: isUpdate ? "Meeting Updated" : "Meeting Created",
-      description: activityTitle || "Untitled Meeting",
+      description: `${activityTitle || "Untitled Meeting"} (by ${performerName})`,
     });
 
     return res.status(200).json({
@@ -402,15 +434,32 @@ exports.deleteMeeting = async (req, res) => {
     // 1️⃣ Find the contact first (to get the meeting title)
     const contact = await Model.findOne({
       _id: contact_id,
-      createdBy: req.user._id,
       "meetings.meeting_id": meeting_id,
     });
 
     if (!contact) {
       return res.status(404).json({
         status: "error",
-        message: "Meeting not found in this contact or unauthorized access",
+        message: "Meeting not found in this contact",
       });
+    }
+
+    // Permission Check
+    const userId = req.user._id;
+    const isCreator = String(contact.createdBy) === String(userId);
+    const assignedArray = Array.isArray(contact.assignedTo) ? contact.assignedTo.map(id => String(id)) : [];
+    const isAssignee = assignedArray.includes(String(userId));
+    const isAdminOfCreator = async () => {
+      const creator = await User.findById(contact.createdBy).select("createdByWhichCompanyAdmin role");
+      return creator && (String(creator._id) === String(userId) || String(creator.createdByWhichCompanyAdmin) === String(userId));
+    };
+
+    if (req.user.role === "user" && !isCreator && !isAssignee) {
+      return res.status(403).json({ status: "error", message: "Unauthorized access to this contact." });
+    }
+
+    if (req.user.role === "companyAdmin" && !(await isAdminOfCreator())) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
     }
 
     // 2️⃣ Get the meeting title

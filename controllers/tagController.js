@@ -27,30 +27,35 @@ const updateContactTags = async (req, res) => {
         .status(404)
         .json({ status: "error", message: "User not found" });
 
-    let allowedCreatedByIds = [user_id];
-
-    if (user.role === "companyAdmin") {
-      const agents = await User.find({
-        createdByWhichCompanyAdmin: user_id,
-        role: "user",
-      }).select("_id");
-
-      allowedCreatedByIds.push(...agents.map(a => a._id));
-    }
-
     const Model = category === "lead" ? Lead : Contact;
 
     // ✅ Validate contact
     const contact = await Model.findOne({
       contact_id: new mongoose.Types.ObjectId(contact_id),
-      // createdBy: user_id,
-      createdBy: { $in: allowedCreatedByIds },
     });
 
-    if (!contact)
-      return res
-        .status(404)
-        .json({ status: "error", message: "Contact not found" });
+    if (!contact) {
+      return res.status(404).json({ status: "error", message: "Contact not found" });
+    }
+
+    // 🔐 Unified Permission Check
+    const userId = user_id.toString();
+    const isCreator = String(contact.createdBy) === userId;
+    const assignedArray = Array.isArray(contact.assignedTo) ? contact.assignedTo.map(id => String(id)) : [];
+    const isAssignee = assignedArray.includes(userId);
+
+    const isAdminOfCreator = async () => {
+      const creator = await User.findById(contact.createdBy).select("createdByWhichCompanyAdmin role");
+      return creator && (String(creator._id) === userId || String(creator.createdByWhichCompanyAdmin) === userId);
+    };
+
+    if (user.role === "user" && !isCreator && !isAssignee) {
+      return res.status(403).json({ status: "error", message: "Unauthorized access to this contact." });
+    }
+
+    if (user.role === "companyAdmin" && !(await isAdminOfCreator())) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
+    }
 
     // ✅ Validate and parse tags
     let tagsArray = [];
@@ -160,6 +165,8 @@ const updateContactTags = async (req, res) => {
 
     // ✅ Save to contact
     contact.tags = finalContactTags;
+
+    const performerName = `${req.user.firstname} ${req.user.lastname}`;
     await logActivityToContact(category, contact._id, {
       action: "tags_updated",
       type: "tag",
@@ -167,7 +174,7 @@ const updateContactTags = async (req, res) => {
       description: `Tags updated to: ${myNewContactTags.length === 0
         ? "No tags"
         : myNewContactTags.map((t) => t.tag).join(", ")
-        }`,
+        } (by ${performerName})`,
     });
 
     await contact.save();
@@ -298,11 +305,15 @@ const updateMultipleContactTags = async (req, res) => {
     for (let i = 0; i < contact_id.length; i += batchSize) {
       const batchIds = contact_id.slice(i, i + batchSize);
 
-      // Fetch contacts for this batch
+      // Fetch contacts for this batch with permission check
+      // Agents see their own OR assigned; Admins see their company's
       const docs = await Model.find({
         contact_id: { $in: batchIds.map(id => new mongoose.Types.ObjectId(id)) },
-        createdBy: { $in: allowedCreatedByIds }
-      }).select("tags _id contact_id");
+        $or: [
+          { createdBy: { $in: allowedCreatedByIds } },
+          { assignedTo: loginUserId }
+        ]
+      }).select("tags _id contact_id createdBy assignedTo");
 
       const bulkOps = [];
 
@@ -336,11 +347,12 @@ const updateMultipleContactTags = async (req, res) => {
         }
 
         if (newTagsToAdd.length > 0) {
+          const performerName = `${loginUser.firstname} ${loginUser.lastname}`;
           const activityObj = {
             action: "tags_added",
             type: "tag",
             title: "Tags Added",
-            description: `Tags added: ${newTagsToAdd.map(t => t.tag).join(", ")}`,
+            description: `Tags added: ${newTagsToAdd.map(t => t.tag).join(", ")} (by ${performerName})`,
             timestamp: new Date()
           };
 

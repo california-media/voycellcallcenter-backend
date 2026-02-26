@@ -34,6 +34,7 @@ exports.getTasksForContact = async (req, res) => {
     }
 
     const Model = category === "lead" ? Lead : Contact;
+    const userId = req.user._id;
 
     const contact = await Model.findById(contact_id);
     if (!contact) {
@@ -41,6 +42,23 @@ exports.getTasksForContact = async (req, res) => {
         status: "error",
         message: "Contact not found.",
       });
+    }
+
+    // Permission Check
+    const isCreator = String(contact.createdBy) === String(userId);
+    const assignedArray = Array.isArray(contact.assignedTo) ? contact.assignedTo.map(id => String(id)) : [];
+    const isAssignee = assignedArray.includes(String(userId));
+    const isAdminOfCreator = async () => {
+      const creator = await mongoose.model("User").findById(contact.createdBy).select("createdByWhichCompanyAdmin role");
+      return creator && (String(creator._id) === String(userId) || String(creator.createdByWhichCompanyAdmin) === String(userId));
+    };
+
+    if (req.user.role === "user" && !isCreator && !isAssignee) {
+      return res.status(403).json({ status: "error", message: "Unauthorized access to these tasks." });
+    }
+
+    if (req.user.role === "companyAdmin" && !(await isAdminOfCreator())) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
     }
 
     let tasks = [...contact.tasks];
@@ -113,7 +131,7 @@ exports.addOrUpdateTask = async (req, res) => {
     }
 
     const Model = category === "lead" ? Lead : Contact;
-
+    const userId = req.user._id;
 
     const contact = await Model.findById(contact_id);
     if (!contact) {
@@ -121,6 +139,23 @@ exports.addOrUpdateTask = async (req, res) => {
         status: "error",
         message: "Contact not found.",
       });
+    }
+
+    // Permission Check
+    const isCreator = String(contact.createdBy) === String(userId);
+    const assignedArray = Array.isArray(contact.assignedTo) ? contact.assignedTo.map(id => String(id)) : [];
+    const isAssignee = assignedArray.includes(String(userId));
+    const isAdminOfCreator = async () => {
+      const creator = await mongoose.model("User").findById(contact.createdBy).select("createdByWhichCompanyAdmin role");
+      return creator && (String(creator._id) === String(userId) || String(creator.createdByWhichCompanyAdmin) === String(userId));
+    };
+
+    if (req.user.role === "user" && !isCreator && !isAssignee) {
+      return res.status(403).json({ status: "error", message: "Unauthorized access to this contact." });
+    }
+
+    if (req.user.role === "companyAdmin" && !(await isAdminOfCreator())) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
     }
 
     // Determine if updating existing task
@@ -191,20 +226,22 @@ exports.addOrUpdateTask = async (req, res) => {
 
     await contact.save();
 
+    const performerName = `${req.user.firstname} ${req.user.lastname}`;
+
     // Log activity
     if (isUpdating) {
       await logActivityToContact(category, contact_id, {
         action: "task_updated",
         type: "task",
         title: "Note Updated",
-        description: taskDescription || "Note details updated",
+        description: `${taskDescription || "Note details updated"} (by ${performerName})`,
       });
     } else {
       await logActivityToContact(category, contact_id, {
         action: "note_created",
         type: "task",
         title: "Note Created",
-        description: taskDescription || "New note added",
+        description: `${taskDescription || "New note added"} (by ${performerName})`,
       });
     }
 
@@ -238,6 +275,8 @@ exports.deleteTask = async (req, res) => {
 
   try {
     const Model = category === "lead" ? Lead : Contact;
+    const userId = req.user._id;
+
     // 1️⃣ Find contact first to get the task description before deleting
     const contact = await Model.findOne({
       _id: contact_id,
@@ -249,6 +288,23 @@ exports.deleteTask = async (req, res) => {
         status: "error",
         message: "Task not found in this contact",
       });
+    }
+
+    // Permission Check
+    const isCreator = String(contact.createdBy) === String(userId);
+    const assignedArray = Array.isArray(contact.assignedTo) ? contact.assignedTo.map(id => String(id)) : [];
+    const isAssignee = assignedArray.includes(String(userId));
+    const isAdminOfCreator = async () => {
+      const creator = await mongoose.model("User").findById(contact.createdBy).select("createdByWhichCompanyAdmin role");
+      return creator && (String(creator._id) === String(userId) || String(creator.createdByWhichCompanyAdmin) === String(userId));
+    };
+
+    if (req.user.role === "user" && !isCreator && !isAssignee) {
+      return res.status(403).json({ status: "error", message: "Unauthorized access to this contact." });
+    }
+
+    if (req.user.role === "companyAdmin" && !(await isAdminOfCreator())) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
     }
 
     // 2️⃣ Extract the task description

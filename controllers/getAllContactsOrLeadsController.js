@@ -56,29 +56,35 @@ exports.getAllContactsOrLeads = async (req, res) => {
       Model = Contact;
     }
 
-    // -----------------------
-    // Agent Filter
-    // -----------------------
-    if (Array.isArray(agentId) && agentId.length > 0) {
-      const validAgentIds = agentId
-        .map(id => {
-          try {
-            return new mongoose.Types.ObjectId(id);
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean);
+    let query = {};
 
-      // Intersect with allowedUserIds (security!)
-      allowedUserIds = allowedUserIds.filter(id =>
-        validAgentIds.some(aid => aid.equals(id))
-      );
+    if (userRole === "companyAdmin") {
+      query.createdBy = { $in: allowedUserIds };
+
+      // If filtering by specific agents
+      if (Array.isArray(agentId) && agentId.length > 0) {
+        const validAgentIds = agentId
+          .map(id => {
+            try { return new mongoose.Types.ObjectId(id); } catch { return null; }
+          })
+          .filter(Boolean);
+
+        // Filter validAgentIds to only include those under this admin
+        const filteredAgentIds = validAgentIds.filter(id => allowedUserIds.some(aid => aid.equals(id)));
+
+        query.createdBy = undefined; // clear previous createdBy
+        query.$or = [
+          { createdBy: { $in: filteredAgentIds } },
+          { assignedTo: { $in: filteredAgentIds } }
+        ];
+      }
+    } else {
+      // Agent -> sees their own OR assigned to them
+      query.$or = [
+        { createdBy: userId },
+        { assignedTo: userId }
+      ];
     }
-
-    const query = {
-      createdBy: { $in: allowedUserIds }
-    };
 
     // -----------------------
     // Filters
@@ -181,23 +187,24 @@ exports.getAllContactsOrLeads = async (req, res) => {
       .lean();
 
 
-    const usersMap = {};
+    // -----------------------
+    // Fetch relevant users for names and tag filtering
+    // -----------------------
+    const creatorIds = [
+      ...new Set([
+        userId.toString(),
+        ...items.map(item => item.createdBy?.toString()).filter(Boolean)
+      ])
+    ];
 
     const users = await User.find(
-      { _id: { $in: allowedUserIds } },
+      { _id: { $in: creatorIds } },
       { firstname: 1, lastname: 1, tags: 1 }
     ).lean();
 
+    const usersMap = {};
     users.forEach(u => {
       usersMap[u._id.toString()] = `${u.firstname || ""} ${u.lastname || ""}`.trim();
-    });
-
-    const userTagsMap = {};
-
-    users.forEach(u => {
-      userTagsMap[u._id.toString()] = Array.isArray(u.tags)
-        ? u.tags.map(t => t.tag_id.toString())
-        : [];
     });
 
     // -----------------------
@@ -319,18 +326,33 @@ exports.getAllActivities = async (req, res) => {
       Model = Contact;
     }
 
-    const record = await Model.findOne({
-      _id: contact_id,
-      createdBy,
-    })
-      .select("activities")
-      .lean();
+    const record = await Model.findById(contact_id).select("activities createdBy assignedTo").lean();
 
     if (!record) {
       return res.status(404).json({
         status: "error",
         message: `${category} not found`,
       });
+    }
+
+    // Permission Check
+    const userId = req.user._id;
+    const userRole = req.user.role;
+    const isCreator = String(record.createdBy) === String(userId);
+    const assignedArray = Array.isArray(record.assignedTo) ? record.assignedTo.map(id => String(id)) : [];
+    const isAssignee = assignedArray.includes(String(userId));
+
+    const isAdminOfCreator = async () => {
+      const creator = await User.findById(record.createdBy).select("createdByWhichCompanyAdmin role");
+      return creator && (String(creator._id) === String(userId) || String(creator.createdByWhichCompanyAdmin) === String(userId));
+    };
+
+    if (userRole === "user" && !isCreator && !isAssignee) {
+      return res.status(403).json({ status: "error", message: "Unauthorized access to these activities." });
+    }
+
+    if (userRole === "companyAdmin" && !(await isAdminOfCreator())) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
     }
 
     // Sort activities by timestamp descending (newest first)
@@ -390,8 +412,11 @@ exports.getSingleContactOrLead = async (req, res) => {
     };
 
     if (loginUserRole === "user") {
-      // agent → only their own contacts
-      query.createdBy = loginUserId;
+      // agent → only their own contacts or assigned to them
+      query.$or = [
+        { createdBy: loginUserId },
+        { assignedTo: loginUserId }
+      ];
     }
 
     if (loginUserRole === "companyAdmin") {
@@ -408,24 +433,6 @@ exports.getSingleContactOrLead = async (req, res) => {
       };
     }
 
-    // -----------------------
-    // Fetch relevant users for names and tag filtering
-    // -----------------------
-    let userQuery = { _id: loginUserId };
-    if (loginUserRole === "companyAdmin") {
-      userQuery = {
-        $or: [
-          { _id: loginUserId },
-          { createdByWhichCompanyAdmin: loginUserId }
-        ]
-      };
-    }
-    const users = await User.find(userQuery).select("tags _id firstname lastname").lean();
-    const usersMap = {};
-    users.forEach((u) => {
-      usersMap[u._id.toString()] = `${u.firstname} ${u.lastname}`.trim();
-    });
-
     const contact = await Model.findOne(query)
       .select("-__v -updatedAt")
       .lean();
@@ -436,6 +443,22 @@ exports.getSingleContactOrLead = async (req, res) => {
         message: "Contact not found",
       });
     }
+
+    // -----------------------
+    // Fetch relevant users for names and tag filtering
+    // -----------------------
+    const userIdsToFetch = [
+      ...new Set([
+        loginUserId.toString(),
+        contact.createdBy?.toString()
+      ].filter(Boolean))
+    ];
+
+    const users = await User.find({ _id: { $in: userIdsToFetch } }).select("tags _id firstname lastname").lean();
+    const usersMap = {};
+    users.forEach((u) => {
+      usersMap[u._id.toString()] = `${u.firstname || ""} ${u.lastname || ""}`.trim();
+    });
 
     // Clean phone numbers
     if (Array.isArray(contact.phoneNumbers)) {

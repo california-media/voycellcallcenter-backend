@@ -299,6 +299,36 @@ const addEditContactisLeads = async (req, res) => {
         .status(404)
         .json({ status: "error", message: "Record not found" });
 
+    // ------------------------------------------------------------------
+    // PERMISSION CHECK
+    // ------------------------------------------------------------------
+    const requesterId = String(req.user._id);
+
+    const requesterUser = await User.findById(requesterId).lean();
+
+    const requesterRole = String(requesterUser.role);
+
+    console.log("requesterId", requesterId);
+    console.log("requesterRole", requesterRole);
+
+    if (requesterRole === "user") {
+      const isCreator = String(existing.createdBy) === requesterId;
+      const assignedArray = Array.isArray(existing.assignedTo) ? existing.assignedTo.map(id => String(id)) : [];
+      const isAssignee = assignedArray.includes(requesterId);
+      if (!isCreator && !isAssignee) {
+        return res.status(403).json({ status: "error", message: "Unauthorized: You do not have permission to edit this record." });
+      }
+    } else if (requesterRole === "companyAdmin") {
+      // Admin can edit their own or their agents'
+      const agents = await User.find({ createdByWhichCompanyAdmin: requesterId }).select("_id").lean();
+      const agentIds = agents.map(a => String(a._id));
+      const recordCreatorId = String(existing.createdBy);
+
+      if (recordCreatorId !== requesterId && !agentIds.includes(recordCreatorId)) {
+        return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
+      }
+    }
+
     const prevCategory = existing.isLead ? "lead" : "contact";
 
     // // Duplicate check for updates → exclude current doc
@@ -593,8 +623,10 @@ const deleteContactOrLead = async (req, res) => {
     // Find and delete record
     const record = await currentModel.findOneAndDelete({
       _id: contact_id,
-      // createdBy: userId,
-      createdBy: { $in: allowedUserIds },
+      $or: [
+        { createdBy: { $in: allowedUserIds } },
+        { assignedTo: req.user._id }
+      ]
     });
 
     if (!record) {
@@ -633,7 +665,7 @@ const toggleContactFavorite = async (req, res) => {
     }
 
     // Determine access scope
-    let createdByFilter = { createdBy: req.user._id };
+    let accessFilter = { createdBy: req.user._id };
 
     // If Company Admin → include agents
     if (user.role === "companyAdmin") {
@@ -643,8 +675,16 @@ const toggleContactFavorite = async (req, res) => {
 
       const agentIds = agents.map((a) => a._id);
 
-      createdByFilter = {
+      accessFilter = {
         createdBy: { $in: [user._id, ...agentIds] },
+      };
+    } else if (user.role === "user") {
+      // Agent → can see their own OR assigned to them
+      accessFilter = {
+        $or: [
+          { createdBy: req.user._id },
+          { assignedTo: req.user._id }
+        ]
       };
     }
 
@@ -669,11 +709,11 @@ const toggleContactFavorite = async (req, res) => {
       let record =
         (await Contact.findOne({
           _id: contact_id,
-          ...createdByFilter,
+          ...accessFilter,
         })) ||
         (await Lead.findOne({
           _id: contact_id,
-          ...createdByFilter,
+          ...accessFilter,
         }));
 
       if (!record) {
@@ -1176,6 +1216,76 @@ const updateAttachments = async (req, res) => {
   }
 };
 
+const assignContactOrLead = async (req, res) => {
+  try {
+    const { contact_ids, agent_id, agent_ids, category, assigned } = req.body;
+    const adminId = req.user._id;
+
+    if (!contact_ids || !Array.isArray(contact_ids) || contact_ids.length === 0) {
+      return res.status(400).json({ status: "error", message: "contact_ids array is required." });
+    }
+
+    if (!category || (category !== "contact" && category !== "lead")) {
+      return res.status(400).json({ status: "error", message: "category is required: contact or lead" });
+    }
+
+    const Model = category === "lead" ? Lead : Contact;
+    const itemType = category === "lead" ? "Lead" : "Contact";
+
+    // Normalize agent_ids to an array
+    const targetAgentIds = Array.isArray(agent_ids) ? agent_ids : (agent_id ? [agent_id] : []);
+
+    if (targetAgentIds.length === 0) {
+      return res.status(400).json({ status: "error", message: "At least one agent_id or agent_ids array is required." });
+    }
+
+    // Verify all agents belong to this company admin and are users
+    const validAgents = await User.find({
+      _id: { $in: targetAgentIds },
+      createdByWhichCompanyAdmin: adminId,
+      role: "user"
+    }).select("firstname lastname");
+
+    if (validAgents.length !== targetAgentIds.length) {
+      return res.status(404).json({ status: "error", message: "One or more agents not found in your company." });
+    }
+
+    const agentNames = validAgents.map(a => `${a.firstname} ${a.lastname}`).join(", ");
+
+    // Determine action based on 'assigned' flag (default to true if not provided)
+    const isAssigning = assigned !== false;
+    const updateQuery = isAssigning
+      ? { $addToSet: { assignedTo: { $each: targetAgentIds } } }
+      : { $pull: { assignedTo: { $in: targetAgentIds } } };
+
+    const results = await Model.updateMany(
+      { _id: { $in: contact_ids }, createdBy: adminId },
+      updateQuery
+    );
+
+    const actionText = isAssigning ? "Assigned to" : "Unassigned from";
+    const activityAction = isAssigning ? "contact_assigned" : "contact_unassigned";
+
+    // Activity Log
+    for (const id of contact_ids) {
+      await logActivityToContact(category, id, {
+        action: activityAction,
+        type: category,
+        title: isAssigning ? "Contact Assigned" : "Contact Unassigned",
+        description: `${actionText} agents: ${agentNames}`,
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: `${itemType}(s) ${isAssigning ? "assigned to" : "unassigned from"} ${agentNames} successfully.`,
+      modifiedCount: results.modifiedCount,
+    });
+  } catch (error) {
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+};
+
 module.exports = {
   addEditContactisLeads,
   deleteContactOrLead,
@@ -1183,4 +1293,5 @@ module.exports = {
   batchDeleteContacts,
   updateFirstPhoneOrEmail,
   updateAttachments,
+  assignContactOrLead,
 };
