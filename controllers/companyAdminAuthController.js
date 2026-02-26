@@ -237,6 +237,36 @@ const signupWithEmail = async (req, res) => {
         console.error("Failed to send demo email:", emailErr.message);
       }
 
+      // ✅ CREATE NEW SESSION (MULTI-SESSION SUPPORT)
+      const newSessionId = randomBytes(32).toString("hex");
+      const deviceId = req.body.deviceId || createHmac("sha256", "voycell-fingerprint").update((req.headers["user-agent"] || "") + (req.ip || "")).digest("hex");
+
+      const sessionData = {
+        sessionId: newSessionId,
+        deviceId: deviceId,
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+        createdAt: new Date()
+      };
+
+      // If login from a DIFFERENT device, clear everything
+      const otherDeviceSessions = user.activeSessions.filter(s => s.deviceId !== deviceId);
+      if (otherDeviceSessions.length > 0) {
+        user.activeSessions = [];
+      }
+
+      // Handle same-device sessions (limit to 2)
+      const sameDeviceSessions = user.activeSessions.filter(s => s.deviceId === deviceId);
+      if (sameDeviceSessions.length >= 2) {
+        // Remove oldest session on this device
+        const oldestOnDevice = sameDeviceSessions.sort((a, b) => a.createdAt - b.createdAt)[0];
+        user.activeSessions = user.activeSessions.filter(s => s.sessionId !== oldestOnDevice.sessionId);
+      }
+
+      user.activeSessions.push(sessionData);
+      user.activeSessionId = newSessionId; // Backward compatibility
+      await user.save();
+
       const token = createTokenforUser(user);
 
       return res.status(200).json({
@@ -1101,10 +1131,34 @@ const unifiedLogin = async (req, res) => {
         }
 
 
-        // ✅ CREATE NEW SESSION (DESTROYS OLD LOGIN)
+        // ✅ CREATE NEW SESSION (MULTI-SESSION SUPPORT)
         const newSessionId = randomBytes(32).toString("hex");
+        const deviceId = req.body.deviceId || createHmac("sha256", "voycell-fingerprint").update((req.headers["user-agent"] || "") + (req.ip || "")).digest("hex");
 
-        user.activeSessionId = newSessionId;
+        const sessionData = {
+          sessionId: newSessionId,
+          deviceId: deviceId,
+          ip: req.ip,
+          userAgent: req.headers["user-agent"],
+          createdAt: new Date()
+        };
+
+        // If login from a DIFFERENT device, clear everything
+        const otherDeviceSessions = user.activeSessions.filter(s => s.deviceId !== deviceId);
+        if (otherDeviceSessions.length > 0) {
+          user.activeSessions = [];
+        }
+
+        // Handle same-device sessions (limit to 2)
+        const sameDeviceSessions = user.activeSessions.filter(s => s.deviceId === deviceId);
+        if (sameDeviceSessions.length >= 2) {
+          // Remove oldest session on this device
+          const oldestOnDevice = sameDeviceSessions.sort((a, b) => a.createdAt - b.createdAt)[0];
+          user.activeSessions = user.activeSessions.filter(s => s.sessionId !== oldestOnDevice.sessionId);
+        }
+
+        user.activeSessions.push(sessionData);
+        user.activeSessionId = newSessionId; // Backward compatibility
         user.isActive = true;
         user.lastSeen = new Date();
         // ✅ Reset failed login attempts

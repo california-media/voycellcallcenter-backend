@@ -222,6 +222,16 @@ const userSchema = new Schema(
       default: null,
     },
 
+    activeSessions: [
+      {
+        sessionId: { type: String, required: true },
+        deviceId: { type: String, required: true },
+        ip: String,
+        userAgent: String,
+        createdAt: { type: Date, default: Date.now }
+      }
+    ],
+
     magicLoginToken: {
       type: String,
       default: null,

@@ -11,7 +11,7 @@ const { createTokenforUser } = require("../../services/authentication");
  * ======================================================
  * User verifies email and sets password
  */
-exports.verifyUser = async (req, res) => {    
+exports.verifyUser = async (req, res) => {
     try {
         const { verifyToken, password } = req.body;
 
@@ -35,6 +35,34 @@ exports.verifyUser = async (req, res) => {
         user.emailVerificationToken = undefined;
         user.password = password;
 
+        // ✅ CREATE NEW SESSION (MULTI-SESSION SUPPORT)
+        const newSessionId = crypto.randomBytes(32).toString("hex");
+        const deviceId = req.body.deviceId || crypto.createHmac("sha256", "voycell-fingerprint").update((req.headers["user-agent"] || "") + (req.ip || "")).digest("hex");
+
+        const sessionData = {
+            sessionId: newSessionId,
+            deviceId: deviceId,
+            ip: req.ip,
+            userAgent: req.headers["user-agent"],
+            createdAt: new Date()
+        };
+
+        // If login from a DIFFERENT device, clear everything
+        const otherDeviceSessions = user.activeSessions.filter(s => s.deviceId !== deviceId);
+        if (otherDeviceSessions.length > 0) {
+            user.activeSessions = [];
+        }
+
+        // Handle same-device sessions (limit to 2)
+        const sameDeviceSessions = user.activeSessions.filter(s => s.deviceId === deviceId);
+        if (sameDeviceSessions.length >= 2) {
+            // Remove oldest session on this device
+            const oldestOnDevice = sameDeviceSessions.sort((a, b) => a.createdAt - b.createdAt)[0];
+            user.activeSessions = user.activeSessions.filter(s => s.sessionId !== oldestOnDevice.sessionId);
+        }
+
+        user.activeSessions.push(sessionData);
+        user.activeSessionId = newSessionId; // Backward compatibility
         await user.save();
 
         const token = createTokenforUser(user);

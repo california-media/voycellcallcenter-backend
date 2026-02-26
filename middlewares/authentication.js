@@ -51,18 +51,23 @@ const checkForAuthentication = () => {
     try {
       const payload = validateToken(token);
 
-      const user = await User.findById(payload._id).select("activeSessionId");
+      const user = await User.findById(payload._id).select("activeSessions activeSessionId");
 
       if (!user) {
         return res.status(401).json({ message: "Unauthorized: User not found" });
       }
 
-      // // ✅ SINGLE DEVICE ENFORCEMENT
-      // if (user.activeSessionId !== payload.sessionId) {
-      //   return res.status(401).json({
-      //     message: "You are logged in on another device.",
-      //   });
-      // }
+      // ✅ MULTI-SESSION ENFORCEMENT
+      const isSessionActive = user.activeSessions.some(s => s.sessionId === payload.sessionId);
+
+      // Fallback for sessions created before this update (if any) or if matching legacy field
+      const isLegacySession = user.activeSessionId === payload.sessionId;
+
+      if (!isSessionActive && !isLegacySession) {
+        return res.status(401).json({
+          message: "Your session has expired or you are logged in on another device.",
+        });
+      }
 
       req.user = payload;
       next();
