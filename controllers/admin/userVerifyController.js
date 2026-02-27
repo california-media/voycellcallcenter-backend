@@ -22,6 +22,37 @@ exports.verifyUser = async (req, res) => {
             });
         }
 
+
+        // 🔐 Detailed Password Validation
+        const passwordErrors = [];
+
+        if (password.length < 8) {
+            passwordErrors.push("Password must be at least 8 characters long.");
+        }
+
+        if (!/[A-Z]/.test(password)) {
+            passwordErrors.push("Password must contain at least one uppercase letter.");
+        }
+
+        if (!/[a-z]/.test(password)) {
+            passwordErrors.push("Password must contain at least one lowercase letter.");
+        }
+
+        if (!/[0-9]/.test(password)) {
+            passwordErrors.push("Password must contain at least one number.");
+        }
+
+        if (!/[!@#$%^&*(),.?\":{}|<>_\-+=]/.test(password)) {
+            passwordErrors.push("Password must contain at least one special character.");
+        }
+
+        if (passwordErrors.length > 0) {
+            return res.status(400).json({
+                status: "error",
+                message: passwordErrors,
+            });
+        }
+
         const user = await User.findOne({ emailVerificationToken: verifyToken });
         if (!user) {
             return res.status(400).json({

@@ -37,18 +37,8 @@ function formatDate(date, fallbackTime) {
 function normalizeNumber(number) {
   if (!number) return "";
 
-  let cleaned = number
-    .toString()
-    .replace(/\s+/g, "") // remove spaces
-    .replace(/^\+/, "") // remove leading +
-    .replace(/\D/g, ""); // remove all non-digits
-
-  // Remove leading 0 if present
-  if (cleaned.startsWith("0")) {
-    cleaned = cleaned.substring(1);
-  }
-
-  return cleaned;
+  // Simply remove non-digits, but keep original if possible for parsing
+  return number.toString().replace(/\D/g, "");
 }
 
 // ======================================================
@@ -57,41 +47,54 @@ function normalizeNumber(number) {
 function extractNumberDetails(rawNumber) {
   if (!rawNumber) return null;
 
-  let cleaned = rawNumber.replace(/\D/g, "");
-  let toParse = rawNumber;
+  let cleaned = rawNumber.toString().replace(/\D/g, "");
+  let toParse = rawNumber.toString();
 
-  // UAE aggressive heuristics
-  if (!rawNumber.startsWith("+")) {
-    // 1. If 9 digits starting with 50, 52, 54, 55, 56, 58 -> UAE mobile missing prefix
+  // 1. Handle "00" prefix as international "+"
+  if (cleaned.startsWith("00")) {
+    toParse = "+" + cleaned.substring(2);
+  }
+  // 2. Handle "0" prefix for long numbers (11+ digits) as potential international
+  else if (cleaned.startsWith("0") && cleaned.length >= 11) {
+    toParse = "+" + cleaned.substring(1);
+  }
+  // 3. UAE aggressive heuristics if not already handled
+  else if (!toParse.startsWith("+")) {
+    // If 9 digits starting with 50, 52, 54, 55, 56, 58 -> UAE mobile missing prefix
     if (cleaned.length === 9 && /^(50|52|54|55|56|58)/.test(cleaned)) {
       toParse = "0" + cleaned;
     }
-    // 2. If 12 digits starting with 971 -> UAE with country code but no +
+    // If 12 digits starting with 971 -> UAE with country code but no +
     else if (cleaned.length === 12 && cleaned.startsWith("971")) {
       toParse = "+" + cleaned;
     }
   }
 
+  // Attempt parsing with UAE hint first (common for this app)
   let parsed = parsePhoneNumberFromString(toParse, "AE");
 
-  // If still fails and no +, try one more time by prepending +
-  if (!parsed && !toParse.startsWith("+")) {
-    parsed = parsePhoneNumberFromString("+" + toParse);
+  // 4. If still fails or invalid, try stripping all leading zeros and prepending + (strict international)
+  if (!parsed || !parsed.isValid()) {
+    let cleanNoZeros = cleaned.replace(/^0+/, "");
+    if (cleanNoZeros) {
+      let globalTry = parsePhoneNumberFromString("+" + cleanNoZeros);
+      if (globalTry && globalTry.isValid()) {
+        parsed = globalTry;
+      }
+    }
   }
 
-  // If still fails or invalid → fallback
+  // Final fallback if libphonenumber fails
   if (!parsed || !parsed.isValid()) {
-    let finalNumber = cleaned;
-    // Strip leading 0 if present for the "number" part
-    if (finalNumber.startsWith("0")) finalNumber = finalNumber.substring(1);
-
-    // If it was 9 digits starting with 5, it's likely UAE
+    // If it was 9 digits starting with 5, it's likely UAE missing leading 0
     if (cleaned.length === 9 && /^(50|52|54|55|56|58)/.test(cleaned)) {
       return { countryCode: "971", number: cleaned };
     }
 
+    // Default to UAE + last 10 digits as a last resort
+    let finalNumber = cleaned.replace(/^0+/, "");
     return {
-      countryCode: "971", // Default to UAE
+      countryCode: "971",
       number: finalNumber.slice(-10),
     };
   }
@@ -268,7 +271,7 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
                 countryCode: fromDetails.countryCode || "971",
                 number: fromDetails.number
               }],
-              status: "no answer",
+              status: "noAnswer",
               createdBy: userId,
               activities: [{
                 action: "Lead Created",
@@ -285,11 +288,11 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
 
         // If records exist, update status to "no answer"
         if (fromRecord) {
-          fromRecord.status = "no answer";
+          fromRecord.status = "noAnswer";
           await fromRecord.save();
         }
         if (toRecord) {
-          toRecord.status = "no answer";
+          toRecord.status = "noAnswer";
           await toRecord.save();
         }
       }
