@@ -56,10 +56,11 @@ exports.getAllContactsOrLeads = async (req, res) => {
       Model = Contact;
     }
 
-    let query = {};
+    let queryTerms = [];
 
     if (userRole === "companyAdmin") {
-      query.createdBy = { $in: allowedUserIds };
+      // Base company admin permission: see their own or their agents'
+      let basePermission = { createdBy: { $in: allowedUserIds } };
 
       // If filtering by specific agents
       if (Array.isArray(agentId) && agentId.length > 0) {
@@ -70,20 +71,25 @@ exports.getAllContactsOrLeads = async (req, res) => {
           .filter(Boolean);
 
         // Filter validAgentIds to only include those under this admin
-        const filteredAgentIds = validAgentIds.filter(id => allowedUserIds.some(aid => aid.equals(id)));
+        const filteredAgentIds = validAgentIds.filter(id => allowedUserIds.some(aid => String(aid) === String(id)));
 
-        query.createdBy = undefined; // clear previous createdBy
-        query.$or = [
-          { createdBy: { $in: filteredAgentIds } },
-          { assignedTo: { $in: filteredAgentIds } }
-        ];
+        // If filtering by agents, we want records createdBy OR assignedTo those agents
+        basePermission = {
+          $or: [
+            { createdBy: { $in: filteredAgentIds } },
+            { assignedTo: { $in: filteredAgentIds } }
+          ]
+        };
       }
+      queryTerms.push(basePermission);
     } else {
       // Agent -> sees their own OR assigned to them
-      query.$or = [
-        { createdBy: userId },
-        { assignedTo: userId }
-      ];
+      queryTerms.push({
+        $or: [
+          { createdBy: userId },
+          { assignedTo: userId }
+        ]
+      });
     }
 
     // -----------------------
@@ -92,27 +98,27 @@ exports.getAllContactsOrLeads = async (req, res) => {
 
     // Filter favourites - only filter if explicitly set to true
     if (isFavourite === true || String(isFavourite).toLowerCase() === "true") {
-      query.isFavourite = true;
+      queryTerms.push({ isFavourite: true });
     }
-    // Note: If isFavourite is false or null, we show all contacts (no filter)
 
     // Filter by status - direct string matching
     if (Array.isArray(status) && status.length > 0) {
-      // Simple $in with string values
-      query.status = { $in: status };
+      queryTerms.push({ status: { $in: status } });
     } else if (typeof status === "string" && status.trim() !== "") {
-      query.status = status.trim();
+      queryTerms.push({ status: status.trim() });
     }
 
     // -----------------------
     // Filter by tags (MULTIPLE TAGS - ANY MATCH)
     // -----------------------
     if (Array.isArray(tag) && tag.length > 0) {
-      query["tags.tag"] = {
-        $in: tag
-          .filter(t => typeof t === "string" && t.trim() !== "")
-          .map(t => new RegExp(`^${escapeRegex(t.trim())}$`, "i")),
-      };
+      queryTerms.push({
+        "tags.tag": {
+          $in: tag
+            .filter(t => typeof t === "string" && t.trim() !== "")
+            .map(t => new RegExp(`^${escapeRegex(t.trim())}$`, "i")),
+        }
+      });
     }
 
 
@@ -124,7 +130,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
       const escaped = escapeRegex(raw);
       const regexInsensitive = new RegExp(escaped, "i");
 
-      const or = [
+      const orConditions = [
         { firstname: { $regex: regexInsensitive } },
         { lastname: { $regex: regexInsensitive } },
         { emailAddresses: { $elemMatch: { $regex: regexInsensitive } } },
@@ -141,12 +147,11 @@ exports.getAllContactsOrLeads = async (req, res) => {
         },
       ];
 
-      // Extract only digits for phone search (handles +92 3303521767 → 923303521767)
+      // Extract only digits for phone search
       const digitsOnly = raw.replace(/\D/g, "");
 
       if (digitsOnly.length > 0) {
-        // Search in concatenated countryCode + number
-        or.push({
+        orConditions.push({
           $expr: {
             $regexMatch: {
               input: {
@@ -158,7 +163,7 @@ exports.getAllContactsOrLeads = async (req, res) => {
                       "$$value",
                       { $ifNull: ["$$this.countryCode", ""] },
                       { $ifNull: ["$$this.number", ""] },
-                      "|", // separator to allow multiple phone numbers
+                      "|",
                     ],
                   },
                 },
@@ -170,8 +175,11 @@ exports.getAllContactsOrLeads = async (req, res) => {
         });
       }
 
-      query.$or = or;
+      queryTerms.push({ $or: orConditions });
     }
+
+    // Combine all terms into a single query
+    const query = queryTerms.length > 0 ? { $and: queryTerms } : {};
 
     // -----------------------
     // Count & Fetch
@@ -188,17 +196,20 @@ exports.getAllContactsOrLeads = async (req, res) => {
 
 
     // -----------------------
-    // Fetch relevant users for names and tag filtering
+    // Fetch relevant users (creators + assigned agents)
     // -----------------------
-    const creatorIds = [
-      ...new Set([
-        userId.toString(),
-        ...items.map(item => item.createdBy?.toString()).filter(Boolean)
-      ])
-    ];
+    const allRelevantUserIds = new Set();
+    allRelevantUserIds.add(userId.toString()); // Logged-in user
+
+    items.forEach(item => {
+      if (item.createdBy) allRelevantUserIds.add(item.createdBy.toString());
+      if (Array.isArray(item.assignedTo)) {
+        item.assignedTo.forEach(id => allRelevantUserIds.add(id.toString()));
+      }
+    });
 
     const users = await User.find(
-      { _id: { $in: creatorIds } },
+      { _id: { $in: Array.from(allRelevantUserIds) } },
       { firstname: 1, lastname: 1, tags: 1 }
     ).lean();
 
@@ -256,6 +267,13 @@ exports.getAllContactsOrLeads = async (req, res) => {
         item.tags = [];
       }
 
+      // Map assignedTo IDs to names
+      item.assignedNames = Array.isArray(item.assignedTo)
+        ? item.assignedTo
+          .map(id => usersMap[id.toString()])
+          .filter(Boolean)
+        : [];
+
       // Add contact_id alias
       item.contact_id = item._id?.toString();
       // ✅ ADD AGENT NAME
@@ -297,7 +315,6 @@ exports.getAllContactsOrLeads = async (req, res) => {
     });
   }
 };
-
 
 exports.getAllActivities = async (req, res) => {
   try {
@@ -527,7 +544,6 @@ exports.getSingleContactOrLead = async (req, res) => {
     });
   }
 };
-
 
 exports.getAllContactOrLeadForEvent = async (req, res) => {
   try {

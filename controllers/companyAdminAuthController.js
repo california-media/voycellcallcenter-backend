@@ -508,14 +508,13 @@ const verifyRealPhoneNumber = async (req, res) => {
 
 
     const existingPhoneUser = await User.findOne({
+      _id: { $ne: userId },
       phonenumbers: {
         $elemMatch: {
           countryCode: sanitizedCountryCode,
           number: sanitizedNumber,
-          isVerified: true || false, // only block verified numbers (recommended)
         },
       },
-      _id: { $ne: userId }, // exclude current user
     });
 
     if (existingPhoneUser) {

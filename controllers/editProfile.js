@@ -155,37 +155,113 @@ const editProfile = async (req, res) => {
       }
     }
 
+    // if (Array.isArray(parsedPhones) && parsedPhones.length > 0) {
+    //   const normalizedPhones = parsedPhones.map((p) => ({
+    //     countryCode: String(p.countryCode || "").replace(/\D/g, ""),
+    //     number: String(p.number || "").replace(/\D/g, ""),
+    //   }));
+
+    //   // Prevent change if user signed up by phone
+    //   if (user.signupMethod === "phoneNumber") {
+    //     const currentPhones = user.phonenumbers || [];
+    //     const sameNumbers =
+    //       currentPhones.length === normalizedPhones.length &&
+    //       currentPhones.every((cur, i) => {
+    //         const newP = normalizedPhones[i];
+    //         return (
+    //           cur.countryCode === newP.countryCode && cur.number === newP.number
+    //         );
+    //       });
+
+    //     if (!sameNumbers) {
+    //       return res.status(400).json({
+    //         status: "error",
+    //         message: "You cannot change phone number for this account.",
+    //       });
+    //     }
+    //   } else {
+    //     // Check duplicates
+    //     // for (const p of normalizedPhones) {
+    //     //   const exists = await User.findOne({
+    //     //     phonenumbers: { $elemMatch: p },
+    //     //     _id: { $ne: user._id },
+    //     //   });
+    //     //   if (exists) {
+    //     //     return res.status(400).json({
+    //     //       status: "error",
+    //     //       message: `Phone number +${p.countryCode}${p.number} is already used.`,
+    //     //     });
+    //     //   }
+    //     // }
+
+    //     for (const p of normalizedPhones) {
+    //       const exists = await User.findOne({
+    //         _id: { $ne: user._id }, // 👈 exclude current logged-in user
+    //         phonenumbers: {
+    //           $elemMatch: {
+    //             countryCode: p.countryCode,
+    //             number: p.number,
+    //           },
+    //         },
+    //       });
+
+    //       if (exists) {
+    //         return res.status(400).json({
+    //           status: "error",
+    //           message: `Phone number +${p.countryCode}${p.number} is already used.`,
+    //         });
+    //       }
+    //     }
+
+    //     // ✅ Important: markModified ensures mongoose saves the array
+    //     user.phonenumbers = normalizedPhones;
+    //     user.markModified("phonenumbers");
+    //   }
+    // }
+
+    // === Profile Image Removal (Works for Postman + Frontend) ===
+
+    // === Phone Number Validation ===
+    // let parsedPhones = phonenumbers;
+
+    // // 🧠 Handle form-data case: parse stringified JSON
+    // if (typeof phonenumbers === "string") {
+    //   try {
+    //     parsedPhones = JSON.parse(phonenumbers);
+    //   } catch (err) {
+    //     parsedPhones = [];
+    //   }
+    // }
+
     if (Array.isArray(parsedPhones) && parsedPhones.length > 0) {
       const normalizedPhones = parsedPhones.map((p) => ({
         countryCode: String(p.countryCode || "").replace(/\D/g, ""),
         number: String(p.number || "").replace(/\D/g, ""),
       }));
 
-      // Prevent change if user signed up by phone
-      if (user.signupMethod === "phoneNumber") {
-        const currentPhones = user.phonenumbers || [];
-        const sameNumbers =
-          currentPhones.length === normalizedPhones.length &&
-          currentPhones.every((cur, i) => {
-            const newP = normalizedPhones[i];
-            return (
-              cur.countryCode === newP.countryCode && cur.number === newP.number
-            );
-          });
+      const currentPhones = user.phonenumbers || [];
 
-        if (!sameNumbers) {
-          return res.status(400).json({
-            status: "error",
-            message: "You cannot change phone number for this account.",
-          });
-        }
-      } else {
-        // Check duplicates
+      const isSameNumber =
+        currentPhones.length === normalizedPhones.length &&
+        currentPhones.every((cur, i) => {
+          return (
+            cur.countryCode === normalizedPhones[i]?.countryCode &&
+            cur.number === normalizedPhones[i]?.number
+          );
+        });
+
+      if (!isSameNumber) {
         for (const p of normalizedPhones) {
           const exists = await User.findOne({
-            phonenumbers: { $elemMatch: p },
             _id: { $ne: user._id },
+            phonenumbers: {
+              $elemMatch: {
+                countryCode: p.countryCode,
+                number: p.number,
+              },
+            },
           });
+
           if (exists) {
             return res.status(400).json({
               status: "error",
@@ -194,13 +270,17 @@ const editProfile = async (req, res) => {
           }
         }
 
-        // ✅ Important: markModified ensures mongoose saves the array
-        user.phonenumbers = normalizedPhones;
+        // 🔥 If changed → mark unverified
+        user.phonenumbers = normalizedPhones.map((p) => ({
+          countryCode: p.countryCode,
+          number: p.number,
+          isVerified: false,
+        }));
+
         user.markModified("phonenumbers");
       }
     }
 
-    // === Profile Image Removal (Works for Postman + Frontend) ===
     const rawProfileImageField = req.body.profileImage;
 
     // ✅ Remove if explicitly sent as empty

@@ -683,7 +683,7 @@ const toggleContactFavorite = async (req, res) => {
       accessFilter = {
         $or: [
           { createdBy: req.user._id },
-          { assignedTo: req.user._id }
+          { assignedTo: { $in: [req.user._id] } }
         ]
       };
     }
@@ -768,7 +768,7 @@ const toggleContactFavorite = async (req, res) => {
     // Find the record
     const record = await currentModel.findOne({
       _id: contact_id,
-      ...createdByFilter,
+      ...accessFilter,
     });
 
     if (!record) {
@@ -929,31 +929,56 @@ const updateFirstPhoneOrEmail = async (req, res) => {
       });
     }
 
-    // Determine which model to use based on category
+    // Determine which model to use based on category or try both if not provided
     const isLeadReq = category && category.toLowerCase() === "lead";
-    const currentModel = isLeadReq ? Lead : Contact;
-    const itemType = isLeadReq ? "lead" : "contact";
+    const currentModel = isLeadReq ? Lead : (category ? Contact : null);
 
-    // Find the record
-    const contact = await currentModel.findOne({
-      _id: contact_id,
-      createdBy: req.user._id,
-    });
+    let existing = null;
+    if (currentModel) {
+      existing = await currentModel.findOne({ contact_id });
+    } else {
+      existing = (await Contact.findOne({ contact_id })) || (await Lead.findOne({ contact_id }));
+    }
 
-    if (!contact) {
+    if (!existing) {
       return res.status(404).json({
         status: "error",
-        message: `${itemType.charAt(0).toUpperCase() + itemType.slice(1)
-          } not found or unauthorized`,
+        message: "Record not found",
       });
     }
 
-    // Update based on field type
-    if (field === "phone") {
-      // Parse phone number - expecting format like "+1 1234567890" or "1234567890"
-      const trimmedValue = value.trim();
+    const itemType = existing.isLead ? "lead" : "contact";
 
-      // ✅ Parse full phone number using libphonenumber-js
+    // ------------------------------------------------------------------
+    // PERMISSION CHECK
+    // ------------------------------------------------------------------
+    const requesterId = String(req.user._id);
+    const requesterRole = String(user.role);
+
+    if (requesterRole === "user") {
+      const isCreator = String(existing.createdBy) === requesterId;
+      const assignedArray = Array.isArray(existing.assignedTo) ? existing.assignedTo.map(id => String(id)) : [];
+      const isAssignee = assignedArray.includes(requesterId);
+      if (!isCreator && !isAssignee) {
+        return res.status(403).json({ status: "error", message: "Unauthorized: You do not have permission to edit this record." });
+      }
+    } else if (requesterRole === "companyAdmin") {
+      const agents = await User.find({ createdByWhichCompanyAdmin: requesterId }).select("_id").lean();
+      const agentIds = agents.map(a => String(a._id));
+      const recordCreatorId = String(existing.createdBy);
+
+      if (recordCreatorId !== requesterId && !agentIds.includes(recordCreatorId)) {
+        return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // DUPLICATE CHECK
+    // ------------------------------------------------------------------
+    const { existingPhones, existingEmails, phoneOwnerMap, emailOwnerMap } = await buildGlobalDuplicateSets(req.user._id);
+
+    if (field === "phone") {
+      const trimmedValue = value.trim();
       const phoneNumber = parsePhoneNumberFromString(trimmedValue);
 
       if (!phoneNumber || !phoneNumber.isValid()) {
@@ -963,67 +988,61 @@ const updateFirstPhoneOrEmail = async (req, res) => {
         });
       }
 
-      // ✅ Extract properly formatted values
-      const countryCode = phoneNumber.countryCallingCode; // like "91"
-      const number = phoneNumber.nationalNumber; // like "9876543210"
+      const cc = phoneNumber.countryCallingCode ? String(phoneNumber.countryCallingCode) : "";
+      const digits = String(phoneNumber.nationalNumber || "").replace(/\D/g, "");
+      const plus = cc ? `+${cc}${digits}` : digits;
+      const noPlus = cc ? `${cc}${digits}` : digits;
 
-      if (!number) {
-        return res.status(400).json({
+      let duplicateFound = null;
+      const owner = phoneOwnerMap.get(plus) || phoneOwnerMap.get(noPlus) || phoneOwnerMap.get(digits);
+
+      if (owner && String(owner.contactId) !== String(existing.contact_id || existing._id)) {
+        duplicateFound = owner;
+      }
+
+      if (duplicateFound) {
+        const ownerId = duplicateFound.createdBy;
+        const ownerUser = await User.findById(ownerId).lean();
+        const ownerUserName = ownerUser ? ownerUser.firstname + " " + ownerUser.lastname : "Unknown";
+        return res.status(409).json({
           status: "error",
-          message: "Invalid phone number format",
+          message: "Another record in your company already has this phone number",
+          duplicate: {
+            model: duplicateFound.model,
+            contactId: duplicateFound.contactId,
+            name: `${duplicateFound.firstname} ${duplicateFound.lastname}`.trim(),
+            ownerUserId: duplicateFound.createdBy,
+            ownerUserName: ownerUserName,
+          },
         });
       }
 
-      // Check if phone already exists for another record in both models
-      const duplicatePhone =
-        (await Contact.findOne({
-          _id: { $ne: contact_id },
-          createdBy: req.user._id,
-          phoneNumbers: {
-            $elemMatch: { countryCode, number },
-          },
-        })) ||
-        (await Lead.findOne({
-          _id: { $ne: contact_id },
-          createdBy: req.user._id,
-          phoneNumbers: {
-            $elemMatch: { countryCode, number },
-          },
-        }));
-
-      if (duplicatePhone) {
-        return res.status(400).json({
-          status: "error",
-          message: "This phone number already exists for another record",
-        });
-      }
-
-      // Update first phone number or add new if none exists
-      if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
-        contact.phoneNumbers[0] = { countryCode, number };
+      // Update first phone number or add new
+      if (existing.phoneNumbers && existing.phoneNumbers.length > 0) {
+        existing.phoneNumbers[0] = { countryCode: cc, number: digits };
       } else {
-        contact.phoneNumbers = [{ countryCode, number }];
+        existing.phoneNumbers = [{ countryCode: cc, number: digits }];
       }
 
-      await contact.save();
+      await existing.save();
 
-      await logActivityToContact(itemType, contact._id, {
+      await logActivityToContact(itemType, existing._id, {
         action: `${itemType}_phone_updated`,
         type: itemType,
         title: "Phone Number Updated",
-        description: `Phone updated to +${countryCode} ${number}`,
+        description: `Phone updated to +${cc} ${digits}`,
       });
 
-      res.status(200).json({
+      return res.status(200).json({
         status: "success",
         message: "Phone number updated successfully",
         data: {
-          contact_id: contact._id,
-          phone: `+${countryCode} ${number}`,
+          contact_id: existing.contact_id,
+          phone: `+${cc} ${digits}`,
         },
       });
+
     } else if (field === "email") {
-      // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(value)) {
         return res.status(400).json({
@@ -1032,48 +1051,48 @@ const updateFirstPhoneOrEmail = async (req, res) => {
         });
       }
 
-      // Check if email already exists for another record in both models
-      const duplicateEmail =
-        (await Contact.findOne({
-          _id: { $ne: contact_id },
-          createdBy: req.user._id,
-          emailAddresses: value,
-        })) ||
-        (await Lead.findOne({
-          _id: { $ne: contact_id },
-          createdBy: req.user._id,
-          emailAddresses: value,
-        }));
+      const normalizedEmail = value.toLowerCase().trim();
+      const owner = emailOwnerMap.get(normalizedEmail);
 
-      if (duplicateEmail) {
-        return res.status(400).json({
+      if (owner && String(owner.contactId) !== String(existing.contact_id || existing._id)) {
+        const ownerId = owner.createdBy;
+        const ownerUser = await User.findById(ownerId).lean();
+        const ownerUserName = ownerUser ? ownerUser.firstname + " " + ownerUser.lastname : "Unknown";
+        return res.status(409).json({
           status: "error",
-          message: "This email already exists for another record",
+          message: "Another record in your company already has this email",
+          duplicate: {
+            model: owner.model,
+            contactId: owner.contactId,
+            name: `${owner.firstname} ${owner.lastname}`.trim(),
+            ownerUserId: owner.createdBy,
+            ownerUserName: ownerUserName,
+          },
         });
       }
 
-      // Update first email or add new if none exists
-      if (contact.emailAddresses && contact.emailAddresses.length > 0) {
-        contact.emailAddresses[0] = value;
+      // Update first email or add new
+      if (existing.emailAddresses && existing.emailAddresses.length > 0) {
+        existing.emailAddresses[0] = normalizedEmail;
       } else {
-        contact.emailAddresses = [value];
+        existing.emailAddresses = [normalizedEmail];
       }
 
-      await contact.save();
+      await existing.save();
 
-      await logActivityToContact(itemType, contact._id, {
+      await logActivityToContact(itemType, existing._id, {
         action: `${itemType}_email_updated`,
         type: itemType,
         title: "Email Updated",
-        description: `Email updated to ${value}`,
+        description: `Email updated to ${normalizedEmail}`,
       });
 
-      res.status(200).json({
+      return res.status(200).json({
         status: "success",
         message: "Email updated successfully",
         data: {
-          contact_id: contact._id,
-          email: value,
+          contact_id: existing.contact_id,
+          email: normalizedEmail,
         },
       });
     }
@@ -1104,18 +1123,44 @@ const updateAttachments = async (req, res) => {
       });
     }
 
-    // Find the contact
-    const contact = await Lead.findOne({
-      _id: contact_id,
-      createdBy: req.user._id,
-    });
+    const requesterId = req.user._id;
+    const user = await User.findById(requesterId).lean();
+    if (!user) return res.status(401).json({ status: "error", message: "User not found" });
 
-    if (!contact) {
+    // Find the record (try Lead then Contact if model not explicit)
+    let existing = (await Lead.findOne({ _id: contact_id })) || (await Contact.findOne({ _id: contact_id }));
+
+    if (!existing) {
       return res.status(404).json({
         status: "error",
-        message: "Contact not found or unauthorized",
+        message: "Record not found",
       });
     }
+
+    // ------------------------------------------------------------------
+    // PERMISSION CHECK
+    // ------------------------------------------------------------------
+    const requesterRole = String(user.role);
+
+    if (requesterRole === "user") {
+      const isCreator = String(existing.createdBy) === String(requesterId);
+      const assignedArray = Array.isArray(existing.assignedTo) ? existing.assignedTo.map(id => String(id)) : [];
+      const isAssignee = assignedArray.includes(String(requesterId));
+      if (!isCreator && !isAssignee) {
+        return res.status(403).json({ status: "error", message: "Unauthorized: You do not have permission to edit this record." });
+      }
+    } else if (requesterRole === "companyAdmin") {
+      const agents = await User.find({ createdByWhichCompanyAdmin: requesterId }).select("_id").lean();
+      const agentIds = agents.map(a => String(a._id));
+      const recordCreatorId = String(existing.createdBy);
+
+      if (recordCreatorId !== String(requesterId) && !agentIds.includes(recordCreatorId)) {
+        return res.status(403).json({ status: "error", message: "Unauthorized: Record belongs to another company." });
+      }
+    }
+
+    const contact = existing; // Use the found record
+    const itemType = contact.isLead ? "lead" : "contact";
 
     // Upload files to S3
     const uploadFileToS3 = async (file) => {
@@ -1190,9 +1235,9 @@ const updateAttachments = async (req, res) => {
     await contact.save();
 
     // Log activity
-    await logActivityToContact("lead", contact._id, {
+    await logActivityToContact(itemType, contact._id, {
       action: "attachments_updated",
-      type: "contact",
+      type: itemType,
       title: "Attachments Updated",
       description: `Updated attachments (${allAttachments.length} total, ${newAttachments.length} newly added)`,
     });
@@ -1219,7 +1264,7 @@ const updateAttachments = async (req, res) => {
 const assignContactOrLead = async (req, res) => {
   try {
     const { contact_ids, agent_id, agent_ids, category, assigned } = req.body;
-    const adminId = req.user._id;
+    const requesterId = req.user._id;
 
     if (!contact_ids || !Array.isArray(contact_ids) || contact_ids.length === 0) {
       return res.status(400).json({ status: "error", message: "contact_ids array is required." });
@@ -1227,6 +1272,11 @@ const assignContactOrLead = async (req, res) => {
 
     if (!category || (category !== "contact" && category !== "lead")) {
       return res.status(400).json({ status: "error", message: "category is required: contact or lead" });
+    }
+
+    const requester = await User.findById(requesterId).lean();
+    if (!requester) {
+      return res.status(401).json({ status: "error", message: "Unauthorized: User not found" });
     }
 
     const Model = category === "lead" ? Lead : Contact;
@@ -1239,11 +1289,18 @@ const assignContactOrLead = async (req, res) => {
       return res.status(400).json({ status: "error", message: "At least one agent_id or agent_ids array is required." });
     }
 
-    // Verify all agents belong to this company admin and are users
+    // Determine company context
+    let companyAdminId = String(requester.role) === "companyAdmin" ? requester._id : requester.createdByWhichCompanyAdmin;
+    if (!companyAdminId) companyAdminId = requester._id; // Fallback
+
+    // Verify all agents belong to this company
     const validAgents = await User.find({
       _id: { $in: targetAgentIds },
-      createdByWhichCompanyAdmin: adminId,
-      role: "user"
+      $or: [
+        { _id: companyAdminId },
+        { createdByWhichCompanyAdmin: companyAdminId }
+      ],
+      role: { $in: ["user", "companyAdmin"] }
     }).select("firstname lastname");
 
     if (validAgents.length !== targetAgentIds.length) {
@@ -1252,16 +1309,28 @@ const assignContactOrLead = async (req, res) => {
 
     const agentNames = validAgents.map(a => `${a.firstname} ${a.lastname}`).join(", ");
 
-    // Determine action based on 'assigned' flag (default to true if not provided)
+    // Determine records the requester can manage
+    let allowedUserIds = [requesterId];
+    if (String(requester.role) === "companyAdmin") {
+      const agents = await User.find({ createdByWhichCompanyAdmin: requesterId }).select("_id").lean();
+      allowedUserIds = [requesterId, ...agents.map(a => a._id)];
+    }
+
+    const scopeFilter = {
+      _id: { $in: contact_ids },
+      $or: [
+        { createdBy: { $in: allowedUserIds } },
+        { assignedTo: requesterId }
+      ]
+    };
+
+    // Determine action based on 'assigned' flag
     const isAssigning = assigned !== false;
     const updateQuery = isAssigning
       ? { $addToSet: { assignedTo: { $each: targetAgentIds } } }
       : { $pull: { assignedTo: { $in: targetAgentIds } } };
 
-    const results = await Model.updateMany(
-      { _id: { $in: contact_ids }, createdBy: adminId },
-      updateQuery
-    );
+    const results = await Model.updateMany(scopeFilter, updateQuery);
 
     const actionText = isAssigning ? "Assigned to" : "Unassigned from";
     const activityAction = isAssigning ? "contact_assigned" : "contact_unassigned";

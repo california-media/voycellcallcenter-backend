@@ -845,5 +845,11 @@ userSchema.static(
   }
 );
 
+// 🚨 Prevent duplicate phone numbers globally
+userSchema.index(
+  { "phonenumbers.countryCode": 1, "phonenumbers.number": 1 },
+  { unique: true, sparse: true }
+);
+
 const User = model("User", userSchema);
 module.exports = User;

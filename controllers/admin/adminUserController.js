@@ -127,22 +127,46 @@ exports.getAllUsersByCompanyAdmin = async (req, res) => {
         },
       },
 
-      // 2️⃣ Lookup contacts
+      // 2️⃣ Lookup contacts (Created OR Assigned)
       {
         $lookup: {
           from: "contacts",
-          localField: "_id",
-          foreignField: "createdBy",
+          let: { agentId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ["$createdBy", "$$agentId"] },
+                    { $in: ["$$agentId", { $ifNull: ["$assignedTo", []] }] }
+                  ]
+                }
+              }
+            },
+            { $project: { _id: 1 } } // Only need ID for counting
+          ],
           as: "contacts",
         },
       },
 
-      // 3️⃣ Lookup leads
+      // 3️⃣ Lookup leads (Created OR Assigned)
       {
         $lookup: {
           from: "leads",
-          localField: "_id",
-          foreignField: "createdBy",
+          let: { agentId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ["$createdBy", "$$agentId"] },
+                    { $in: ["$$agentId", { $ifNull: ["$assignedTo", []] }] }
+                  ]
+                }
+              }
+            },
+            { $project: { _id: 1 } } // Only need ID for counting
+          ],
           as: "leads",
         },
       },
