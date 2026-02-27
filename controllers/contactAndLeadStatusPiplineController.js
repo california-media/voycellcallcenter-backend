@@ -66,6 +66,7 @@ exports.changeStatus = async (req, res) => {
         meetings: contact.meetings,
         attachments: contact.attachments,
         activities: contact.activities,
+        assignedTo: contact.assignedTo,
         createdBy: contact.createdBy,
       });
 

@@ -5,6 +5,7 @@ const checkAccountStatus = require("../middlewares/checkAccountStatus")
 
 const {
   fetchAndStoreCallHistory,
+  fetchAndStoreCall10DaysHistory,
   getCompanyCallHistory,
   callRecordingDownload,
   getPhoneNumberCallHistory,
@@ -17,6 +18,8 @@ const {
 } = require("../controllers/getYeasterCallHistoryController");
 
 router.post("/fetch-and-store", checkAccountStatus, fetchAndStoreCallHistory);
+
+router.post("/fetch10DaysCallHistory", checkAccountStatus, fetchAndStoreCall10DaysHistory);
 
 router.post("/company-call-history", checkAccountStatus, checkRole(["companyAdmin"]), getCompanyCallHistory);
 

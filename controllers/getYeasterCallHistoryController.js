@@ -37,27 +37,62 @@ function formatDate(date, fallbackTime) {
 function normalizeNumber(number) {
   if (!number) return "";
 
-  return number
+  let cleaned = number
     .toString()
     .replace(/\s+/g, "") // remove spaces
     .replace(/^\+/, "") // remove leading +
     .replace(/\D/g, ""); // remove all non-digits
+
+  // Remove leading 0 if present
+  if (cleaned.startsWith("0")) {
+    cleaned = cleaned.substring(1);
+  }
+
+  return cleaned;
 }
 
 // ======================================================
 // 📞 Extract countryCode + number (Global support)
 // ======================================================
 function extractNumberDetails(rawNumber) {
-
   if (!rawNumber) return null;
 
-  const parsed = parsePhoneNumberFromString("+" + rawNumber);
+  let cleaned = rawNumber.replace(/\D/g, "");
+  let toParse = rawNumber;
 
-  // If parsing fails → fallback last 10 digits
-  if (!parsed) {
+  // UAE aggressive heuristics
+  if (!rawNumber.startsWith("+")) {
+    // 1. If 9 digits starting with 50, 52, 54, 55, 56, 58 -> UAE mobile missing prefix
+    if (cleaned.length === 9 && /^(50|52|54|55|56|58)/.test(cleaned)) {
+      toParse = "0" + cleaned;
+    }
+    // 2. If 12 digits starting with 971 -> UAE with country code but no +
+    else if (cleaned.length === 12 && cleaned.startsWith("971")) {
+      toParse = "+" + cleaned;
+    }
+  }
+
+  let parsed = parsePhoneNumberFromString(toParse, "AE");
+
+  // If still fails and no +, try one more time by prepending +
+  if (!parsed && !toParse.startsWith("+")) {
+    parsed = parsePhoneNumberFromString("+" + toParse);
+  }
+
+  // If still fails or invalid → fallback
+  if (!parsed || !parsed.isValid()) {
+    let finalNumber = cleaned;
+    // Strip leading 0 if present for the "number" part
+    if (finalNumber.startsWith("0")) finalNumber = finalNumber.substring(1);
+
+    // If it was 9 digits starting with 5, it's likely UAE
+    if (cleaned.length === 9 && /^(50|52|54|55|56|58)/.test(cleaned)) {
+      return { countryCode: "971", number: cleaned };
+    }
+
     return {
-      countryCode: null,
-      number: rawNumber.slice(-10),
+      countryCode: "971", // Default to UAE
+      number: finalNumber.slice(-10),
     };
   }
 
@@ -68,54 +103,57 @@ function extractNumberDetails(rawNumber) {
 }
 
 // ======================================================
-// 🔍 Find Contact / Lead (Flexible match)
+// 🔍 Find Contact / Lead (Company-wide match)
 // ======================================================
-async function findRecord(details, userId) {
-
+async function findRecord(details, allowedUserIds) {
   if (!details?.number) return null;
 
+  // Normalize number for search: try both as-is and with leading 0 if 9 digits
+  let searchNumbers = [details.number];
+  if (details.number.length === 9 && /^(50|52|54|55|56|58)/.test(details.number)) {
+    searchNumbers.push("0" + details.number);
+  } else if (details.number.length === 10 && details.number.startsWith("0")) {
+    searchNumbers.push(details.number.substring(1));
+  }
+
   // 1️⃣ Full match (country + number)
-  let contact = await Contact.findOne({
-    phoneNumbers: {
-      $elemMatch: {
-        countryCode: details.countryCode,
-        number: details.number,
-      },
-    },
-    createdBy: userId,
-  });
-
-  let lead = null;
-
-  if (!contact) {
-    lead = await Lead.findOne({
+  if (details.countryCode) {
+    let contact = await Contact.findOne({
       phoneNumbers: {
         $elemMatch: {
           countryCode: details.countryCode,
-          number: details.number,
+          number: { $in: searchNumbers },
         },
       },
-      createdBy: userId,
+      createdBy: { $in: allowedUserIds },
     });
+    if (contact) return contact;
+
+    let lead = await Lead.findOne({
+      phoneNumbers: {
+        $elemMatch: {
+          countryCode: details.countryCode,
+          number: { $in: searchNumbers },
+        },
+      },
+      createdBy: { $in: allowedUserIds },
+    });
+    if (lead) return lead;
   }
 
-  // 2️⃣ If not found → match only number
-  if (!contact && !lead) {
+  // 2️⃣ Match only number (Fallback)
+  let contact = await Contact.findOne({
+    "phoneNumbers.number": { $in: searchNumbers },
+    createdBy: { $in: allowedUserIds },
+  });
+  if (contact) return contact;
 
-    contact = await Contact.findOne({
-      "phoneNumbers.number": details.number,
-      createdBy: userId,
-    });
+  let lead = await Lead.findOne({
+    "phoneNumbers.number": { $in: searchNumbers },
+    createdBy: { $in: allowedUserIds },
+  });
 
-    if (!contact) {
-      lead = await Lead.findOne({
-        "phoneNumbers.number": details.number,
-        createdBy: userId,
-      });
-    }
-  }
-
-  return contact || lead || null;
+  return lead || null;
 }
 
 exports.fetchAndStoreCallHistory = async (req, res) => {
@@ -172,7 +210,21 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     finalList.forEach((c) => map.set(c.id, c));
     finalList = [...map.values()];
 
+    // ==========================================
+    // 🔐 Identify Company Users for Duplicate Check
+    // ==========================================
+    let allowedCreatedByIds = [userId];
+    if (user.role === "companyAdmin") {
+      const agents = await User.find({ createdByWhichCompanyAdmin: userId, role: "user" }).select("_id");
+      allowedCreatedByIds.push(...agents.map(a => a._id));
+    } else if (user.createdByWhichCompanyAdmin) {
+      const adminId = user.createdByWhichCompanyAdmin;
+      const agents = await User.find({ createdByWhichCompanyAdmin: adminId, role: "user" }).select("_id");
+      allowedCreatedByIds = [adminId, ...agents.map(a => a._id)];
+    }
+
     let inserted = 0;
+    const performerName = `${user.firstname} ${user.lastname}`;
 
     for (const call of finalList) {
       const exists = await CallHistory.findOne({ yeastarId: call.id });
@@ -188,14 +240,59 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
       const toDetails = extractNumberDetails(to_number);
 
       // ==========================================
-      // 🔍 Find matching records
+      // 🔍 Find matching records (Entire Company)
       // ==========================================
-      const fromRecord = await findRecord(fromDetails, userId);
-      const toRecord = await findRecord(toDetails, userId);
+      let fromRecord = await findRecord(fromDetails, allowedCreatedByIds);
+      let toRecord = await findRecord(toDetails, allowedCreatedByIds);
 
       const dubaiFormatted = moment
         .tz(call.time, "MM/DD/YYYY HH:mm:ss", TZ)
         .format("MM/DD/YYYY HH:mm:ss");
+
+      // ==========================================
+      // 🆕 AUTOMATED LEAD CREATION (NO ANSWER)
+      // ==========================================
+      if (call.disposition === "NO ANSWER") {
+        // If it's Inbound and the caller (FROM) is not in DB -> Create Lead
+        if (call.call_type === "Inbound" && !fromRecord) {
+          // Double check to ensure no last-second race condition if multiple calls sync
+          const doubleCheck = await findRecord(fromDetails, allowedCreatedByIds);
+          const newID = new mongoose.Types.ObjectId();
+          if (!doubleCheck) {
+            fromRecord = await Lead.create({
+              _id: newID,
+              contact_id: newID,
+              firstname: "Unknown",
+              lastname: "Caller",
+              phoneNumbers: [{
+                countryCode: fromDetails.countryCode || "971",
+                number: fromDetails.number
+              }],
+              status: "no answer",
+              createdBy: userId,
+              activities: [{
+                action: "Lead Created",
+                type: "lead",
+                title: "Automated Lead Creation",
+                description: `Lead created from unanswered call (by ${performerName})`,
+                timestamp: dubaiFormatted
+              }]
+            });
+          } else {
+            fromRecord = doubleCheck;
+          }
+        }
+
+        // If records exist, update status to "no answer"
+        if (fromRecord) {
+          fromRecord.status = "no answer";
+          await fromRecord.save();
+        }
+        if (toRecord) {
+          toRecord.status = "no answer";
+          await toRecord.save();
+        }
+      }
 
       await CallHistory.create({
         userId,
@@ -230,33 +327,241 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
           call.call_type === "Outbound"
             ? "Outgoing Call"
             : "Incoming Call",
-        description: `Call ${call.disposition} | Duration: ${call.duration}s`,
+        description: `Call ${call.disposition} | Duration: ${call.duration}s (by ${performerName})`,
         timestamp: dubaiFormatted,
       };
 
       // ==========================================
-      // 💾 Store FROM activity
+      // 💾 Store activity
       // ==========================================
       if (fromRecord) {
-
         fromRecord.activities.push({
           ...baseActivity,
-          description: `Call with ${to_number} | ${call.disposition}`,
+          description: `Call with ${to_number} | ${call.disposition} (by ${performerName})`,
         });
-
         await fromRecord.save();
       }
 
-      // ==========================================
-      // 💾 Store TO activity
-      // ==========================================
       if (toRecord) {
-
         toRecord.activities.push({
           ...baseActivity,
-          description: `Call with ${from_number} | ${call.disposition}`,
+          description: `Call with ${from_number} | ${call.disposition} (by ${performerName})`,
         });
+        await toRecord.save();
+      }
 
+      inserted++;
+    }
+
+    return res.json({
+      status: "success",
+      userId,
+      extension: ext,
+      time_window: { startTime, endTime },
+      totalFetched: finalList.length,
+      newInserted: inserted,
+      message: `Stored ${inserted} new call records`,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to fetch/store call history",
+      error: err.response?.data || err.message,
+    });
+  }
+};
+
+exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const user = await User.findById(userId);
+    if (!user || !user.PBXDetails.PBX_EXTENSION_NUMBER) {
+      return res.status(400).json({
+        success: false,
+        message: "User extension not found",
+      });
+    }
+
+    const ext = user.PBXDetails.PBX_EXTENSION_NUMBER;
+    const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL;
+    const deviceId = user.PBXDetails.assignedDeviceId;
+    const token = await getDeviceToken(deviceId, "pbx");
+    // Always use Yeastar PBX timezone
+    const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
+
+    // Build time window in Yeastar timezone
+    const endMoment = moment().tz(TZ);
+    const startMoment = endMoment.clone().subtract(10, "days");
+
+    // Yeastar required format
+    const startTime = startMoment.format("MM/DD/YYYY HH:mm:ss");
+    const endTime = endMoment.format("MM/DD/YYYY HH:mm:ss");
+
+    const encodedStart = encodeURIComponent(startTime);
+    const encodedEnd = encodeURIComponent(endTime);
+
+    // -------- OUTBOUND --------
+    const urlFrom = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+    const respFrom = await axios.get(urlFrom, {
+      httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
+    });
+
+    // -------- INBOUND --------
+    const urlTo = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+    const respTo = await axios.get(urlTo, {
+      httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
+    });
+
+    const fromList = Array.isArray(respFrom.data?.data)
+      ? respFrom.data.data
+      : [];
+    const toList = Array.isArray(respTo.data?.data) ? respTo.data.data : [];
+
+    let finalList = [...fromList, ...toList];
+
+    // Remove duplicates
+    const map = new Map();
+    finalList.forEach((c) => map.set(c.id, c));
+    finalList = [...map.values()];
+
+    // ==========================================
+    // 🔐 Identify Company Users for Duplicate Check
+    // ==========================================
+    let allowedCreatedByIds = [userId];
+    if (user.role === "companyAdmin") {
+      const agents = await User.find({ createdByWhichCompanyAdmin: userId, role: "user" }).select("_id");
+      allowedCreatedByIds.push(...agents.map(a => a._id));
+    } else if (user.createdByWhichCompanyAdmin) {
+      const adminId = user.createdByWhichCompanyAdmin;
+      const agents = await User.find({ createdByWhichCompanyAdmin: adminId, role: "user" }).select("_id");
+      allowedCreatedByIds = [adminId, ...agents.map(a => a._id)];
+    }
+
+    let inserted = 0;
+    const performerName = `${user.firstname} ${user.lastname}`;
+
+    for (const call of finalList) {
+      const exists = await CallHistory.findOne({ yeastarId: call.id });
+      if (exists) continue;
+
+      const from_number = normalizeNumber(call.call_from_number);
+      const to_number = normalizeNumber(call.call_to_number);
+
+      // ==========================================
+      // 📞 Parse FROM & TO numbers
+      // ==========================================
+      const fromDetails = extractNumberDetails(from_number);
+      const toDetails = extractNumberDetails(to_number);
+
+      // ==========================================
+      // 🔍 Find matching records (Entire Company)
+      // ==========================================
+      let fromRecord = await findRecord(fromDetails, allowedCreatedByIds);
+      let toRecord = await findRecord(toDetails, allowedCreatedByIds);
+
+      const dubaiFormatted = moment
+        .tz(call.time, "MM/DD/YYYY HH:mm:ss", TZ)
+        .format("MM/DD/YYYY HH:mm:ss");
+
+      // ==========================================
+      // 🆕 AUTOMATED LEAD CREATION (NO ANSWER)
+      // ==========================================
+      if (call.disposition === "NO ANSWER") {
+        // If it's Inbound and the caller (FROM) is not in DB -> Create Lead
+        if (call.call_type === "Inbound" && !fromRecord) {
+          // Double check to ensure no last-second race condition if multiple calls sync
+          const doubleCheck = await findRecord(fromDetails, allowedCreatedByIds);
+          const newID = new mongoose.Types.ObjectId();
+          if (!doubleCheck) {
+            fromRecord = await Lead.create({
+              _id: newID,
+              contact_id: newID,
+              firstname: "Unknown",
+              lastname: "Caller",
+              phoneNumbers: [{
+                countryCode: fromDetails.countryCode || "971",
+                number: fromDetails.number
+              }],
+              status: "noAnswer",
+              createdBy: userId,
+              activities: [{
+                action: "Lead Created",
+                type: "lead",
+                title: "Automated Lead Creation",
+                description: `Lead created from unanswered call (by ${performerName})`,
+                timestamp: dubaiFormatted
+              }]
+            });
+          } else {
+            fromRecord = doubleCheck;
+          }
+        }
+
+        // If records exist, update status to "no answer"
+        if (fromRecord) {
+          fromRecord.status = "noAnswer";
+          await fromRecord.save();
+        }
+        if (toRecord) {
+          toRecord.status = "noAnswer";
+          await toRecord.save();
+        }
+      }
+
+      await CallHistory.create({
+        userId,
+        extensionNumber: ext,
+        yeastarId: call.id,
+
+        call_from: from_number,
+        call_to: to_number,
+
+        talk_time: call.talk_duration,
+        ring_time: call.ring_duration,
+        duration: call.duration,
+
+        direction: call.call_type,
+        status: call.disposition,
+
+        start_time: dubaiFormatted,
+        end_time: dubaiFormatted,
+
+        record_file: call.record_file,
+        disposition_code: call.reason,
+        trunk: call.dst_trunk,
+      });
+
+      // ==========================================
+      // 📝 Prepare Activity
+      // ==========================================
+      const baseActivity = {
+        action: "Call activity",
+        type: "call",
+        title:
+          call.call_type === "Outbound"
+            ? "Outgoing Call"
+            : "Incoming Call",
+        description: `Call ${call.disposition} | Duration: ${call.duration}s (by ${performerName})`,
+        timestamp: dubaiFormatted,
+      };
+
+      // ==========================================
+      // 💾 Store activity
+      // ==========================================
+      if (fromRecord) {
+        fromRecord.activities.push({
+          ...baseActivity,
+          description: `Call with ${to_number} | ${call.disposition} (by ${performerName})`,
+        });
+        await fromRecord.save();
+      }
+
+      if (toRecord) {
+        toRecord.activities.push({
+          ...baseActivity,
+          description: `Call with ${from_number} | ${call.disposition} (by ${performerName})`,
+        });
         await toRecord.save();
       }
 
