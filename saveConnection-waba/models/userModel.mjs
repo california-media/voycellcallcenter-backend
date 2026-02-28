@@ -301,7 +301,7 @@ const userSchema = new Schema(
         default:
           "Enter your phone number and we'll call you back in 30 seconds!",
       },
-      calltoaction: { type: String, default: "📞 Call Me" },
+      calltoaction: { type: String, default: " Call Me" },
       phoneIconColor: { type: String, default: "black" }, // 'black' or 'white'
       // Add this near popupSettings in userSchema
       allowedOriginPopup: {

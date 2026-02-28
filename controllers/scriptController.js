@@ -70,7 +70,7 @@ exports.generateScriptTag = async (req, res) => {
       calltoaction:
         req.body.calltoaction ||
         user.popupSettings?.calltoaction ||
-        "📞 Call Me",
+        " Call Me",
       phoneIconColor:
         req.body.phoneIconColor ||
         user.popupSettings?.phoneIconColor ||

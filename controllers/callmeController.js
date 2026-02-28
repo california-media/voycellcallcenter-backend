@@ -68,7 +68,7 @@ async function getPopupJS(req, tokenDoc, user) {
     phoneIconColor: phoneIconColorQuery = "white",
     popupText:
     popupTextQuery = "Enter your phone number and we’ll call you back in 30 seconds!",
-    calltoaction: calltoactionQuery = " Call Me Now",
+    calltoaction: calltoactionQuery = " Call Me",
     headingColor: headingColorQuery = "#4CAF50",
     floatingButtonColor: floatingButtonColorQuery = "#4CAF50",
   } = req.query;
