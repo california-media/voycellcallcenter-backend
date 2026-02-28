@@ -231,11 +231,11 @@ const signupWithEmail = async (req, res) => {
       // ✅ Optional: Update scannedMe for other users
       await user.save();
 
-      try {
-        await sendPostVerificationDemoEmail(user);
-      } catch (emailErr) {
-        console.error("Failed to send demo email:", emailErr.message);
-      }
+      // try {
+      //   await sendPostVerificationDemoEmail(user);
+      // } catch (emailErr) {
+      //   console.error("Failed to send demo email:", emailErr.message);
+      // }
 
       // ✅ CREATE NEW SESSION (MULTI-SESSION SUPPORT)
       const newSessionId = randomBytes(32).toString("hex");
@@ -439,6 +439,32 @@ const signupWithEmail = async (req, res) => {
     });
   }
 };
+
+const demoEmailSend = async (req, res) => {
+  try {
+    const userId = req.user?._id; // from token middleware
+    if (!userId) {
+      return res.status(401).json({
+        status: "error",
+        message: "Unauthorized",
+      });
+    }
+    const user = await User.findById(userId);
+
+    try {
+      await sendPostVerificationDemoEmail(user);
+    } catch (emailErr) {
+      console.error("Failed to send demo email:", emailErr.message);
+    }
+
+    return res.json({
+      status: "success",
+      message: "demo Email Send",
+    });
+  } catch {
+    res.status(500).json({ error: err.message });
+  }
+}
 
 async function sendWhatsAppOtp(toPhoneNumber, otp) {
   try {
@@ -1385,6 +1411,7 @@ const logoutUser = async (req, res) => {
 module.exports = {
   signupWithEmail,
   signupWithPhoneNumber,
+  demoEmailSend,
   verifyRealPhoneNumber,
   unifiedLogin,
   resendVerificationLink,

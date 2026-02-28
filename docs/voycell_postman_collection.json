@@ -5,10 +5,6 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "24694351",
     "_collection_link": "https://go.postman.co/collection/24694351-8a7f933d-8921-4577-8176-bda211b2328f?source=collection_link",
-    "{{baseURL}}" : "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com",
-    "{{BaseUrlLive}}" : "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com",
-    "{{BaseUrlLocal}}" : "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
-
   },
   "item": [
     {
@@ -30,9 +26,9 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseURL}}/disconnect/smtp",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/disconnect/smtp",
               "host": [
-                "{{baseURL}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "disconnect",
@@ -58,9 +54,9 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseURL}}/disconnect/google",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/disconnect/google",
               "host": [
-                "{{baseURL}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "disconnect",
@@ -86,9 +82,9 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLive}}/api/zoho/disconnect",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/zoho/disconnect",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -115,9 +111,9 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseURL}}/disconnect/microsoft",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/disconnect/microsoft",
               "host": [
-                "{{baseURL}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "disconnect",
@@ -152,9 +148,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/connect/google",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/google",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "connect",
@@ -189,9 +185,9 @@
               }
             },
             "url": {
-              "raw": "{{baseURL}}/connect/smtp",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/smtp",
               "host": [
-                "{{baseURL}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "connect",
@@ -226,9 +222,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/connect/microsoft",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/microsoft",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "connect",
@@ -263,9 +259,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/api/zoho/connect",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/zoho/connect",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -301,9 +297,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/connect/zoom",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/zoom",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "connect",
@@ -338,9 +334,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/api/whatsapp/connect",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/connect",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -367,9 +363,9 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/api/whatsapp/disconnect",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/disconnect",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -400,9 +396,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/user/login",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/user/login",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "user",
@@ -437,9 +433,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/changePassword",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/changePassword",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "changePassword"
@@ -464,9 +460,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/admin/details",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/details",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -491,9 +487,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/user/signup/email",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/user/signup/email",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "user",
@@ -519,9 +515,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/email/forgot-password",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/email/forgot-password",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "email",
@@ -546,9 +542,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/email/reset-password?token=ec627d7a274b090a1cd4e6aa6a63380eddc02dd84fed47482a16d6095d802d60",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/email/reset-password?token=ec627d7a274b090a1cd4e6aa6a63380eddc02dd84fed47482a16d6095d802d60",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "email",
@@ -589,9 +585,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/admin/user/register",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/user/register",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -618,9 +614,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLive}}/admin/user/getAgent",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/user/getAgent",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -646,9 +642,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/admin/user/verify",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/user/verify",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -675,9 +671,9 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/deleteUser",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/deleteUser",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "deleteUser"
@@ -711,9 +707,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/deleteUser/activate",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/deleteUser/activate",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "deleteUser",
@@ -741,9 +737,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/user/login/magic-link",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/user/login/magic-link",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "user",
@@ -772,9 +768,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/user/generateMagicLink",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/user/generateMagicLink",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "user",
@@ -809,9 +805,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/user/verify-phone-number",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/user/verify-phone-number",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "user",
@@ -846,9 +842,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/admin/user/695cc3773241ed90635397e4",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/user/695cc3773241ed90635397e4",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -882,9 +878,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/api/yeastar/make-call",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/yeastar/make-call",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -916,9 +912,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/api/yeastar/get-call?call_id=352343",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/yeastar/get-call?call_id=352343",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -960,9 +956,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/api/script/generate",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/script/generate",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -998,9 +994,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/call/fetch-and-store",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/fetch-and-store",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1026,9 +1022,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/integrations/token",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/integrations/token",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "integrations",
@@ -1063,9 +1059,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/call/recording",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/recording",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1100,9 +1096,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/call/company-call-history",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/company-call-history",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1137,9 +1133,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/call/phone-number-call-history",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/phone-number-call-history",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1174,9 +1170,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/call/agent-call-history",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/agent-call-history",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1211,9 +1207,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/call/dashboard-call-history",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/dashboard-call-history",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1239,9 +1235,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/call/inbound-outbound-call-graph",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/inbound-outbound-call-graph",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1276,9 +1272,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/api/yeastar-login/get-signature",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/yeastar-login/get-signature",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -1314,9 +1310,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/call/addFormDataAfterCallEnd",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/addFormDataAfterCallEnd",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1351,9 +1347,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/changePassword/sip-secret",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/changePassword/sip-secret",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "changePassword",
@@ -1388,9 +1384,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/api/script/generateFormCall",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/script/generateFormCall",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -1417,9 +1413,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLive}}/call/incoming-call-webhook",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/incoming-call-webhook",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1454,9 +1450,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/call/find-by-phone-number",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/call/find-by-phone-number",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "call",
@@ -1503,9 +1499,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLive}}/fetch-google-contacts?defaultCountryCode=971&category=contact",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/fetch-google-contacts?defaultCountryCode=971&category=contact",
                   "host": [
-                    "{{BaseUrlLive}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "fetch-google-contacts"
@@ -1554,9 +1550,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/save-bulk-contacts",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/save-bulk-contacts",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "save-bulk-contacts"
@@ -1593,9 +1589,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/fetch-zoho-contacts?defaultCountryCode=971&tags=[{\"tag\": \"abc\", \"emoji\": \"💎\"},{\"tag\": \"Call Back\",\"emoji\": \"📞\"}]&category=lead",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/fetch-zoho-contacts?defaultCountryCode=971&tags=[{\"tag\": \"abc\", \"emoji\": \"💎\"},{\"tag\": \"Call Back\",\"emoji\": \"📞\"}]&category=lead",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "fetch-zoho-contacts"
@@ -1637,9 +1633,9 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/fetch-hubspot-contacts?defaultCountryCode=971&tags=[{\"tag\": \"Premium\", \"emoji\": \"💎\"},{\"tag\": \"Call Back\",\"emoji\": \"📞\"}]&category=lead",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/fetch-hubspot-contacts?defaultCountryCode=971&tags=[{\"tag\": \"Premium\", \"emoji\": \"💎\"},{\"tag\": \"Call Back\",\"emoji\": \"📞\"}]&category=lead",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "fetch-hubspot-contacts"
@@ -1695,9 +1691,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/tag/assignedToContact",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/tag/assignedToContact",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "tag",
@@ -1732,9 +1728,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/tag/assignedToMultipleContacts",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/tag/assignedToMultipleContacts",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "tag",
@@ -1769,9 +1765,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/tag/addTagToUser",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/tag/addTagToUser",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "tag",
@@ -1806,9 +1802,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/tag/deleteTagOfUser",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/tag/deleteTagOfUser",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "tag",
@@ -1834,9 +1830,9 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/tag/getTagsOfUser",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/tag/getTagsOfUser",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "tag",
@@ -1874,9 +1870,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/tag/getTagWithContact",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/tag/getTagWithContact",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "tag",
@@ -1911,9 +1907,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/tag/editTagOfUser",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/tag/editTagOfUser",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "tag",
@@ -2069,9 +2065,9 @@
               ]
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/addEditContactLeads",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/addEditContactLeads",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "addEditContactLeads"
@@ -2105,9 +2101,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/getAllContactsOrLeads",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/getAllContactsOrLeads",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "getAllContactsOrLeads"
@@ -2219,9 +2215,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/meeting/addUpdateMeeting",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/meeting/addUpdateMeeting",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "meeting",
@@ -2256,9 +2252,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/meeting/deleteMeeting",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/meeting/deleteMeeting",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "meeting",
@@ -2293,9 +2289,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/task/addEdit",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/task/addEdit",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "task",
@@ -2330,9 +2326,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}task/delete",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.comtask/delete",
               "host": [
-                "{{BaseUrlLocal}}task"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.comtask"
               ],
               "path": [
                 "delete"
@@ -2366,9 +2362,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/getProfileEvent",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/getProfileEvent",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "getProfileEvent"
@@ -2405,9 +2401,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/meeting/getAll",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/meeting/getAll",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "meeting",
@@ -2445,9 +2441,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/getAllContactsOrLeads/ForEvent?search=7046658651",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/getAllContactsOrLeads/ForEvent?search=7046658651",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "getAllContactsOrLeads",
@@ -2491,9 +2487,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/getAllContactsOrLeads/searchByPhone",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/getAllContactsOrLeads/searchByPhone",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "getAllContactsOrLeads",
@@ -2528,9 +2524,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/getAllContactsOrLeads/single",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/getAllContactsOrLeads/single",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "getAllContactsOrLeads",
@@ -2565,9 +2561,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/addEditContactLeads/batch-delete",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/addEditContactLeads/batch-delete",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "addEditContactLeads",
@@ -2602,9 +2598,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/addEditContactLeads/toggle-favorite",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/addEditContactLeads/toggle-favorite",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "addEditContactLeads",
@@ -2689,9 +2685,9 @@
               ]
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/help-support/create",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/help-support/create",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "help-support",
@@ -2717,9 +2713,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/help-support/691326a2aae6e80591b76b88",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/help-support/691326a2aae6e80591b76b88",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "help-support",
@@ -2745,9 +2741,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/help-support/get",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/help-support/get",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "help-support",
@@ -2782,9 +2778,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/help-support/691326a2aae6e80591b76b88/reply",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/help-support/691326a2aae6e80591b76b88/reply",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "help-support",
@@ -2811,9 +2807,9 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/help-support/691326a2aae6e80591b76b88",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/help-support/691326a2aae6e80591b76b88",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "help-support",
@@ -2846,9 +2842,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/admin/help-support/stats",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/help-support/stats",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -2868,9 +2864,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/admin/help-support",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/help-support",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -2889,9 +2885,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/admin/help-support/691326a2aae6e80591b76b88",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/help-support/691326a2aae6e80591b76b88",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -2927,9 +2923,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/admin/help-support/691326a2aae6e80591b76b88/reply",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/help-support/691326a2aae6e80591b76b88/reply",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -2957,9 +2953,9 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/admin/help-support/691326a2aae6e80591b76b88",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/admin/help-support/691326a2aae6e80591b76b88",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "admin",
@@ -3000,9 +2996,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/faq/addEdit",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/faq/addEdit",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "faq",
@@ -3028,9 +3024,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/faq/get",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/faq/get",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "faq",
@@ -3065,9 +3061,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/faq/delete",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/faq/delete",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "faq",
@@ -3107,9 +3103,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/allCompanyAdmin",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/allCompanyAdmin",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3144,9 +3140,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/superAdmin/companyAdminDetailsById",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/companyAdminDetailsById",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3181,9 +3177,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/deleteUser/suspend",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/deleteUser/suspend",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "deleteUser",
@@ -3218,9 +3214,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/allAgentsOfCompanyAdmin",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/allAgentsOfCompanyAdmin",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3255,9 +3251,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/agentDetailsById",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/agentDetailsById",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3292,9 +3288,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/editCompanyAdminAndAgent",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/editCompanyAdminAndAgent",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3329,9 +3325,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/deleteAllUserData",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/deleteAllUserData",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "deleteAllUserData"
@@ -3365,9 +3361,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/updateMultipleYeastarUsers",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/updateMultipleYeastarUsers",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3402,9 +3398,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/addPBXDevice",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/addPBXDevice",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3439,9 +3435,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/updatePBXDevice",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/updatePBXDevice",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3476,9 +3472,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/deletePBXDevice",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/deletePBXDevice",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3504,9 +3500,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/getAllPBXDevices",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/getAllPBXDevices",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3544,9 +3540,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/getPBXDeviceById",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/getPBXDeviceById",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3581,9 +3577,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLocal}}/superAdmin/getAgentsOfCompanyAdminByPBXDevice",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/getAgentsOfCompanyAdminByPBXDevice",
               "host": [
-                "{{BaseUrlLocal}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3618,9 +3614,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/superAdmin/getAllCompanyAdminsByPBXDevice",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/superAdmin/getAllCompanyAdminsByPBXDevice",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "superAdmin",
@@ -3663,9 +3659,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/send-text",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/send-text",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -3701,9 +3697,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/conversations",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/conversations",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -3773,9 +3769,9 @@
                   ]
                 },
                 "url": {
-                  "raw": "{{BaseUrlLive}}/api/whatsapp/send-message",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/send-message",
                   "host": [
-                    "{{BaseUrlLive}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -3811,9 +3807,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/send-template",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/send-template",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -3849,9 +3845,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/send-campaign",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/send-campaign",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -3887,9 +3883,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/campaigns",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/campaigns",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -3925,9 +3921,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLive}}/api/whatsapp/campaignsById",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/campaignsById",
                   "host": [
-                    "{{BaseUrlLive}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -3963,9 +3959,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/delete/campaigns",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/delete/campaigns",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4002,9 +3998,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/delete-chats",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/delete-chats",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4040,9 +4036,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/messages",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/messages",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4074,9 +4070,9 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{BaseUrlLive}}/api/whatsapp/connect",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/connect",
                   "host": [
-                    "{{BaseUrlLive}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4112,9 +4108,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/get-waba-templates",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/get-waba-templates",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4176,9 +4172,9 @@
                   ]
                 },
                 "url": {
-                  "raw": "{{BaseUrlLive}}/api/whatsapp/create-template",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/create-template",
                   "host": [
-                    "{{BaseUrlLive}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4205,9 +4201,9 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/approved-templates",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/approved-templates",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4246,9 +4242,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/templateById",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/templateById",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4298,9 +4294,9 @@
                   ]
                 },
                 "url": {
-                  "raw": "{{BaseUrlLive}}/api/whatsapp/edit-template",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/edit-template",
                   "host": [
-                    "{{BaseUrlLive}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4332,9 +4328,9 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/profile",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/profile",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4435,9 +4431,9 @@
                   ]
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/profile/edit",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/profile/edit",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4474,9 +4470,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/refresh-token",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/refresh-token",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4512,9 +4508,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/assignedUnassignedToAgent",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/assignedUnassignedToAgent",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4550,9 +4546,9 @@
                   }
                 },
                 "url": {
-                  "raw": "{{BaseUrlLocal}}/api/whatsapp/unassignedToAgent",
+                  "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/unassignedToAgent",
                   "host": [
-                    "{{BaseUrlLocal}}"
+                    "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
                   ],
                   "path": [
                     "api",
@@ -4590,9 +4586,9 @@
               }
             },
             "url": {
-              "raw": "{{BaseUrlLive}}/api/whatsapp/webhook",
+              "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/webhook",
               "host": [
-                "{{BaseUrlLive}}"
+                "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
               ],
               "path": [
                 "api",
@@ -4715,9 +4711,9 @@
           ]
         },
         "url": {
-          "raw": "{{BaseUrlLive}}/editProfile",
+          "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/editProfile",
           "host": [
-            "{{BaseUrlLive}}"
+            "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
           ],
           "path": [
             "editProfile"
@@ -4742,9 +4738,9 @@
         "method": "POST",
         "header": [],
         "url": {
-          "raw": "{{BaseUrlLive}}/getUser",
+          "raw": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/getUser",
           "host": [
-            "{{BaseUrlLive}}"
+            "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com"
           ],
           "path": [
             "getUser"

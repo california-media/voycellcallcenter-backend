@@ -4,6 +4,7 @@ const checkAccountStatus = require("../middlewares/checkAccountStatus");
 const {
   signupWithEmail,
   verifyRealPhoneNumber,
+  demoEmailSend,
   unifiedLogin,
   resendVerificationLink,
   logoutUser,
@@ -55,7 +56,11 @@ const router = Router();
 
 router.post("/signup/email", signupWithEmail);
 
+
 router.post("/verify-phone-number", checkForAuthentication(), checkAccountStatus, verifyRealPhoneNumber);
+
+router.post("/sendDemoEmail", checkForAuthentication(), checkAccountStatus, demoEmailSend);
+
 
 router.post("/resendVerificationLink", resendVerificationLink);
 
