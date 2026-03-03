@@ -279,14 +279,43 @@ exports.handleZohoCallback = async (req, res) => {
         };
       }
 
-      const duplicate = isGlobalDuplicate({
-        phoneObj,
-        email,
-        existingPhones,
-        existingEmails,
+      // const duplicate = isGlobalDuplicate({
+      //   phoneObj,
+      //   email,
+      //   existingPhones,
+      //   existingEmails,
+      // });
+
+      const loggedInUser = await User.findById(userId).lean();
+      if (!loggedInUser) throw new Error("User not found");
+
+      // determine the company admin id
+      let companyAdminId = null;
+      if (String(loggedInUser.role) === "companyAdmin") {
+        companyAdminId = loggedInUser._id;
+      } else if (loggedInUser.createdByWhichCompanyAdmin) {
+        companyAdminId = loggedInUser.createdByWhichCompanyAdmin;
+      } else {
+        companyAdminId = loggedInUser._id;
+      }
+
+      const companyUsers = await User.find({
+        $or: [{ _id: companyAdminId }, { createdByWhichCompanyAdmin: companyAdminId }],
+      }).select("_id").lean();
+
+      const allUserIds = companyUsers.map((u) => u._id);
+
+      const duplicate = await TargetModel.exists({
+        createdBy: { $in: allUserIds },
+        $or: [
+          { emailAddresses: email },
+          { "phoneNumbers.number": phoneObj?.number }
+        ]
       });
 
       if (duplicate) continue;
+
+      // if (duplicate) continue;
 
       const _id = new mongoose.Types.ObjectId();
 
