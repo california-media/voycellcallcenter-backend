@@ -225,7 +225,13 @@ async function getPopupJS(req, tokenDoc, user) {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
       }
       .callme-popup h3{color:var(--callme-theme);font-size:22px;margin:0 0 8px;font-weight:700;margin-bottom:10px}
-      .callme-popup p{color:#555;margin:0 0 18px;font-size:15px}
+      .callme-popup p{
+  color:#555;
+  margin-top:20px;
+  margin-bottom:18px;
+  font-size:21px !important;
+  font-weight:600;
+}
       .close-btn{
         position:absolute;right:12px;top:10px;border:none;background:none;font-size:22px;color:#999;cursor:pointer;
         width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:6px;
@@ -291,7 +297,6 @@ async function getPopupJS(req, tokenDoc, user) {
         <div id="callme-overlay" class="callme-overlay" role="dialog" aria-hidden="true">
           <div class="callme-popup" role="document" id="callme-popup">
             <button class="close-btn" id="callme-close" aria-label="Close popup">&times;</button>
-            <h3 style="color:\${HEADING_COLOR}">\${POPUP_HEADING}</h3>
             <p>\${POPUP_TEXT}</p>
 
             <div id="callme-form">
@@ -311,7 +316,11 @@ async function getPopupJS(req, tokenDoc, user) {
               </button>
               <div style="margin-top: 10px; font-size: 12px; color: #555; display: flex; align-items: center; justify-content: center;">
                 <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell_favicon.png" alt="VOYCELL Logo" style="width: 16px; height: 16px; margin-right: 5px; margin-top: 2px;" />
-                Powered by VOYCELL
+                Powered by <a href="https://voycell.com" target="_blank" style="display:flex; align-items:center;">
+    <img src="https://voycell.com/wp-content/uploads/2024/06/voycell_logo_new_gradiant.png"
+         alt="logo"
+         style="height:11px;" />
+  </a>
               </div>
             </div>
 
