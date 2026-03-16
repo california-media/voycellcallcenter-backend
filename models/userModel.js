@@ -1,6 +1,8 @@
 const { createHmac, randomBytes } = require("crypto");
 const { Schema, model, mongoose } = require("mongoose");
 const { createTokenforUser } = require("../services/authentication");
+const FAQ = require("./faqModel");
+const defaultFaqs = require("../utils/defaultFaqs");
 
 const whatsappTemplateSchema = new Schema(
   {
@@ -804,6 +806,34 @@ const userSchema = new Schema(
   },
   { timestamps: true }
 );
+
+userSchema.post("save", async function (doc, next) {
+  try {
+    if (doc.role === "companyAdmin") {
+
+      const existingFaq = await FAQ.findOne({ createdBy: doc._id });
+
+      if (!existingFaq) {
+
+        const faqs = defaultFaqs.map((faq) => ({
+          question: faq.question,
+          answer: faq.answer,
+          createdBy: doc._id,
+        }));
+
+        await FAQ.insertMany(faqs);
+
+        console.log("Default FAQs created for:", doc._id);
+      }
+
+    }
+
+    next();
+  } catch (error) {
+    console.error("Default FAQ creation error:", error);
+    next(error);
+  }
+});
 
 userSchema.pre("save", function (next) {
   const user = this;
