@@ -14,6 +14,7 @@ const { createZoomMeeting } = require("../utils/zoomCalendar");
 const { createGoogleMeetEvent } = require("../utils/googleCalendar");
 const incomingcallConnection = require("../models/incomingcallConnection");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
+  const { hubspotAfterCallSync } = require("../services/hubspotSync.service");
 
 //show all calls of number agent and company admin calls, show proper agent ya company admin name in call,extention is change so call is not show
 
@@ -1908,6 +1909,23 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
         console.error("Zoho After Call Sync Failed:", err.message);
       });
     }
+
+
+
+    if (loggedInUser.hubspot?.accessToken && loggedInUser.hubspot?.isConnected) {
+
+
+  hubspotAfterCallSync({
+    user: loggedInUser,
+    targetDoc,
+    phone: `+${rawCountry}${rawNumber}`,
+    status,
+    note,
+    meeting,
+  }).catch((err) => {
+    console.error("HubSpot After Call Sync Failed:", err.message);
+  });
+}
 
     return res.status(200).json({
       message: "Call form data saved successfully",

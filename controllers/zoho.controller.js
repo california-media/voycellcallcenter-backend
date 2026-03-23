@@ -17,7 +17,7 @@ exports.connectZoho = async (req, res) => {
       state: userId
     });
 
-    return res.json({ status: "success", url });
+    return res.json({ status: "success", url });  
   } catch (err) {
     return res.status(500).json({ status: "error", message: "Auth URL generation failed" });
   }

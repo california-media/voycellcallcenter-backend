@@ -651,7 +651,16 @@ const userSchema = new Schema(
       timezone: { type: String },     // ✅ REQUIRED
     },
 
-
+hubspot: {
+  accessToken: { type: String },
+  refreshToken: { type: String },
+  isConnected: { type: Boolean, default: false },
+  userId: { type: String },       // HubSpot portal/hub ID
+  email: { type: String },
+  timezone: { type: String },
+  apiBaseUrl: { type: String, default: "https://api.hubapi.com" },
+  tokenExpiresAt: { type: Date }, // HubSpot tokens expire in 30 min
+},
 
     password: {
       type: String,

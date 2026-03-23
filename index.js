@@ -65,6 +65,7 @@ const getProfileEventRoutes = require("./routes/getProfileEventRoutes");
 const apiKeyRoutes = require("./routes/apiKeyRoutes");
 const addEditTempleteRoutes = require("./routes/addEditTempleteRoutes");
 const whatsappRoutes = require("./routes/whatsapp.routes");
+const hubspotAuthRoutes = require("./routes/hubspot.routes");
 
 
 //for admin routes
@@ -172,6 +173,7 @@ app.use(
 );
 app.use("/disconnect", checkForAuthentication(), disconnectAccountRoutes);
 app.use("/api/zoho", zohoAuthRoutes);
+app.use("/api/hubspot", hubspotAuthRoutes);
 // app.use("/api/pipedrive", pipedriveRoutes);
 app.use(
   "/save-bulk-contacts",
