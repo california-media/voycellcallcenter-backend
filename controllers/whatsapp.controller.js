@@ -448,6 +448,7 @@ const uploadProfilePictureHandleToMeta = async ({
 };
 
 exports.updateWabaProfile = async (req, res) => {
+    const {META_APP_ID} = getConfig()
     try {
         const userId = req.user._id;
 
@@ -554,7 +555,8 @@ exports.updateWabaProfile = async (req, res) => {
                     fileBuffer,
                     fileName: req.file.originalname,
                     mimeType: req.file.mimetype,
-                    appId: process.env.META_APP_ID,
+                    // appId: process.env.META_APP_ID,
+                    appId: META_APP_ID,
                 });
 
             /* Set DP in Meta */
@@ -720,6 +722,7 @@ async function connectDB() {
 /** STEP 4: Webhook to receive messages
  */
 const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
+const { getConfig } = require("../utils/getConfig");
 
 // Initialize AWS Lambda client 
 const lambdaClient = new LambdaClient({

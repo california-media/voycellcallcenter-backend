@@ -2,13 +2,16 @@
 const User = require("../models/userModel");
 const oauth = require("../services/hubspotOAuth.service");
 const { getHubSpotCurrentUser } = require("../services/hubspotApi.service");
+const { getConfig } = require("../utils/getConfig");
 
 exports.connectHubSpot = async (req, res) => {
   try {
+    const {HUBSPOT_REDIRECT_URI2} = getConfig()
     const userId = req.user._id.toString();
 
     const url = oauth.getAuthURL({
-      redirectUri: process.env.HUBSPOT_REDIRECT_URI,
+      // redirectUri: process.env.HUBSPOT_REDIRECT_URI2,
+      redirectUri: HUBSPOT_REDIRECT_URI2,
       state: userId,
     });
  console.log("HubSpot Auth URL:", url);
@@ -19,6 +22,7 @@ exports.connectHubSpot = async (req, res) => {
 };
 
 exports.hubspotCallback = async (req, res) => {
+  const {HUBSPOT_REDIRECT_URI2} = getConfig()
   const { code, state } = req.query;
 
   if (!code || !state) {
@@ -32,7 +36,8 @@ exports.hubspotCallback = async (req, res) => {
     // 1. Exchange code for tokens
     const tokens = await oauth.getTokens({
       code,
-      redirectUri: process.env.HUBSPOT_REDIRECT_URI,
+      // redirectUri: process.env.HUBSPOT_REDIRECT_URI2,
+      redirectUri: HUBSPOT_REDIRECT_URI2,
     });
 
     // 2. Save tokens to DB

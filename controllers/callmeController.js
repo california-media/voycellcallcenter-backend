@@ -28,11 +28,10 @@ function normalizeFullUrl(url = "") {
   return url
     .toLowerCase()
     .trim()
-    .split("#")[0]     // remove hash
-    .split("?")[0]     // remove query params
+    .split("#")[0] // remove hash
+    .split("?")[0] // remove query params
     .replace(/\/+$/, ""); // remove trailing slash
 }
-
 
 exports.serveCallmeJS = async (req, res) => {
   const { token, fieldName } = req.params;
@@ -57,17 +56,16 @@ exports.serveCallmeJS = async (req, res) => {
     // 👉 popup only
     return servePopupScript(req, res, tokenDoc, user);
   }
-
 };
 
 async function getPopupJS(req, tokenDoc, user) {
-
+  const { API_BASE_URL } = getConfig();
   const {
     themeColor: themeColorQuery = "#4CAF50",
     popupHeading: popupHeadingQuery = "📞 Request a Call Back",
     phoneIconColor: phoneIconColorQuery = "white",
     popupText:
-    popupTextQuery = "Enter your phone number and we’ll call you back in 30 seconds!",
+      popupTextQuery = "Enter your phone number and we’ll call you back in 30 seconds!",
     calltoaction: calltoactionQuery = " Call Me",
     headingColor: headingColorQuery = "#4CAF50",
     floatingButtonColor: floatingButtonColorQuery = "#4CAF50",
@@ -77,12 +75,10 @@ async function getPopupJS(req, tokenDoc, user) {
     return `// Invalid popup token or user`;
   }
 
-
   const decodedExt = tokenDoc.extensionNumber;
 
   const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL || "";
   const assignedDeviceId = user.PBXDetails.assignedDeviceId || null;
-
 
   function normalizeOrigin(origin = "") {
     return origin.toLowerCase().replace(/\/+$/, "");
@@ -94,7 +90,7 @@ async function getPopupJS(req, tokenDoc, user) {
     if (referer) {
       try {
         return normalizeOrigin(new URL(referer).origin);
-      } catch (e) { }
+      } catch (e) {}
     }
 
     // 2️⃣ Fetch/XHR → use origin
@@ -102,7 +98,7 @@ async function getPopupJS(req, tokenDoc, user) {
     if (origin) {
       try {
         return normalizeOrigin(new URL(origin).origin);
-      } catch (e) { }
+      } catch (e) {}
     }
 
     return "";
@@ -117,7 +113,7 @@ async function getPopupJS(req, tokenDoc, user) {
     if (!requestOrigin) return false;
 
     return allowedOriginPopup
-      .map(o => normalizeOrigin(o))
+      .map((o) => normalizeOrigin(o))
       .includes(requestOrigin);
   }
 
@@ -149,21 +145,25 @@ async function getPopupJS(req, tokenDoc, user) {
       : calltoactionQuery;
   const phoneIconColor =
     popupSettings.phoneIconColor && popupSettings.phoneIconColor.trim()
-      ? popupSettings.phoneIconColor :
-      phoneIconColorQuery;
+      ? popupSettings.phoneIconColor
+      : phoneIconColorQuery;
   const headingColor =
     popupSettings.headingColor && popupSettings.headingColor.trim()
       ? popupSettings.headingColor
       : headingColorQuery;
   const floatingButtonColor =
     popupSettings.floatingButtonColor &&
-      popupSettings.floatingButtonColor.trim()
+    popupSettings.floatingButtonColor.trim()
       ? popupSettings.floatingButtonColor
       : floatingButtonColorQuery;
 
-  const API_BASE_URL =
-    process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
-  const apiUrl = API_BASE_URL.replace(/\/+$/, "") + "/api/yeastar/make-call";
+  // const API_BASE_URL =
+  //   process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
+  // const apiUrl = API_BASE_URL.replace(/\/+$/, "") + "/api/yeastar/make-call";
+
+  
+  const baseUrl = API_BASE_URL || req.protocol + "://" + req.get("host");
+  const apiUrl = baseUrl.replace(/\/+$/, "") + "/api/yeastar/make-call";
 
   // Build JS to send to browser
   const js = `
@@ -177,9 +177,7 @@ async function getPopupJS(req, tokenDoc, user) {
   const FLOATING_BUTTON_COLOR = ${JSON.stringify(floatingButtonColor)};
   const POPUP_TEXT = ${JSON.stringify(popupText)};
   const CALL_TO_ACTION = ${JSON.stringify(calltoaction)};
-  const PHONE_ICON_COLOR = ${JSON.stringify(
-    phoneIconColor || "black"
-  )};
+  const PHONE_ICON_COLOR = ${JSON.stringify(phoneIconColor || "black")};
   const API_URL = ${JSON.stringify(apiUrl)};
   const API_BASE_URL = ${JSON.stringify(API_BASE_URL)};
 
@@ -525,7 +523,7 @@ async function getPopupJS(req, tokenDoc, user) {
 `;
 
   return js;
-};
+}
 
 async function servePopupAndFormScript(req, res, tokenDoc, fieldName, user) {
   // Generate popup JS
@@ -558,6 +556,7 @@ async function servePopupScript(req, res, tokenDoc, user) {
 }
 
 async function getFormJS(req, tokenDoc, fieldName, user) {
+const { API_BASE_URL } = getConfig();
   if (!tokenDoc) {
     return `// Invalid form token`;
   }
@@ -577,20 +576,15 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
   const normalizedReferer = rawReferer
     .toLowerCase()
     .trim()
-    .split("#")[0]     // remove hash
-    .split("?")[0]     // remove query params
+    .split("#")[0] // remove hash
+    .split("?")[0] // remove query params
     .replace(/\/+$/, ""); // remove trailing slash
 
   // -------------------------------
   // 3️⃣ NORMALIZE RESTRICTED URLS
   // -------------------------------
-  const normalizedRestrictedUrls = (tokenDoc.restrictedUrls || []).map(u =>
-    u
-      .toLowerCase()
-      .trim()
-      .split("#")[0]
-      .split("?")[0]
-      .replace(/\/+$/, "")
+  const normalizedRestrictedUrls = (tokenDoc.restrictedUrls || []).map((u) =>
+    u.toLowerCase().trim().split("#")[0].split("?")[0].replace(/\/+$/, ""),
   );
 
   // -------------------------------
@@ -621,7 +615,8 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
   }
 
   function getRequestPageUrl(req) {
-    const referer = req.query.pageUrl || req.get("referer") || req.get("referrer") || "";
+    const referer =
+      req.query.pageUrl || req.get("referer") || req.get("referrer") || "";
     return normalizeFullUrl(referer);
   }
 
@@ -632,7 +627,7 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     tokenDoc.allowedOriginContactForm.length > 0
   ) {
     const allowed = tokenDoc.allowedOriginContactForm
-      .map(u => normalizeFullUrl(u))
+      .map((u) => normalizeFullUrl(u))
       .includes(requestPageUrl);
 
     if (!allowed) {
@@ -647,38 +642,28 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     return `// User not found for form script`;
   }
 
-  const assignedDeviceId =
-    user.PBXDetails.assignedDeviceId || null;
+  const assignedDeviceId = user.PBXDetails.assignedDeviceId || null;
 
-  const PBX_BASE_URL =
-    user.PBXDetails.PBX_BASE_URL || "";
+  const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL || "";
 
   const API_BASE =
-    process.env.API_BASE_URL ||
-    req.protocol + "://" + req.get("host");
+    // process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
+    API_BASE_URL || req.protocol + "://" + req.get("host");
 
-  const apiUrl =
-    API_BASE.replace(/\/+$/, "") +
-    "/api/yeastar/make-call";
+  const apiUrl = API_BASE.replace(/\/+$/, "") + "/api/yeastar/make-call";
 
   // -------------------------------
   // 7️⃣ SAFE JSON VARIABLES
   // -------------------------------
-  const restrictedUrlsJson = JSON.stringify(
-    tokenDoc.restrictedUrls || []
-  );
+  const restrictedUrlsJson = JSON.stringify(tokenDoc.restrictedUrls || []);
 
-  const extensionJson = JSON.stringify(
-    tokenDoc.extensionNumber || ""
-  );
+  const extensionJson = JSON.stringify(tokenDoc.extensionNumber || "");
 
   const fieldNameJson = JSON.stringify(fieldName);
 
-  const assignedDeviceIdJson =
-    JSON.stringify(assignedDeviceId);
+  const assignedDeviceIdJson = JSON.stringify(assignedDeviceId);
 
-  const PBX_BASE_URLJson =
-    JSON.stringify(PBX_BASE_URL);
+  const PBX_BASE_URLJson = JSON.stringify(PBX_BASE_URL);
 
   // -------------------------------
   // 8️⃣ FRONTEND JS
@@ -743,7 +728,7 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     "      if (digits.length >= 7) handleCall(digits);",
     "    }",
     "  }, true);",
-    "})();"
+    "})();",
   ].join("\n");
 
   return js;

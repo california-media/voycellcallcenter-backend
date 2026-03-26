@@ -6,15 +6,17 @@ const s3 = require("../utils/s3");
 const User = require("../models/userModel");
 // ADD this at the top (with your other requires)
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
+const { getConfig } = require("../utils/getConfig");
 
 // Upload file to S3
 const uploadImageToS3 = async (file) => {
+  const {AWS_BUCKET_NAME} = getConfig()
   const ext = path.extname(file.originalname);
   const name = path.basename(file.originalname, ext);
   const fileName = `helpAndSupportAttachments/${name}_${Date.now()}${ext}`;
 
   const params = {
-    Bucket: process.env.AWS_BUCKET_NAME,
+    Bucket: AWS_BUCKET_NAME,
     Key: fileName,
     Body: file.buffer,
     ContentType: file.mimetype,
@@ -22,7 +24,7 @@ const uploadImageToS3 = async (file) => {
 
   try {
     await s3.send(new PutObjectCommand(params));
-    return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+    return `https://${AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
   } catch (error) {
     throw new Error("Image upload failed");
   }

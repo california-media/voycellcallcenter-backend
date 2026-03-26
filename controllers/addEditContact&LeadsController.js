@@ -7,6 +7,7 @@ const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const path = require("path");
 const { logActivityToContact } = require("../utils/activityLogger");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
+const { getConfig } = require("../utils/getConfig");
 
 // --------------------------
 // company-wide duplicate helper
@@ -116,12 +117,14 @@ const parseBoolean = (val) => {
 };
 
 const uploadImageToS3 = async (file) => {
+  const {AWS_BUCKET_NAME} = getConfig()
   const ext = path.extname(file.originalname);
   const name = path.basename(file.originalname, ext);
   const fileName = `contactImages/${name}_${Date.now()}${ext}`;
 
   const params = {
-    Bucket: process.env.AWS_BUCKET_NAME,
+    // Bucket: process.env.AWS_BUCKET_NAME,
+    Bucket: AWS_BUCKET_NAME,
     Key: fileName,
     Body: file.buffer,
     ContentType: file.mimetype,
@@ -129,7 +132,7 @@ const uploadImageToS3 = async (file) => {
 
   await s3.send(new PutObjectCommand(params));
 
-  return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+  return `https://${AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
 };
 
 const addEditContactisLeads = async (req, res) => {
@@ -1164,12 +1167,14 @@ const updateAttachments = async (req, res) => {
 
     // Upload files to S3
     const uploadFileToS3 = async (file) => {
+      const {AWS_BUCKET_NAME} =getConfig()
       const ext = path.extname(file.originalname);
       const name = path.basename(file.originalname, ext);
       const fileName = `attachments/${Date.now()}_${name}${ext}`;
 
       const params = {
-        Bucket: process.env.AWS_BUCKET_NAME,
+        // Bucket: process.env.AWS_BUCKET_NAME,
+        Bucket: AWS_BUCKET_NAME,
         Key: fileName,
         Body: file.buffer,
         ContentType: file.mimetype,
@@ -1177,7 +1182,7 @@ const updateAttachments = async (req, res) => {
 
       try {
         await s3.send(new PutObjectCommand(params));
-        const fileURL = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+        const fileURL = `https://${AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
         return fileURL;
       } catch (error) {
         throw new Error("File upload failed");

@@ -5,8 +5,9 @@ const WabaTemplate = require("../models/wabaTemplateModel");
 const { uploadWhatsAppMediaTemplateToS3 } = require("../utils/uploadWhatsAppMedia");
 const { downloadMetaMedia } = require("../services/metaMedia");
 const FormData = require("form-data");
-const { META_APP_ID } = process.env;
+// const { META_APP_ID } = process.env;
 const mongoose = require("mongoose");
+const { getConfig } = require("../utils/getConfig");
 
 //test template payload
 // {
@@ -75,6 +76,8 @@ const uploadMediaToFB = async (
   phoneNumberId
 ) => {
   try {
+
+    const {META_APP_ID} = getConfig()
     const mimeType = getMimeType(format, fileName);
 
     const startUrl = `${META_GRAPH_URL}/${META_APP_ID}/uploads`;

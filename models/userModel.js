@@ -662,6 +662,17 @@ hubspot: {
   tokenExpiresAt: { type: Date }, // HubSpot tokens expire in 30 min
 },
 
+pipedrive: {
+  accessToken:    { type: String },
+  refreshToken:   { type: String },
+  isConnected:    { type: Boolean, default: false },
+  userId:         { type: String },
+  email:          { type: String },
+  companyDomain:  { type: String }, // e.g. "mycompany.pipedrive.com"
+  apiBaseUrl:     { type: String }, // e.g. "https://mycompany.pipedrive.com"
+  tokenExpiresAt: { type: Date },
+},
+
     password: {
       type: String,
       required: function () {

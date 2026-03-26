@@ -1,35 +1,54 @@
 require("dotenv").config();
 const nodemailer = require("nodemailer");
-
+const { getConfig } = require("./getConfig");
 
 // MAIL_HOST=smtp.titan.email
 // MAIL_PORT=465
 // MAIL_USERNAME=noreply@contacts.management
 // MAIL_PASSWORD=bZ}JTus_PQ{qWvA
 
-
-const transporter = nodemailer.createTransport({
-    // service: "gmail",
-    service: "smtp",
-    host: process.env.MAIL_HOST,
-    port: Number(process.env.MAIL_PORT),
-    secure: false, // Gmail on port 587 uses TLS (not SSL)
-    auth: {
-        user: process.env.MAIL_USERNAME,
-        pass: process.env.MAIL_PASSWORD,
-    },
-    tls: {
-        rejectUnauthorized: false, // important for Gmail on TLS
-    },
+// const transporter = nodemailer.createTransport({
+//   // service: "gmail",
+//   service: "smtp",
+//   host: process.env.MAIL_HOST,
+//   port: Number(process.env.MAIL_PORT),
+//   secure: false, // Gmail on port 587 uses TLS (not SSL)
+//   auth: {
+//     user: process.env.MAIL_USERNAME,
+//     pass: process.env.MAIL_PASSWORD,
+//   },
+//   tls: {
+//     rejectUnauthorized: false, // important for Gmail on TLS
+//   },
+// });
+const getTransporter =()=>{
+const {MAIL_HOST, MAIL_PORT} = getConfig()
+    return nodemailer.createTransport({
+  // service: "gmail",
+  service: "smtp",
+//   host: process.env.MAIL_HOST,
+  host: MAIL_HOST,
+//   port: Number(process.env.MAIL_PORT),
+  port: Number(MAIL_PORT),
+  secure: false, // Gmail on port 587 uses TLS (not SSL)
+  auth: {
+    user: process.env.MAIL_USERNAME,
+    pass: process.env.MAIL_PASSWORD,
+  },
+  tls: {
+    rejectUnauthorized: false, // important for Gmail on TLS
+  },
 });
+}
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+// const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const sendVerificationEmail = async (email, link) => {
-    const mailOptions = {
-        from: '"VOYCELL" <noreply@voycell.com>',
-        to: email,
-        subject: "VOYCELL : Verify Your E-mail",
-        html: `<html lang="en">
+    const {FRONTEND_URL} = getConfig()
+  const mailOptions = {
+    from: '"VOYCELL" <noreply@voycell.com>',
+    to: email,
+    subject: "VOYCELL : Verify Your E-mail",
+    html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -171,22 +190,25 @@ const sendVerificationEmail = async (email, link) => {
 </body>
 
 </html>`,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+//   await transporter.sendMail(mailOptions);
+getTransporter().sendMail(mailOptions);
 };
 
 const sendPostVerificationDemoEmail = async (user) => {
-    const clientName =
-        `${user.firstname || ""} ${user.lastname || ""}`.trim() || "Client";
 
-    const meetingLink = "https://voycell.com/voycell-book-a-demo"; // 🔁 replace with real link
+    const {FRONTEND_URL} = getConfig()
+  const clientName =
+    `${user.firstname || ""} ${user.lastname || ""}`.trim() || "Client";
 
-    const mailOptions = {
-        from: '"VOYCELL" <noreply@voycell.com>',
-        to: user.email,
-        subject: "Welcome to VOYCELL – Let’s Help You Get Started",
-        html: `
+  const meetingLink = "https://voycell.com/voycell-book-a-demo"; // 🔁 replace with real link
+
+  const mailOptions = {
+    from: '"VOYCELL" <noreply@voycell.com>',
+    to: user.email,
+    subject: "Welcome to VOYCELL – Let’s Help You Get Started",
+    html: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -278,9 +300,10 @@ const sendPostVerificationDemoEmail = async (user) => {
 </body>
 </html>
 `,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+//   await transporter.sendMail(mailOptions);
+getTransporter().sendMail(mailOptions);
 };
 
 // const sendHelpSupportReply = async (
@@ -398,20 +421,25 @@ const sendPostVerificationDemoEmail = async (user) => {
 // };
 
 const sendHelpSupportReplyNotification = async (
-    userEmail,
-    userName,
-    subject,
-    adminMessage,
-    ticketId
+  userEmail,
+  userName,
+  subject,
+  adminMessage,
+  ticketId,
 ) => {
-    const ticketsPageUrl = `${process.env.FRONTEND_URL || "https://app.voycell.com"
-        }/my-tickets?ticketId=${ticketId}`;
+    const {FRONTEND_URL} = getConfig()
+  const ticketsPageUrl = `${
+    FRONTEND_URL || "https://app.voycell.com"
+  }/my-tickets?ticketId=${ticketId}`;
+//   const ticketsPageUrl = `${
+//     process.env.FRONTEND_URL || "https://app.voycell.com"
+//   }/my-tickets?ticketId=${ticketId}`;
 
-    const mailOptions = {
-        from: '"VOYCELL" <noreply@voycell.com>',
-        to: userEmail,
-        subject: `New Reply: ${subject || "Your Support Request"}`,
-        html: `<html lang="en">
+  const mailOptions = {
+    from: '"VOYCELL" <noreply@voycell.com>',
+    to: userEmail,
+    subject: `New Reply: ${subject || "Your Support Request"}`,
+    html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -522,23 +550,25 @@ const sendHelpSupportReplyNotification = async (
 </body>
 
 </html>`,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+//   await transporter.sendMail(mailOptions);
+getTransporter().sendMail(mailOptions);
 };
 
 const sendEmailChangeVerification = async (
-    newEmail,
-    oldEmail,
-    userName,
-    userId,
-    verificationLink
+  newEmail,
+  oldEmail,
+  userName,
+  userId,
+  verificationLink,
 ) => {
-    const mailOptions = {
-        from: '"VOYCELL" <noreply@voycell.com>',
-        to: newEmail,
-        subject: "VOYCELL: Verify Your New Email Address",
-        html: `<html lang="en">
+    const {FRONTEND_URL} = getConfig()
+  const mailOptions = {
+    from: '"VOYCELL" <noreply@voycell.com>',
+    to: newEmail,
+    subject: "VOYCELL: Verify Your New Email Address",
+    html: `<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -613,7 +643,8 @@ const sendEmailChangeVerification = async (
 
         <div class="info-box">
             <h4 style="margin-top: 0;">Email Change Details:</h4>
-            <p style="margin: 5px 0;"><strong>Account:</strong> ${userName || userId
+            <p style="margin: 5px 0;"><strong>Account:</strong> ${
+              userName || userId
             }</p>
             <p style="margin: 5px 0;"><strong>Previous Email:</strong> ${oldEmail}</p>
             <p style="margin: 5px 0;"><strong>New Email:</strong> ${newEmail}</p>
@@ -691,17 +722,19 @@ const sendEmailChangeVerification = async (
 </body>
 
 </html>`,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+//   await transporter.sendMail(mailOptions);
+getTransporter().sendMail(mailOptions);
 };
 
 const sendMagicLinkEmail = async (email, link) => {
-    const mailOptions = {
-        from: '"VOYCELL" <noreply@voycell.com>',
-        to: email,
-        subject: "VOYCELL Secure Magic Login Link",
-        html: `
+    const {FRONTEND_URL} = getConfig()
+  const mailOptions = {
+    from: '"VOYCELL" <noreply@voycell.com>',
+    to: email,
+    subject: "VOYCELL Secure Magic Login Link",
+    html: `
     <html>
     <head>
       <style>
@@ -738,7 +771,7 @@ const sendMagicLinkEmail = async (email, link) => {
       <div class="container">
 
         <center>
-          <img src="${process.env.FRONTEND_URL}/assets/img/voycell-logo.png" style="width:180px;" />
+          <img src="${FRONTEND_URL}/assets/img/voycell-logo.png" style="width:180px;" />
         </center>
 
         <h2>Login to VOYCELL using Magic Link</h2>
@@ -759,24 +792,25 @@ const sendMagicLinkEmail = async (email, link) => {
 
         <div class="footer">
           <p>VOYCELL Team</p>
-          <p>${process.env.FRONTEND_URL}</p>
+          <p>${FRONTEND_URL}</p>
         </div>
 
       </div>
     </body>
     </html>
     `,
-    };
+  };
 
-    await transporter.sendMail(mailOptions);
+//   await transporter.sendMail(mailOptions);
+getTransporter().sendMail(mailOptions);
 };
 
 module.exports = {
-    sendVerificationEmail,
-    //   sendHelpSupportReply,
-    sendHelpSupportReplyNotification,
-    sendPostVerificationDemoEmail,
-    sendEmailChangeVerification,
-    sendMagicLinkEmail,
-    transporter,
+  sendVerificationEmail,
+  //   sendHelpSupportReply,
+  sendHelpSupportReplyNotification,
+  sendPostVerificationDemoEmail,
+  sendEmailChangeVerification,
+  sendMagicLinkEmail,
+  getTransporter,
 };

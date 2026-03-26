@@ -6,15 +6,12 @@ const mongoose = require("mongoose"); // ⬅️ Make sure this is imported at th
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const { title } = require("process");
 const User = require("../models/userModel"); // make sure to import
+const { getConfig } = require("../utils/getConfig");
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI3 // e.g., http://localhost:3000/api/google/callback
-);
 
 // Step 1: Generate the Google OAuth Consent URL
 const redirectToGoogle = (req, res) => {
+  const {GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI3} = getConfig()
   const scopes = ["https://www.googleapis.com/auth/contacts.readonly"];
 
   const user_id = req.user._id; // Use user ID from request context if available
@@ -23,8 +20,10 @@ const redirectToGoogle = (req, res) => {
   const category = req.query.category || "contact"; // 👈 ADD (default)
 
   const params = querystring.stringify({
-    client_id: process.env.GOOGLE_CLIENT_ID,
-    redirect_uri: process.env.GOOGLE_REDIRECT_URI3,
+    // client_id: process.env.GOOGLE_CLIENT_ID,
+    client_id: GOOGLE_CLIENT_ID,
+    // redirect_uri: process.env.GOOGLE_REDIRECT_URI3,
+    redirect_uri: GOOGLE_REDIRECT_URI3,
     response_type: "code",
     scope: scopes.join(" "),
     access_type: "offline",
@@ -46,6 +45,17 @@ const redirectToGoogle = (req, res) => {
 
 // Step 2: Google redirects here with ?code=... and ?state=...
 const handleGoogleCallback = async (req, res) => {
+const {GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI3} = getConfig()
+
+const oauth2Client = new google.auth.OAuth2(
+  // process.env.GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  // process.env.GOOGLE_REDIRECT_URI3 // e.g., http://localhost:3000/api/google/callback
+  GOOGLE_REDIRECT_URI3 // e.g., http://localhost:3000/api/google/callback
+);
+
+
   const { code, state } = req.query;
 
   if (!code) {

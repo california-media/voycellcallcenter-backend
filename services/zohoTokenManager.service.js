@@ -1,16 +1,19 @@
 const axios = require("axios");
 const User = require("../models/userModel");
+const { getConfig } = require("../utils/getConfig");
 
 exports.getZohoAccessToken = async (user) => {
     return user.zoho.accessToken;
 };
 
 exports.refreshZohoToken = async (user) => {
+    const {ZOHO_CLIENT_ID} = getConfig()
     const url = `${user.zoho.accountsUrl}/oauth/v2/token`;
 
     const params = {
         refresh_token: user.zoho.refreshToken,
-        client_id: process.env.ZOHO_CLIENT_ID,
+        // client_id: process.env.ZOHO_CLIENT_ID,
+        client_id: ZOHO_CLIENT_ID,
         client_secret: process.env.ZOHO_CLIENT_SECRET,
         grant_type: "refresh_token",
     };

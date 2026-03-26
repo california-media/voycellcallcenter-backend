@@ -5,23 +5,21 @@ const User = require('../models/userModel'); // Your User Model
 const querystring = require('querystring');
 require("dotenv").config();
 const mongoose = require("mongoose");
+const { getConfig } = require('../utils/getConfig');
 
 
 
 // Google OAuth Setup
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI2;
 
-const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
+
+// const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
 const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET;
-const MICROSOFT_REDIRECT_URI = process.env.MICROSOFT_REDIRECT_URI;
+// const MICROSOFT_REDIRECT_URI = process.env.MICROSOFT_REDIRECT_URI;
 
 const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
 const ZOHO_REDIRECT_URI2 = process.env.ZOHO_REDIRECT_URI;
 const ZOHO_ACCOUNTS_URL = process.env.ZOHO_ACCOUNTS_URL || "https://accounts.zoho.com";
 
-const oauth2Client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
 
 // 1. API to Generate Google OAuth URL
 exports.connectGoogle = async (req, res) => {
@@ -64,6 +62,16 @@ exports.connectGoogle = async (req, res) => {
 
 // 2. Google OAuth Callback API
 exports.googleCallback = async (req, res) => {
+    const{GOOGLE_CLIENT_ID,GOOGLE_REDIRECT_URI2}= getConfig()
+
+// const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const CLIENT_ID = GOOGLE_CLIENT_ID;
+const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+// const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI2;
+const REDIRECT_URI = GOOGLE_REDIRECT_URI2;
+
+const oauth2Client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+
     const { code, state } = req.query;
     // const userId = state;
 
@@ -157,6 +165,8 @@ exports.googleCallback = async (req, res) => {
 };
 
 exports.connectMicrosoft = async (req, res) => {
+
+    const {MICROSOFT_CLIENT_ID, MICROSOFT_REDIRECT_URI} = getConfig()
     const userId = req.user._id;
 
     const params = querystring.stringify({
@@ -174,6 +184,8 @@ exports.connectMicrosoft = async (req, res) => {
 };
 
 exports.microsoftCallback = async (req, res) => {
+    const {MICROSOFT_CLIENT_ID, MICROSOFT_REDIRECT_URI} = getConfig()
+
     const { code, state } = req.query;
     const userId = state;
 
@@ -315,12 +327,15 @@ exports.connectSMTP = async (req, res) => {
 };
 
 exports.connectZoom = async (req, res) => {
+    const {ZOOM_CLIENT_ID, ZOOM_REDIRECT_URI} = getConfig()
     const userId = req.user._id;
 
     const params = new URLSearchParams({
         response_type: "code",
-        client_id: process.env.ZOOM_CLIENT_ID,
-        redirect_uri: process.env.ZOOM_REDIRECT_URI,
+        // client_id: process.env.ZOOM_CLIENT_ID,
+        client_id: ZOOM_CLIENT_ID,
+        // redirect_uri: process.env.ZOOM_REDIRECT_URI,
+        redirect_uri: ZOOM_REDIRECT_URI,
         state: JSON.stringify({ userId }),
     });
 
@@ -331,6 +346,7 @@ exports.connectZoom = async (req, res) => {
 };
 
 exports.zoomCallback = async (req, res) => {
+    const {ZOOM_CLIENT_ID, ZOOM_REDIRECT_URI} = getConfig()
     const { code, state } = req.query;
     const { userId } = JSON.parse(state);
 
@@ -342,10 +358,12 @@ exports.zoomCallback = async (req, res) => {
                 params: {
                     grant_type: "authorization_code",
                     code,
-                    redirect_uri: process.env.ZOOM_REDIRECT_URI,
+                    // redirect_uri: process.env.ZOOM_REDIRECT_URI,
+                    redirect_uri: ZOOM_REDIRECT_URI,
                 },
                 auth: {
-                    username: process.env.ZOOM_CLIENT_ID,
+                    // username: process.env.ZOOM_CLIENT_ID,
+                    username: ZOOM_CLIENT_ID,
                     password: process.env.ZOOM_CLIENT_SECRET,
                 },
             }

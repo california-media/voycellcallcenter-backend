@@ -2,11 +2,14 @@ const axios = require('axios');
 const User = require('../models/userModel');
 const { createTokenforUser } = require("../services/authentication");
 const jwt = require("jsonwebtoken");
+const { getConfig } = require('../utils/getConfig');
 
 // 1. START OAUTH
 exports.startAuth = (req, res) => {
+    const {PIPEDRIVE_CLIENT_ID, PIPEDRIVE_REDIRECT_URI} = getConfig()
     const state = req.user._id; 
-    const authUrl = `https://oauth.pipedrive.com/oauth/authorize?client_id=${process.env.PIPEDRIVE_CLIENT_ID}&redirect_uri=${process.env.PIPEDRIVE_REDIRECT_URI}&state=${state}`;
+    // const authUrl = `https://oauth.pipedrive.com/oauth/authorize?client_id=${process.env.PIPEDRIVE_CLIENT_ID}&redirect_uri=${process.env.PIPEDRIVE_REDIRECT_URI}&state=${state}`;
+    const authUrl = `https://oauth.pipedrive.com/oauth/authorize?client_id=${PIPEDRIVE_CLIENT_ID}&redirect_uri=${PIPEDRIVE_REDIRECT_URI}&state=${state}`;
     res.redirect(authUrl);
 };
 
@@ -43,6 +46,8 @@ exports.startAuth = (req, res) => {
 // };
 
 exports.handleCallback = async (req, res) => {
+const {PIPEDRIVE_CLIENT_ID,PIPEDRIVE_REDIRECT_URI} = getConfig()
+
     const { code, state } = req.query; 
 
     try {
@@ -51,11 +56,13 @@ exports.handleCallback = async (req, res) => {
             new URLSearchParams({
                 grant_type: 'authorization_code',
                 code: code,
-                redirect_uri: process.env.PIPEDRIVE_REDIRECT_URI,
+                // redirect_uri: process.env.PIPEDRIVE_REDIRECT_URI,
+                redirect_uri: PIPEDRIVE_REDIRECT_URI,
             }), {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': `Basic ${Buffer.from(`${process.env.PIPEDRIVE_CLIENT_ID}:${process.env.PIPEDRIVE_CLIENT_SECRET}`).toString('base64')}`
+                // 'Authorization': `Basic ${Buffer.from(`${process.env.PIPEDRIVE_CLIENT_ID}:${process.env.PIPEDRIVE_CLIENT_SECRET}`).toString('base64')}`
+                'Authorization': `Basic ${Buffer.from(`${PIPEDRIVE_CLIENT_ID}:${process.env.PIPEDRIVE_CLIENT_SECRET}`).toString('base64')}`
             }
         });
 

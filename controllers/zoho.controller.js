@@ -3,8 +3,10 @@ const oauth = require("../services/zohoOAuth.service");
 const { syncZoho } = require("../services/zohoSync.service");
 const { getZohoCurrentUser } = require("../services/zohoApi.service");
 const axios = require("axios");
+const { getConfig } = require("../utils/getConfig");
 
 exports.connectZoho = async (req, res) => {
+  const {ZOHO_REDIRECT_URI} = getConfig()
   try {
     const userId = req.user._id.toString();
 
@@ -13,7 +15,8 @@ exports.connectZoho = async (req, res) => {
 
     const url = oauth.getAuthURL({
       accountsUrl: accountsUrl,
-      redirectUri: process.env.ZOHO_REDIRECT_URI,
+      // redirectUri: process.env.ZOHO_REDIRECT_URI,
+      redirectUri: ZOHO_REDIRECT_URI,
       state: userId
     });
 
@@ -24,6 +27,7 @@ exports.connectZoho = async (req, res) => {
 };
 
 exports.zohoCallback = async (req, res) => {
+  const {ZOHO_REDIRECT_URI} = getConfig()
   // Zoho sends 'location' and 'accounts-server' in the query params
   const { code, state, location, "accounts-server": accountsServer } = req.query;
 
@@ -42,7 +46,8 @@ exports.zohoCallback = async (req, res) => {
     const tokens = await oauth.getTokens({
       code,
       accountsUrl: finalAccountsUrl,
-      redirectUri: process.env.ZOHO_REDIRECT_URI
+      // redirectUri: process.env.ZOHO_REDIRECT_URI
+      redirectUri: ZOHO_REDIRECT_URI
     });
 
     // 2. Save DC info and tokens

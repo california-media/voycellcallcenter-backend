@@ -4,9 +4,13 @@ const User = require("../models/userModel");
 const crypto = require("crypto");
 const { randomBytes, createHmac } = require("crypto");
 // const { randomBytes } = require("crypto");
-const { sendVerificationEmail, sendMagicLinkEmail, sendPostVerificationDemoEmail } = require("../utils/emailUtils");
+const {
+  sendVerificationEmail,
+  sendMagicLinkEmail,
+  sendPostVerificationDemoEmail,
+} = require("../utils/emailUtils");
 const googleClient = new OAuth2Client(
-  "401067515093-9j7faengj216m6uc9csubrmo3men1m7p.apps.googleusercontent.com"
+  "401067515093-9j7faengj216m6uc9csubrmo3men1m7p.apps.googleusercontent.com",
 );
 const { normalizePhone } = require("../utils/phoneUtils");
 require("dotenv").config();
@@ -16,11 +20,12 @@ const axios = require("axios");
 const ReferralLog = require("../models/referralLogModel");
 const { createYeastarExtensionForUser } = require("../utils/yeastarClient");
 const { META_GRAPH_URL } = require("../config/whatsapp");
+const { getConfig } = require("../utils/getConfig");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_LOGIN_URI // e.g. https://yourapi.com/auth/google/callback
+  process.env.GOOGLE_REDIRECT_LOGIN_URI, // e.g. https://yourapi.com/auth/google/callback
 );
 
 const disallowedEmailDomains = [
@@ -43,7 +48,7 @@ const disallowedEmailDomains = [
   // "lycos.com",
 ];
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+// const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 // Requires: User and ReferralLog models in scope.
 // Put this near top of your controller file:
@@ -57,9 +62,9 @@ async function addOrUpdateReferral(referrerId, referredUser) {
   // Normalize phone objects from referredUser
   const phoneObjs = Array.isArray(referredUser.phonenumbers)
     ? referredUser.phonenumbers.map((p) => ({
-      countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
-      number: (p.number || "").toString().replace(/^\+/, ""),
-    }))
+        countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
+        number: (p.number || "").toString().replace(/^\+/, ""),
+      }))
     : [];
 
   const referredIdStr = referredUser._id.toString();
@@ -167,6 +172,8 @@ async function addOrUpdateReferral(referrerId, referredUser) {
 }
 
 const signupWithEmail = async (req, res) => {
+
+  const {FRONTEND_URL} = getConfig()
   try {
     const {
       email = "",
@@ -202,7 +209,7 @@ const signupWithEmail = async (req, res) => {
           // Add $10 referral credits to the current user's cache
           try {
             console.log(
-              `Added $10 welcome credit to user cache for user ${user._id}`
+              `Added $10 welcome credit to user cache for user ${user._id}`,
             );
           } catch (error) {
             console.error("Error adding welcome credit to user cache:", error);
@@ -213,13 +220,13 @@ const signupWithEmail = async (req, res) => {
             const referringUser = await User.findById(user.referredBy);
             if (referringUser) {
               console.log(
-                `Added $10 referral credit to referring user cache ${user.referredBy}`
+                `Added $10 referral credit to referring user cache ${user.referredBy}`,
               );
             }
           } catch (error) {
             console.error(
               "Error adding referral credits to referring user:",
-              error
+              error,
             );
           }
         }
@@ -239,28 +246,40 @@ const signupWithEmail = async (req, res) => {
 
       // ✅ CREATE NEW SESSION (MULTI-SESSION SUPPORT)
       const newSessionId = randomBytes(32).toString("hex");
-      const deviceId = req.body.deviceId || createHmac("sha256", "voycell-fingerprint").update((req.headers["user-agent"] || "") + (req.ip || "")).digest("hex");
+      const deviceId =
+        req.body.deviceId ||
+        createHmac("sha256", "voycell-fingerprint")
+          .update((req.headers["user-agent"] || "") + (req.ip || ""))
+          .digest("hex");
 
       const sessionData = {
         sessionId: newSessionId,
         deviceId: deviceId,
         ip: req.ip,
         userAgent: req.headers["user-agent"],
-        createdAt: new Date()
+        createdAt: new Date(),
       };
 
       // If login from a DIFFERENT device, clear everything
-      const otherDeviceSessions = user.activeSessions.filter(s => s.deviceId !== deviceId);
+      const otherDeviceSessions = user.activeSessions.filter(
+        (s) => s.deviceId !== deviceId,
+      );
       if (otherDeviceSessions.length > 0) {
         user.activeSessions = [];
       }
 
       // Handle same-device sessions (limit to 2)
-      const sameDeviceSessions = user.activeSessions.filter(s => s.deviceId === deviceId);
+      const sameDeviceSessions = user.activeSessions.filter(
+        (s) => s.deviceId === deviceId,
+      );
       if (sameDeviceSessions.length >= 2) {
         // Remove oldest session on this device
-        const oldestOnDevice = sameDeviceSessions.sort((a, b) => a.createdAt - b.createdAt)[0];
-        user.activeSessions = user.activeSessions.filter(s => s.sessionId !== oldestOnDevice.sessionId);
+        const oldestOnDevice = sameDeviceSessions.sort(
+          (a, b) => a.createdAt - b.createdAt,
+        )[0];
+        user.activeSessions = user.activeSessions.filter(
+          (s) => s.sessionId !== oldestOnDevice.sessionId,
+        );
       }
 
       user.activeSessions.push(sessionData);
@@ -312,11 +331,15 @@ const signupWithEmail = async (req, res) => {
     }
 
     if (!/[A-Z]/.test(password)) {
-      passwordErrors.push("Password must contain at least one uppercase letter.");
+      passwordErrors.push(
+        "Password must contain at least one uppercase letter.",
+      );
     }
 
     if (!/[a-z]/.test(password)) {
-      passwordErrors.push("Password must contain at least one lowercase letter.");
+      passwordErrors.push(
+        "Password must contain at least one lowercase letter.",
+      );
     }
 
     if (!/[0-9]/.test(password)) {
@@ -324,7 +347,9 @@ const signupWithEmail = async (req, res) => {
     }
 
     if (!/[!@#$%^&*(),.?\":{}|<>_\-+=]/.test(password)) {
-      passwordErrors.push("Password must contain at least one special character.");
+      passwordErrors.push(
+        "Password must contain at least one special character.",
+      );
     }
 
     if (passwordErrors.length > 0) {
@@ -464,11 +489,13 @@ const demoEmailSend = async (req, res) => {
   } catch {
     res.status(500).json({ error: err.message });
   }
-}
+};
 
 async function sendWhatsAppOtp(toPhoneNumber, otp) {
+  const {WHATSAPP_PHONE_NUMBER_ID} = getConfig()
   try {
-    const url = `${META_GRAPH_URL}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    // const url = `${META_GRAPH_URL}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    const url = `${META_GRAPH_URL}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
     const payload = {
       messaging_product: "whatsapp",
@@ -477,43 +504,40 @@ async function sendWhatsAppOtp(toPhoneNumber, otp) {
       template: {
         name: "otp",
         language: {
-          code: "en_US"
+          code: "en_US",
         },
         components: [
           {
             type: "body",
-            parameters: [
-              { type: "text", text: otp }
-            ]
+            parameters: [{ type: "text", text: otp }],
           },
           {
             type: "button",
             sub_type: "url",
             index: 0,
             parameters: [
-              { type: "text", text: otp }  // Just the OTP (must be ≤ 15 characters)
-            ]
-          }
-        ]
-      }
+              { type: "text", text: otp }, // Just the OTP (must be ≤ 15 characters)
+            ],
+          },
+        ],
+      },
     };
 
     const headers = {
       Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     };
 
     const response = await axios.post(url, payload, { headers });
   } catch (error) {
     throw error;
   }
-};
+}
 
 const verifyRealPhoneNumber = async (req, res) => {
   try {
     const userId = req.user?._id; // from token middleware
-    const { countryCode, phonenumber, otp, resendOtp = false } =
-      req.body;
+    const { countryCode, phonenumber, otp, resendOtp = false } = req.body;
 
     if (!userId) {
       return res.status(401).json({
@@ -531,7 +555,6 @@ const verifyRealPhoneNumber = async (req, res) => {
 
     const sanitizedCountryCode = countryCode.replace("+", "");
     const sanitizedNumber = phonenumber.replace(/\D/g, "");
-
 
     const existingPhoneUser = await User.findOne({
       _id: { $ne: userId },
@@ -616,8 +639,7 @@ const verifyRealPhoneNumber = async (req, res) => {
     // mark number verified
     const phoneExistsIndex = user.phonenumbers.findIndex(
       (p) =>
-        p.countryCode === sanitizedCountryCode &&
-        p.number === sanitizedNumber
+        p.countryCode === sanitizedCountryCode && p.number === sanitizedNumber,
     );
 
     if (phoneExistsIndex >= 0) {
@@ -654,6 +676,7 @@ const verifyRealPhoneNumber = async (req, res) => {
 };
 
 const resendVerificationLink = async (req, res) => {
+  const {FRONTEND_URL} = getConfig()
   try {
     const { email = "" } = req.body;
 
@@ -703,6 +726,7 @@ const resendVerificationLink = async (req, res) => {
 };
 
 const signupWithPhoneNumber = async (req, res) => {
+  const {FRONTEND_URL} = getConfig()
   try {
     const {
       countryCode,
@@ -786,7 +810,7 @@ const signupWithPhoneNumber = async (req, res) => {
             ],
           },
         },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
+        { upsert: true, new: true, setDefaultsOnInsert: true },
       );
 
       try {
@@ -795,7 +819,7 @@ const signupWithPhoneNumber = async (req, res) => {
       } catch (error) {
         console.error(
           "OTP Send Failed ❌",
-          error.response?.data || error.message
+          error.response?.data || error.message,
         );
         return res.status(500).json({
           status: "error",
@@ -1073,10 +1097,7 @@ const signupWithPhoneNumber = async (req, res) => {
 
 const unifiedLogin = async (req, res) => {
   try {
-    const {
-      email = "",
-      password = "",
-    } = req.body;
+    const { email = "", password = "" } = req.body;
 
     if (email && password) {
       try {
@@ -1104,7 +1125,7 @@ const unifiedLogin = async (req, res) => {
         // 🚫 Check if account is locked
         if (user.lockUntil && user.lockUntil > new Date()) {
           const remainingMinutes = Math.ceil(
-            (user.lockUntil - new Date()) / (1000 * 60)
+            (user.lockUntil - new Date()) / (1000 * 60),
           );
 
           return res.status(403).json({
@@ -1112,7 +1133,6 @@ const unifiedLogin = async (req, res) => {
             message: `Account locked due to multiple failed attempts. Try again in ${remainingMinutes} minutes.`,
           });
         }
-
 
         // If logging in by email, require email verification
         if (trimmedEmail && !user.isVerified) {
@@ -1143,7 +1163,6 @@ const unifiedLogin = async (req, res) => {
               "This user signed up with email. Please login with email and password.",
           });
         }
-
 
         // ✅ MANUAL PASSWORD CHECK
         const hash = createHmac("sha256", user.salt)
@@ -1185,31 +1204,42 @@ const unifiedLogin = async (req, res) => {
           });
         }
 
-
         // ✅ CREATE NEW SESSION (MULTI-SESSION SUPPORT)
         const newSessionId = randomBytes(32).toString("hex");
-        const deviceId = req.body.deviceId || createHmac("sha256", "voycell-fingerprint").update((req.headers["user-agent"] || "") + (req.ip || "")).digest("hex");
+        const deviceId =
+          req.body.deviceId ||
+          createHmac("sha256", "voycell-fingerprint")
+            .update((req.headers["user-agent"] || "") + (req.ip || ""))
+            .digest("hex");
 
         const sessionData = {
           sessionId: newSessionId,
           deviceId: deviceId,
           ip: req.ip,
           userAgent: req.headers["user-agent"],
-          createdAt: new Date()
+          createdAt: new Date(),
         };
 
         // If login from a DIFFERENT device, clear everything
-        const otherDeviceSessions = user.activeSessions.filter(s => s.deviceId !== deviceId);
+        const otherDeviceSessions = user.activeSessions.filter(
+          (s) => s.deviceId !== deviceId,
+        );
         if (otherDeviceSessions.length > 0) {
           user.activeSessions = [];
         }
 
         // Handle same-device sessions (limit to 2)
-        const sameDeviceSessions = user.activeSessions.filter(s => s.deviceId === deviceId);
+        const sameDeviceSessions = user.activeSessions.filter(
+          (s) => s.deviceId === deviceId,
+        );
         if (sameDeviceSessions.length >= 2) {
           // Remove oldest session on this device
-          const oldestOnDevice = sameDeviceSessions.sort((a, b) => a.createdAt - b.createdAt)[0];
-          user.activeSessions = user.activeSessions.filter(s => s.sessionId !== oldestOnDevice.sessionId);
+          const oldestOnDevice = sameDeviceSessions.sort(
+            (a, b) => a.createdAt - b.createdAt,
+          )[0];
+          user.activeSessions = user.activeSessions.filter(
+            (s) => s.sessionId !== oldestOnDevice.sessionId,
+          );
         }
 
         user.activeSessions.push(sessionData);
@@ -1252,6 +1282,7 @@ const unifiedLogin = async (req, res) => {
 };
 
 const generateMagicLink = async (req, res) => {
+  const {FRONTEND_URL} = getConfig()
   try {
     // const userId = req.user._id; // ✅ from auth middleware
 
@@ -1287,7 +1318,7 @@ const generateMagicLink = async (req, res) => {
     });
 
     // ✅ Create full magic link
-    const magicLink = `${process.env.FRONTEND_URL}/link-login?token=${magicToken}`;
+    const magicLink = `${FRONTEND_URL}/link-login?token=${magicToken}`;
 
     // ✅ SEND MAGIC LINK TO USER EMAIL ✅✅✅
     await sendMagicLinkEmail(user.email, magicLink);

@@ -5,6 +5,7 @@ const User = require("../models/userModel");
 const ScriptToken = require("../models/FormCallScriptToken");
 
 exports.serveFormCallJS = async (req, res) => {
+  const { API_BASE_URL } = getConfig();
   // const { token } = req.params;
   const { token, fieldName } = req.params;
   if (!fieldName || fieldName.length > 50) {
@@ -12,7 +13,7 @@ exports.serveFormCallJS = async (req, res) => {
   }
 
   console.log("token", token);
-  
+
   // 1. Fetch Token Data
   const tokenDoc = await ScriptToken.findOne({ token }).lean();
   if (!tokenDoc) return res.status(404).send("// Invalid token");
@@ -33,17 +34,24 @@ exports.serveFormCallJS = async (req, res) => {
 
   // 3. IMPROVED RESTRICTION CHECK
   if (tokenDoc.restrictedUrls && tokenDoc.restrictedUrls.length > 0) {
-    const isRestricted = tokenDoc.restrictedUrls.some(restrictedPath => {
+    const isRestricted = tokenDoc.restrictedUrls.some((restrictedPath) => {
       if (!restrictedPath) return false;
 
       // 1. Clean both paths (remove trailing slashes and spaces)
-      const cleanDBPath = restrictedPath.toLowerCase().trim().replace(/\/+$/, "");
-      const cleanCurrentUrl = normalizedReferer.toLowerCase().trim().replace(/\/+$/, "");
+      const cleanDBPath = restrictedPath
+        .toLowerCase()
+        .trim()
+        .replace(/\/+$/, "");
+      const cleanCurrentUrl = normalizedReferer
+        .toLowerCase()
+        .trim()
+        .replace(/\/+$/, "");
 
       // 2. LOGIC: Block if the Current URL is exactly the restricted path
       // OR if the Current URL is part of the restricted path (for local testing)
       // OR if the restricted path is a sub-folder of the current URL
-      const match = cleanCurrentUrl === cleanDBPath ||
+      const match =
+        cleanCurrentUrl === cleanDBPath ||
         cleanDBPath.includes(cleanCurrentUrl) ||
         cleanCurrentUrl.includes(cleanDBPath);
 
@@ -57,14 +65,14 @@ exports.serveFormCallJS = async (req, res) => {
     }
   }
 
-
   const user = await User.findById(tokenDoc.userId).lean();
   if (!user) {
     return res.status(404).send("// User not found");
   }
 
   const API_BASE =
-    process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
+    // process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
+    API_BASE_URL || req.protocol + "://" + req.get("host");
 
   const js = `
 (function () {

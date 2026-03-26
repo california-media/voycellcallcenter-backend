@@ -5,6 +5,7 @@ const Lead = require("../models/leadModel"); // adjust as needed
 const mongoose = require("mongoose");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const User = require("../models/userModel"); // adjust as needed
+const { getConfig } = require("../utils/getConfig");
 require("dotenv").config();
 
 // Step 1: Redirect to HubSpot OAuth
@@ -74,13 +75,15 @@ const buildGlobalDuplicateSets = async (userId) => {
 };
 
 const redirectToHubSpot = (req, res) => {
+  const {HUBSPOT_CLIENT_ID}= getConfig()
   const scopes = ["crm.objects.contacts.read", "oauth"];
   const user_id = req.user._id;
   const defaultCountryCode = req.query.defaultCountryCode || "971";
   const tags = req.query.tags || "[]"; // 👈 ADD
   const category = req.query.category || "contact"; // 👈 ADD (default)
   const params = querystring.stringify({
-    client_id: process.env.HUBSPOT_CLIENT_ID,
+    // client_id: process.env.HUBSPOT_CLIENT_ID,
+    client_id: HUBSPOT_CLIENT_ID,
     redirect_uri: process.env.HUBSPOT_REDIRECT_URI,
     scope: scopes.join(" "),
     // state: `${user_id}::${defaultCountryCode}`,
@@ -100,6 +103,7 @@ const redirectToHubSpot = (req, res) => {
 };
 
 const handleHubSpotCallback = async (req, res) => {
+  const {HUBSPOT_CLIENT_ID} = getConfig()
   const { code, state } = req.query;
   if (!code || !state)
     return res.status(400).json({ status: "error", message: "Missing code" });
@@ -118,7 +122,8 @@ const handleHubSpotCallback = async (req, res) => {
       "https://api.hubapi.com/oauth/v1/token",
       querystring.stringify({
         grant_type: "authorization_code",
-        client_id: process.env.HUBSPOT_CLIENT_ID,
+        // client_id: process.env.HUBSPOT_CLIENT_ID,
+        client_id: HUBSPOT_CLIENT_ID,
         client_secret: process.env.HUBSPOT_CLIENT_SECRET,
         redirect_uri: process.env.HUBSPOT_REDIRECT_URI,
         code,

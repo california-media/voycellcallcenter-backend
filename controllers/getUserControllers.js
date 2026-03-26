@@ -201,6 +201,18 @@ const getUserData = async (req, res) => {
     apiBaseUrl: user.hubspot?.apiBaseUrl || null,
     tokenExpiresAt: user.hubspot?.tokenExpiresAt || null,
   },
+  // In all 3 places in getUserData, add to crm array:
+{
+  type:          "pipedrive",
+  isConnected:   user.pipedrive?.isConnected    || false,
+  userId:        user.pipedrive?.userId         || null,
+  email:         user.pipedrive?.email          || null,
+  accessToken:   user.pipedrive?.accessToken    || null,
+  refreshToken:  user.pipedrive?.refreshToken   || null,
+  apiBaseUrl:    user.pipedrive?.apiBaseUrl      || null,
+  companyDomain: user.pipedrive?.companyDomain  || null,
+  tokenExpiresAt: user.pipedrive?.tokenExpiresAt || null,
+},
               {
                 type: "meta",
                 isConnected: user.meta?.isConnected || false,
@@ -366,6 +378,17 @@ const getUserData = async (req, res) => {
     apiBaseUrl: user.hubspot?.apiBaseUrl || null,
     tokenExpiresAt: user.hubspot?.tokenExpiresAt || null,
   },
+  {
+  type:          "pipedrive",
+  isConnected:   user.pipedrive?.isConnected    || false,
+  userId:        user.pipedrive?.userId         || null,
+  email:         user.pipedrive?.email          || null,
+  accessToken:   user.pipedrive?.accessToken    || null,
+  refreshToken:  user.pipedrive?.refreshToken   || null,
+  apiBaseUrl:    user.pipedrive?.apiBaseUrl      || null,
+  companyDomain: user.pipedrive?.companyDomain  || null,
+  tokenExpiresAt: user.pipedrive?.tokenExpiresAt || null,
+},
               {
                 type: "meta",
                 isConnected: user.meta?.isConnected || false,
@@ -517,6 +540,17 @@ const getUserData = async (req, res) => {
     apiBaseUrl: user.hubspot?.apiBaseUrl || null,
     tokenExpiresAt: user.hubspot?.tokenExpiresAt || null,
   },
+  {
+  type:          "pipedrive",
+  isConnected:   user.pipedrive?.isConnected    || false,
+  userId:        user.pipedrive?.userId         || null,
+  email:         user.pipedrive?.email          || null,
+  accessToken:   user.pipedrive?.accessToken    || null,
+  refreshToken:  user.pipedrive?.refreshToken   || null,
+  apiBaseUrl:    user.pipedrive?.apiBaseUrl      || null,
+  companyDomain: user.pipedrive?.companyDomain  || null,
+  tokenExpiresAt: user.pipedrive?.tokenExpiresAt || null,
+},
         ],
         whatsapp:
         {

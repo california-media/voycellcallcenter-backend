@@ -14,7 +14,7 @@ const { createZoomMeeting } = require("../utils/zoomCalendar");
 const { createGoogleMeetEvent } = require("../utils/googleCalendar");
 const incomingcallConnection = require("../models/incomingcallConnection");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
-  const { hubspotAfterCallSync } = require("../services/hubspotSync.service");
+const { hubspotAfterCallSync } = require("../services/hubspotSync.service");
 
 //show all calls of number agent and company admin calls, show proper agent ya company admin name in call,extention is change so call is not show
 
@@ -114,7 +114,10 @@ async function findRecord(details, allowedUserIds) {
 
   // Normalize number for search: try both as-is and with leading 0 if 9 digits
   let searchNumbers = [details.number];
-  if (details.number.length === 9 && /^(50|52|54|55|56|58)/.test(details.number)) {
+  if (
+    details.number.length === 9 &&
+    /^(50|52|54|55|56|58)/.test(details.number)
+  ) {
     searchNumbers.push("0" + details.number);
   } else if (details.number.length === 10 && details.number.startsWith("0")) {
     searchNumbers.push(details.number.substring(1));
@@ -161,6 +164,7 @@ async function findRecord(details, allowedUserIds) {
 }
 
 exports.fetchAndStoreCallHistory = async (req, res) => {
+  const {YEASTAR_TZ} = getConfig()
   try {
     const userId = req.user._id;
 
@@ -177,7 +181,8 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     const deviceId = user.PBXDetails.assignedDeviceId;
     const token = await getDeviceToken(deviceId, "pbx");
     // Always use Yeastar PBX timezone
-    const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
+    // const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
+    const TZ = YEASTAR_TZ || "Asia/Dubai";
 
     // Build time window in Yeastar timezone
     const endMoment = moment().tz(TZ);
@@ -219,12 +224,18 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     // ==========================================
     let allowedCreatedByIds = [userId];
     if (user.role === "companyAdmin") {
-      const agents = await User.find({ createdByWhichCompanyAdmin: userId, role: "user" }).select("_id");
-      allowedCreatedByIds.push(...agents.map(a => a._id));
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: userId,
+        role: "user",
+      }).select("_id");
+      allowedCreatedByIds.push(...agents.map((a) => a._id));
     } else if (user.createdByWhichCompanyAdmin) {
       const adminId = user.createdByWhichCompanyAdmin;
-      const agents = await User.find({ createdByWhichCompanyAdmin: adminId, role: "user" }).select("_id");
-      allowedCreatedByIds = [adminId, ...agents.map(a => a._id)];
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: adminId,
+        role: "user",
+      }).select("_id");
+      allowedCreatedByIds = [adminId, ...agents.map((a) => a._id)];
     }
 
     let inserted = 0;
@@ -260,7 +271,10 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         // If it's Inbound and the caller (FROM) is not in DB -> Create Lead
         if (call.call_type === "Inbound" && !fromRecord) {
           // Double check to ensure no last-second race condition if multiple calls sync
-          const doubleCheck = await findRecord(fromDetails, allowedCreatedByIds);
+          const doubleCheck = await findRecord(
+            fromDetails,
+            allowedCreatedByIds,
+          );
           const newID = new mongoose.Types.ObjectId();
           if (!doubleCheck) {
             fromRecord = await Lead.create({
@@ -268,19 +282,23 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
               contact_id: newID,
               firstname: "Unknown",
               lastname: "Caller",
-              phoneNumbers: [{
-                countryCode: fromDetails.countryCode || "971",
-                number: fromDetails.number
-              }],
+              phoneNumbers: [
+                {
+                  countryCode: fromDetails.countryCode || "971",
+                  number: fromDetails.number,
+                },
+              ],
               status: "noAnswer",
               createdBy: userId,
-              activities: [{
-                action: "Lead Created",
-                type: "lead",
-                title: "Automated Lead Creation",
-                description: `Lead created from unanswered call (by ${performerName})`,
-                timestamp: dubaiFormatted
-              }]
+              activities: [
+                {
+                  action: "Lead Created",
+                  type: "lead",
+                  title: "Automated Lead Creation",
+                  description: `Lead created from unanswered call (by ${performerName})`,
+                  timestamp: dubaiFormatted,
+                },
+              ],
             });
           } else {
             fromRecord = doubleCheck;
@@ -328,9 +346,7 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         action: "Call activity",
         type: "call",
         title:
-          call.call_type === "Outbound"
-            ? "Outgoing Call"
-            : "Incoming Call",
+          call.call_type === "Outbound" ? "Outgoing Call" : "Incoming Call",
         description: `Call ${call.disposition} | Duration: ${call.duration}s (by ${performerName})`,
         timestamp: dubaiFormatted,
       };
@@ -376,6 +392,7 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
 };
 
 exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
+  const {YEASTAR_TZ} = getConfig()
   try {
     const userId = req.user._id;
 
@@ -392,7 +409,8 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
     const deviceId = user.PBXDetails.assignedDeviceId;
     const token = await getDeviceToken(deviceId, "pbx");
     // Always use Yeastar PBX timezone
-    const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
+    // const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
+    const TZ = YEASTAR_TZ || "Asia/Dubai";
 
     // Build time window in Yeastar timezone
     const endMoment = moment().tz(TZ);
@@ -434,12 +452,18 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
     // ==========================================
     let allowedCreatedByIds = [userId];
     if (user.role === "companyAdmin") {
-      const agents = await User.find({ createdByWhichCompanyAdmin: userId, role: "user" }).select("_id");
-      allowedCreatedByIds.push(...agents.map(a => a._id));
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: userId,
+        role: "user",
+      }).select("_id");
+      allowedCreatedByIds.push(...agents.map((a) => a._id));
     } else if (user.createdByWhichCompanyAdmin) {
       const adminId = user.createdByWhichCompanyAdmin;
-      const agents = await User.find({ createdByWhichCompanyAdmin: adminId, role: "user" }).select("_id");
-      allowedCreatedByIds = [adminId, ...agents.map(a => a._id)];
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: adminId,
+        role: "user",
+      }).select("_id");
+      allowedCreatedByIds = [adminId, ...agents.map((a) => a._id)];
     }
 
     let inserted = 0;
@@ -475,7 +499,10 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
         // If it's Inbound and the caller (FROM) is not in DB -> Create Lead
         if (call.call_type === "Inbound" && !fromRecord) {
           // Double check to ensure no last-second race condition if multiple calls sync
-          const doubleCheck = await findRecord(fromDetails, allowedCreatedByIds);
+          const doubleCheck = await findRecord(
+            fromDetails,
+            allowedCreatedByIds,
+          );
           const newID = new mongoose.Types.ObjectId();
           if (!doubleCheck) {
             fromRecord = await Lead.create({
@@ -483,19 +510,23 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
               contact_id: newID,
               firstname: "Unknown",
               lastname: "Caller",
-              phoneNumbers: [{
-                countryCode: fromDetails.countryCode || "971",
-                number: fromDetails.number
-              }],
+              phoneNumbers: [
+                {
+                  countryCode: fromDetails.countryCode || "971",
+                  number: fromDetails.number,
+                },
+              ],
               status: "noAnswer",
               createdBy: userId,
-              activities: [{
-                action: "Lead Created",
-                type: "lead",
-                title: "Automated Lead Creation",
-                description: `Lead created from unanswered call (by ${performerName})`,
-                timestamp: dubaiFormatted
-              }]
+              activities: [
+                {
+                  action: "Lead Created",
+                  type: "lead",
+                  title: "Automated Lead Creation",
+                  description: `Lead created from unanswered call (by ${performerName})`,
+                  timestamp: dubaiFormatted,
+                },
+              ],
             });
           } else {
             fromRecord = doubleCheck;
@@ -543,9 +574,7 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
         action: "Call activity",
         type: "call",
         title:
-          call.call_type === "Outbound"
-            ? "Outgoing Call"
-            : "Incoming Call",
+          call.call_type === "Outbound" ? "Outgoing Call" : "Incoming Call",
         description: `Call ${call.disposition} | Duration: ${call.duration}s (by ${performerName})`,
         timestamp: dubaiFormatted,
       };
@@ -627,7 +656,7 @@ exports.getCompanyCallHistory = async (req, res) => {
       createdByWhichCompanyAdmin: admin._id,
     }).select("_id");
 
-    const allUserIds = [admin._id, ...agents.map(a => a._id)];
+    const allUserIds = [admin._id, ...agents.map((a) => a._id)];
 
     // ------------------------------------
     // 2️⃣ RECORD USER FILTER (agentId)
@@ -635,7 +664,7 @@ exports.getCompanyCallHistory = async (req, res) => {
     let recordUserIds = allUserIds;
 
     if (Array.isArray(agentId) && agentId.length) {
-      recordUserIds = agentId.map(id => new mongoose.Types.ObjectId(id));
+      recordUserIds = agentId.map((id) => new mongoose.Types.ObjectId(id));
     }
 
     // ------------------------------------
@@ -647,7 +676,6 @@ exports.getCompanyCallHistory = async (req, res) => {
 
     // ❌ Exclude Internal calls
     recordMatch.direction = { $ne: "Internal" };
-
 
     if (search.trim()) {
       recordMatch.$or = [
@@ -664,7 +692,7 @@ exports.getCompanyCallHistory = async (req, res) => {
         invalid: "FAILED",
       };
       recordMatch.status = {
-        $in: status.map(s => map[s]).filter(Boolean),
+        $in: status.map((s) => map[s]).filter(Boolean),
       };
     }
 
@@ -675,7 +703,7 @@ exports.getCompanyCallHistory = async (req, res) => {
         // internal: "Internal",
       };
       recordMatch.direction = {
-        $in: callType.map(t => map[t]).filter(Boolean),
+        $in: callType.map((t) => map[t]).filter(Boolean),
       };
     }
 
@@ -732,9 +760,7 @@ exports.getCompanyCallHistory = async (req, res) => {
           from: "users",
           localField: "userId",
           foreignField: "_id",
-          pipeline: [
-            { $project: { firstname: 1, lastname: 1, role: 1 } },
-          ],
+          pipeline: [{ $project: { firstname: 1, lastname: 1, role: 1 } }],
           as: "owner",
         },
       },
@@ -804,8 +830,7 @@ exports.getCompanyCallHistory = async (req, res) => {
         outboundCalls: summary.outbound,
         // internalCalls: summary.internal,
         missedCalls: summary.missed,
-        totalCalls:
-          summary.inbound + summary.outbound,
+        totalCalls: summary.inbound + summary.outbound,
         // + summary.internal,
       },
       page,
@@ -828,7 +853,7 @@ exports.getAgentCallHistory = async (req, res) => {
 
     // 1️⃣ Fetch logged-in company admin
     const agent = await User.findById(loginUserId).select(
-      "_id firstname lastname extensionNumber role PBXDetails"
+      "_id firstname lastname extensionNumber role PBXDetails",
     );
 
     if (!agent) {
@@ -1006,7 +1031,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
 
     /* 👤 Logged-in user */
     const loginUser = await User.findById(loginUserId).select(
-      "_id firstname lastname role createdByWhichCompanyAdmin"
+      "_id firstname lastname role createdByWhichCompanyAdmin",
     );
 
     if (!loginUser) {
@@ -1044,16 +1069,16 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
         role: "user",
       }).select("_id");
 
-      allowedUserIds = [loginUser._id, ...agents.map(a => a._id)];
+      allowedUserIds = [loginUser._id, ...agents.map((a) => a._id)];
     } else {
       allowedUserIds = [loginUser._id];
     }
 
     /* 📞 PHONE NORMALIZATION */
-    const normalize = v => v?.toString().replace(/\D/g, "") || "";
+    const normalize = (v) => v?.toString().replace(/\D/g, "") || "";
 
     const phoneSet = new Set();
-    phonenumbers.forEach(p => {
+    phonenumbers.forEach((p) => {
       const num = normalize(p.number);
       const cc = normalize(p.countryCode);
       if (!num) return;
@@ -1094,10 +1119,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       },
       {
         $match: {
-          $or: [
-            { call_from: { $in: phones } },
-            { call_to: { $in: phones } },
-          ],
+          $or: [{ call_from: { $in: phones } }, { call_to: { $in: phones } }],
         },
       },
 
@@ -1145,7 +1167,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       pipeline.push({
         $match: {
           status: {
-            $in: status.map(s => statusMap[s]).filter(Boolean),
+            $in: status.map((s) => statusMap[s]).filter(Boolean),
           },
         },
       });
@@ -1156,7 +1178,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
       pipeline.push({
         $match: {
           direction: {
-            $in: callType.map(t => typeMap[t]).filter(Boolean),
+            $in: callType.map((t) => typeMap[t]).filter(Boolean),
           },
         },
       });
@@ -1225,7 +1247,7 @@ exports.getPhoneNumberCallHistory = async (req, res) => {
     let outboundCalls = 0;
     let missedCalls = 0;
 
-    summaryCalls.forEach(c => {
+    summaryCalls.forEach((c) => {
       if (c.direction === "Inbound") inboundCalls++;
       if (c.direction === "Outbound") outboundCalls++;
       if (c.status === "NO ANSWER") missedCalls++;
@@ -1285,7 +1307,7 @@ exports.callRecordingDownload = async (req, res) => {
     // ---- STEP 1 ----
     // Correct API URL based on your working Postman request
     const url1 = `${PBX_BASE_URL}/recording/download?access_token=${token}&file=${encodeURIComponent(
-      record_file
+      record_file,
     )}`;
 
     const step1 = await axios.get(url1);
@@ -1306,8 +1328,7 @@ exports.callRecordingDownload = async (req, res) => {
       }
     }
 
-    const MEDIA_BASE_URL =
-      getMediaBaseUrl(PBX_BASE_URL);
+    const MEDIA_BASE_URL = getMediaBaseUrl(PBX_BASE_URL);
 
     const downloadPath = step1.data.download_resource_url;
     const url2 = `${MEDIA_BASE_URL}${downloadPath}?access_token=${token}`;
@@ -1333,7 +1354,7 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
 
     // Fetch logged in user (could be admin or agent/user)
     const loggedUser = await User.findById(loginUserId).select(
-      "role createdByWhichCompanyAdmin"
+      "role createdByWhichCompanyAdmin",
     );
 
     if (!loggedUser) {
@@ -1373,8 +1394,8 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         today.getUTCDate() + 1, // next day at 00:00
         0,
         0,
-        0
-      )
+        0,
+      ),
     );
 
     const startDate = new Date(
@@ -1384,8 +1405,8 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         today.getUTCDate() - 29,
         0,
         0,
-        0
-      )
+        0,
+      ),
     );
 
     // ------------------------------
@@ -1445,8 +1466,9 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         "Dec",
       ];
 
-      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${months[dateObj.getUTCMonth()]
-        } ${dateObj.getUTCFullYear()}`;
+      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${
+        months[dateObj.getUTCMonth()]
+      } ${dateObj.getUTCFullYear()}`;
     };
 
     // ------------------------------
@@ -1459,8 +1481,8 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         Date.UTC(
           today.getUTCFullYear(),
           today.getUTCMonth(),
-          today.getUTCDate() - i
-        )
+          today.getUTCDate() - i,
+        ),
       );
 
       daysArray.push({
@@ -1475,7 +1497,7 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     // ------------------------------
     calls.forEach((call) => {
       const d = new Date(
-        call.start_time.replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$1-$2")
+        call.start_time.replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$1-$2"),
       );
 
       const diffDays = Math.floor((endDate - d) / (1000 * 60 * 60 * 24));
@@ -1515,7 +1537,7 @@ exports.getMonthlyCallGraph = async (req, res) => {
 
     // 1️⃣ Fetch logged-in user
     const loginUser = await User.findById(loginUserId).select(
-      "_id role createdByWhichCompanyAdmin"
+      "_id role createdByWhichCompanyAdmin",
     );
 
     if (!loginUser) {
@@ -1597,7 +1619,7 @@ exports.getMonthlyCallGraph = async (req, res) => {
     // 7️⃣ Summary counts
     const inboundTotal = calls.filter((c) => c.direction === "Inbound").length;
     const outboundTotal = calls.filter(
-      (c) => c.direction === "Outbound"
+      (c) => c.direction === "Outbound",
     ).length;
     const answeredTotal = calls.filter((c) => c.status === "ANSWERED").length;
     const invalidTotal = calls.filter((c) => c.status === "FAILED").length;
@@ -1642,6 +1664,22 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     // ⭐ NEW: Determine company admin and agent group
     // -----------------------------------------------
     const loggedInUser = await User.findById(userId);
+
+
+
+
+
+
+
+
+console.log("[DEBUG] userId being queried:", userId);
+console.log("[DEBUG] loggedInUser._id:", loggedInUser?._id);
+console.log("[DEBUG] loggedInUser.pipedrive raw:", JSON.stringify(loggedInUser?.pipedrive, null, 2));
+console.log("[DEBUG] loggedInUser.hubspot.isConnected:", loggedInUser?.hubspot?.isConnected);
+console.log("[DEBUG] loggedInUser.zoho.isConnected:", loggedInUser?.zoho?.isConnected);
+
+
+
 
     // Find company admin ID
     let companyAdminId =
@@ -1770,7 +1808,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       targetDoc.status = status;
     }
 
-
     if (firstname) {
       targetDoc.firstname = firstname;
     }
@@ -1778,7 +1815,6 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     if (lastname) {
       targetDoc.lastname = lastname;
     }
-
 
     // ✅ 5. ADD NOTE AS TASK
     if (note) {
@@ -1844,7 +1880,7 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
           const link = await createGoogleMeetEvent(
             loggedInUser,
             meetingObj,
-            timezone
+            timezone,
           );
 
           meetingObj.meetingLink = link;
@@ -1862,7 +1898,7 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
           const zoomData = await createZoomMeeting(
             loggedInUser,
             meetingObj,
-            timezone
+            timezone,
           );
 
           meetingObj.meetingLink = zoomData.joinUrl;
@@ -1910,21 +1946,61 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
       });
     }
 
+    if (
+      loggedInUser.hubspot?.accessToken &&
+      loggedInUser.hubspot?.isConnected
+    ) {
+      console.log(
+        "[HubSpot] Sync block entered — triggering hubspotAfterCallSync",
+      );
+      const {
+        hubspotAfterCallSync,
+      } = require("../services/hubspotSync.service");
 
+      try {
+        await hubspotAfterCallSync({
+          user: loggedInUser,
+          targetDoc,
+          phone: `+${rawCountry}${rawNumber}`,
+          status,
+          note,
+          meeting,
+        });
+        console.log("[HubSpot] Sync completed successfully");
+      } catch (err) {
+        console.error("[HubSpot Sync Failed] Status:", err?.response?.status);
+        console.error(
+          "[HubSpot Sync Failed] Data:",
+          JSON.stringify(err?.response?.data, null, 2),
+        );
+        console.error("[HubSpot Sync Failed] Message:", err.message);
+        // ✅ Don't return error to client — sync failure shouldn't break the main response
+      }
+    }
+    console.log("[Pipedrive Check]", {
+  isConnected: loggedInUser.pipedrive?.isConnected,
+  hasAccessToken: !!loggedInUser.pipedrive?.accessToken,
+  hasRefreshToken: !!loggedInUser.pipedrive?.refreshToken,
+});
+    // ✅ Add after HubSpot sync block
+if (loggedInUser.pipedrive?.accessToken && loggedInUser.pipedrive?.isConnected) {
+  const { pipedriveAfterCallSync } = require("../services/pipedriveSync.service");
 
-    if (loggedInUser.hubspot?.accessToken && loggedInUser.hubspot?.isConnected) {
-
-
-  hubspotAfterCallSync({
-    user: loggedInUser,
-    targetDoc,
-    phone: `+${rawCountry}${rawNumber}`,
-    status,
-    note,
-    meeting,
-  }).catch((err) => {
-    console.error("HubSpot After Call Sync Failed:", err.message);
-  });
+  try {
+    await pipedriveAfterCallSync({
+      user: loggedInUser,
+      targetDoc,
+      phone: `+${rawCountry}${rawNumber}`,
+      status,
+      note,
+      meeting,
+    });
+    console.log("[Pipedrive] Sync completed successfully");
+  } catch (err) {
+    console.error("[Pipedrive Sync Failed] Status:", err?.response?.status);
+    console.error("[Pipedrive Sync Failed] Data:", JSON.stringify(err?.response?.data, null, 2));
+    console.error("[Pipedrive Sync Failed] Message:", err.message);
+  }
 }
 
     return res.status(200).json({
@@ -2000,10 +2076,7 @@ exports.findByPhoneNumber = async (req, res) => {
         createdByWhichCompanyAdmin: loggedInUser._id,
       }).select("_id");
 
-      allowedUserIds = [
-        loggedInUser._id,
-        ...agents.map((a) => a._id),
-      ];
+      allowedUserIds = [loggedInUser._id, ...agents.map((a) => a._id)];
     }
 
     /* ---------------------------------------------
@@ -2075,7 +2148,6 @@ exports.findByPhoneNumber = async (req, res) => {
       message: "Contact/Lead found",
       data: contact || lead,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
@@ -2084,11 +2156,11 @@ exports.findByPhoneNumber = async (req, res) => {
   }
 };
 
-
 const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
+const { getConfig } = require("../utils/getConfig");
 
 const lambdaClient = new LambdaClient({
-  region: "eu-north-1"
+  region: "eu-north-1",
 });
 
 exports.incomingCallWebhook = async (req, res) => {
@@ -2097,22 +2169,22 @@ exports.incomingCallWebhook = async (req, res) => {
 
     const connections = await incomingcallConnection.find({ userId });
 
-
     const payload = {
       userId,
       message: "Incoming Call",
     };
 
-
-    const responce = await lambdaClient.send(new InvokeCommand({
-      FunctionName: "incomingcall-connect",
-      InvocationType: "Event",
-      Payload: JSON.stringify({
-        action: "incomingcall",
-        connections: connections.map(c => c.connectionId),
-        payload,
-      })
-    }));
+    const responce = await lambdaClient.send(
+      new InvokeCommand({
+        FunctionName: "incomingcall-connect",
+        InvocationType: "Event",
+        Payload: JSON.stringify({
+          action: "incomingcall",
+          connections: connections.map((c) => c.connectionId),
+          payload,
+        }),
+      }),
+    );
 
     // You can process the incoming call data here
     // For example, save it to the database or trigger other actions
