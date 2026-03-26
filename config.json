@@ -35,8 +35,9 @@
     "META_WHATSAPP_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/callback",
     "MICROSOFT_CLIENT_ID":"8d29cd77-2a13-4e59-974d-45edb7993c28",
     "MICROSOFT_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/microsoft-callback",
-    "PIPEDRIVE_CLIENT_ID":"ed0d84c4446ab153",
+    "PIPEDRIVE_CLIENT_ID":"e1c4b11d532cb7bd",
     "PIPEDRIVE_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/pipedrive/callback",
+    "PIPEDRIVE_CLIENT_SECRET":"6fe2c88b25aa584c46606b266b3e626c8430bd2d",
 
 
     "PORT":"4004",
@@ -54,6 +55,6 @@
     "ZOOM_CLIENT_ID":"IeARJpwvTAW_78tD7YHFEQ",
     "ZOOM_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/zoom-callback",
 
-    
+
     "resetpasswordlink":"https://voycell-call-center-admin-frontend.vercel.app/reset-password"
 }
