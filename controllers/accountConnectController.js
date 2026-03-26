@@ -62,15 +62,15 @@ exports.connectGoogle = async (req, res) => {
 
 // 2. Google OAuth Callback API
 exports.googleCallback = async (req, res) => {
-    const{GOOGLE_CLIENT_ID,GOOGLE_REDIRECT_URI2}= getConfig()
+    const { GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI2 } = getConfig()
 
-// const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const CLIENT_ID = GOOGLE_CLIENT_ID;
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-// const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI2;
-const REDIRECT_URI = GOOGLE_REDIRECT_URI2;
+    // const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+    const CLIENT_ID = GOOGLE_CLIENT_ID;
+    const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+    // const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI2;
+    const REDIRECT_URI = GOOGLE_REDIRECT_URI2;
 
-const oauth2Client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+    const oauth2Client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
 
     const { code, state } = req.query;
     // const userId = state;
@@ -166,8 +166,11 @@ const oauth2Client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
 
 exports.connectMicrosoft = async (req, res) => {
 
-    const {MICROSOFT_CLIENT_ID, MICROSOFT_REDIRECT_URI} = getConfig()
+    const { MICROSOFT_CLIENT_ID, MICROSOFT_REDIRECT_URI } = getConfig()
+    // const MICROSOFT_REDIRECT_URI = "http://localhost:4004/connect/microsoft-callback";
     const userId = req.user._id;
+
+    // console.log(userId, "userId in connect time");
 
     const params = querystring.stringify({
         client_id: MICROSOFT_CLIENT_ID,
@@ -175,7 +178,7 @@ exports.connectMicrosoft = async (req, res) => {
         redirect_uri: MICROSOFT_REDIRECT_URI,
         response_mode: 'query',
         scope: 'User.Read Mail.Send offline_access',
-        state: userId,
+        state: userId.toString(),
     });
 
     const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`;
@@ -184,10 +187,17 @@ exports.connectMicrosoft = async (req, res) => {
 };
 
 exports.microsoftCallback = async (req, res) => {
-    const {MICROSOFT_CLIENT_ID, MICROSOFT_REDIRECT_URI} = getConfig()
+    const { MICROSOFT_CLIENT_ID, MICROSOFT_REDIRECT_URI } = getConfig()
+
+    // const MICROSOFT_REDIRECT_URI = "http://localhost:4004/connect/microsoft-callback";
 
     const { code, state } = req.query;
+
+    // console.log(state, "state");
+    // console.log("MICROSOFT_CLIENT_SECRET", MICROSOFT_CLIENT_SECRET);
+    // console.log("MICROSOFT_CLIENT_ID", MICROSOFT_CLIENT_ID);
     const userId = state;
+
 
     try {
         const tokenResponse = await axios.post('https://login.microsoftonline.com/common/oauth2/v2.0/token', new URLSearchParams({
@@ -202,14 +212,20 @@ exports.microsoftCallback = async (req, res) => {
 
         const accessToken = tokenResponse.data.access_token;
 
+        // console.log("accessTokenmicrosoft", accessToken);
+
         const userProfile = await axios.get('https://graph.microsoft.com/v1.0/me', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
+
+        // console.log("userProfile", userProfile);
 
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'User not found' });
         }
+
+        // console.log("user", user);
 
         user.microsoftId = userProfile.data.id;
         user.microsoftEmail = userProfile.data.mail || userProfile.data.userPrincipalName;
@@ -225,6 +241,8 @@ exports.microsoftCallback = async (req, res) => {
             microsoftAccessToken: user.microsoftAccessToken,
             microsoftConnected: user.microsoftConnected
         };
+
+        // console.log("resultData", resultData);
 
         // res.json({ status: 'success', message: 'Microsoft account connected', user });
 
@@ -327,7 +345,7 @@ exports.connectSMTP = async (req, res) => {
 };
 
 exports.connectZoom = async (req, res) => {
-    const {ZOOM_CLIENT_ID, ZOOM_REDIRECT_URI} = getConfig()
+    const { ZOOM_CLIENT_ID, ZOOM_REDIRECT_URI } = getConfig()
     const userId = req.user._id;
 
     const params = new URLSearchParams({
@@ -346,7 +364,7 @@ exports.connectZoom = async (req, res) => {
 };
 
 exports.zoomCallback = async (req, res) => {
-    const {ZOOM_CLIENT_ID, ZOOM_REDIRECT_URI} = getConfig()
+    const { ZOOM_CLIENT_ID, ZOOM_REDIRECT_URI } = getConfig()
     const { code, state } = req.query;
     const { userId } = JSON.parse(state);
 
