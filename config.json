@@ -21,7 +21,6 @@
     "META_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/meta/callback",
     "META_WHATSAPP_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/callback",
     "MICROSOFT_CLIENT_ID": "8d29cd77-2a13-4e59-974d-45edb7993c28",
-    "MICROSOFT_CLIENT_SECRET": "64966265-2f75-4bc2-8375-32644c6450de",
     "MICROSOFT_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/microsoft-callback",
     "PIPEDRIVE_CLIENT_ID": "ed0d84c4446ab153",
     "PIPEDRIVE_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/pipedrive/callback",
