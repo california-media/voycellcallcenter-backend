@@ -24,10 +24,17 @@ const ZOHO_ACCOUNTS_URL = process.env.ZOHO_ACCOUNTS_URL || "https://accounts.zoh
 // 1. API to Generate Google OAuth URL
 exports.connectGoogle = async (req, res) => {
     const userId = req.user._id;
+    const { GOOGLE_REDIRECT_URI2, GOOGLE_CLIENT_ID } = getConfig()
+
+    // console.log("GOOGLE_REDIRECT_URI2", GOOGLE_REDIRECT_URI2);
+
 
     const type = req.body.type; // Default to 'default' if not specified
     try {
+        console.log("hello");
         const user = await User.findById(userId);
+
+        console.log("user", user);
 
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'User not found' });
@@ -42,8 +49,8 @@ exports.connectGoogle = async (req, res) => {
         ];
 
         const params = querystring.stringify({
-            client_id: CLIENT_ID,
-            redirect_uri: REDIRECT_URI,
+            client_id: GOOGLE_CLIENT_ID,
+            redirect_uri: GOOGLE_REDIRECT_URI2,
             response_type: 'code',
             scope: scopes.join(' '),
             access_type: 'offline',
@@ -51,6 +58,8 @@ exports.connectGoogle = async (req, res) => {
             // state: userId,   // ✅ Pass User ID here, not email
             state: JSON.stringify({ userId, type }),
         });
+
+        // console.log("params", params);
 
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 
