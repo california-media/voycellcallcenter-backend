@@ -166,8 +166,8 @@ exports.googleCallback = async (req, res) => {
 
 exports.connectMicrosoft = async (req, res) => {
 
-    const { MICROSOFT_CLIENT_ID } = getConfig()
-    const MICROSOFT_REDIRECT_URI = "http://localhost:4004/connect/microsoft-callback";
+    const { MICROSOFT_CLIENT_ID, MICROSOFT_REDIRECT_URI } = getConfig()
+    // const MICROSOFT_REDIRECT_URI = "http://localhost:4004/connect/microsoft-callback";
     const userId = req.user._id;
 
     // console.log(userId, "userId in connect time");
@@ -194,6 +194,8 @@ exports.microsoftCallback = async (req, res) => {
     const { code, state } = req.query;
 
     // console.log(state, "state");
+    // console.log("MICROSOFT_CLIENT_SECRET", MICROSOFT_CLIENT_SECRET);
+    // console.log("MICROSOFT_CLIENT_ID", MICROSOFT_CLIENT_ID);
     const userId = state;
 
 
