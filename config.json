@@ -1,59 +1,41 @@
 {
-    
-    "API_BASE_URL":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com",
-    "AWS_BUCKET_NAME":"voycell-api-bucket",
-    "AWS_BUCKET_NAME_WABA":"voycell-waba-attachments",
-
-
-    "EXTENSION_MAX_ATTEMPTS":"500",
-    "EXTENSION_START":"1000",
-
-
-    "FRONTEND_URL":"https://app.voycell.com",
-    "GOOGLE_CLIENT_ID":"939014504701-lf76hk7o5jufh3eul2rrp4hqfg9btpq1.apps.googleusercontent.com",
-    "GOOGLE_REDIRECT_URI":"https://developers.google.com/oauthplayground",
-    "GOOGLE_REDIRECT_URI2":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/google-callback",
-    "GOOGLE_REDIRECT_URI3":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/fetch-google-contacts/google/callback",
-    "HUBSPOT_CLIENT_ID":"35766c71-5991-48ac-a458-7446663b6cc6",
-    "HUBSPOT_REDIRECT_URI2":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/hubspot/callback",
-
-
-    "MAIL_ENCRYPTION":"ssl",
-    "MAIL_FROM_ADDRESS":"noreply@voycell.com",
-
-
-    "MAIL_HOST":"email-smtp.eu-north-1.amazonaws.com",
-
-
-    "MAIL_MAILER":"smtp",
-
-
-    "MAIL_PORT":"587",
-    "MAIL_USERNAME":"AKIAZPPGACVJJ6IDCLWH",
-    "META_APP_ID":"878581404547460",
-    "META_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/meta/callback",
-    "META_WHATSAPP_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/callback",
-    "MICROSOFT_CLIENT_ID":"8d29cd77-2a13-4e59-974d-45edb7993c28",
-    "MICROSOFT_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/microsoft-callback",
-    "PIPEDRIVE_CLIENT_ID":"ed0d84c4446ab153",
-    "PIPEDRIVE_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/pipedrive/callback",
-
-
-    "PORT":"4004",
-
-
-    "WHATSAPP_PHONE_NUMBER_ID":"349091098285399",
-    "YEASTAR_BASE_URL":"https://cmedia.ras.yeastar.com/openapi/v1.0",
-    "YEASTAR_SDK_ACCESS_ID":"5RtvBHtumNDCawauIn9bstm8dlByPufP",
-    "YEASTAR_TZ":"Asia/Dubai",
-    "YEASTAR_USERNAME":"inekQ0iUcc6DoFlBIC0XYxL5lCOhl9Zy",
-    "YEASTAR_USER_AGENT":"Mozilla/5.0",
-    "ZOHO_CLIENT_ID":"1000.K9OTGRINNT0VV5NHTO69IQ9S1G4SXE",
-    "ZOHO_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/zoho/callback",
-    "ZOHO_REDIRECT_URI2":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/fetch-zoho-contacts/zoho/callback",
-    "ZOOM_CLIENT_ID":"IeARJpwvTAW_78tD7YHFEQ",
-    "ZOOM_REDIRECT_URI":"https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/zoom-callback",
-
-    
-    "resetpasswordlink":"https://voycell-call-center-admin-frontend.vercel.app/reset-password"
+    "API_BASE_URL": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com",
+    "AWS_BUCKET_NAME": "voycell-api-bucket",
+    "AWS_BUCKET_NAME_WABA": "voycell-waba-attachments",
+    "EXTENSION_MAX_ATTEMPTS": "500",
+    "EXTENSION_START": "1000",
+    "FRONTEND_URL": "https://app.voycell.com",
+    "GOOGLE_CLIENT_ID": "939014504701-lf76hk7o5jufh3eul2rrp4hqfg9btpq1.apps.googleusercontent.com",
+    "GOOGLE_REDIRECT_URI": "https://developers.google.com/oauthplayground",
+    "GOOGLE_REDIRECT_URI2": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/google-callback",
+    "GOOGLE_REDIRECT_URI3": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/fetch-google-contacts/google/callback",
+    "HUBSPOT_CLIENT_ID": "35766c71-5991-48ac-a458-7446663b6cc6",
+    "HUBSPOT_REDIRECT_URI2": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/hubspot/callback",
+    "MAIL_ENCRYPTION": "ssl",
+    "MAIL_FROM_ADDRESS": "noreply@voycell.com",
+    "MAIL_HOST": "email-smtp.eu-north-1.amazonaws.com",
+    "MAIL_MAILER": "smtp",
+    "MAIL_PORT": "587",
+    "MAIL_USERNAME": "AKIAZPPGACVJJ6IDCLWH",
+    "META_APP_ID": "878581404547460",
+    "META_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/meta/callback",
+    "META_WHATSAPP_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/whatsapp/callback",
+    "MICROSOFT_CLIENT_ID": "8d29cd77-2a13-4e59-974d-45edb7993c28",
+    "MICROSOFT_CLIENT_SECRET": "64966265-2f75-4bc2-8375-32644c6450de",
+    "MICROSOFT_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/microsoft-callback",
+    "PIPEDRIVE_CLIENT_ID": "ed0d84c4446ab153",
+    "PIPEDRIVE_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/pipedrive/callback",
+    "PORT": "4004",
+    "WHATSAPP_PHONE_NUMBER_ID": "349091098285399",
+    "YEASTAR_BASE_URL": "https://cmedia.ras.yeastar.com/openapi/v1.0",
+    "YEASTAR_SDK_ACCESS_ID": "5RtvBHtumNDCawauIn9bstm8dlByPufP",
+    "YEASTAR_TZ": "Asia/Dubai",
+    "YEASTAR_USERNAME": "inekQ0iUcc6DoFlBIC0XYxL5lCOhl9Zy",
+    "YEASTAR_USER_AGENT": "Mozilla/5.0",
+    "ZOHO_CLIENT_ID": "1000.K9OTGRINNT0VV5NHTO69IQ9S1G4SXE",
+    "ZOHO_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/api/zoho/callback",
+    "ZOHO_REDIRECT_URI2": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/fetch-zoho-contacts/zoho/callback",
+    "ZOOM_CLIENT_ID": "IeARJpwvTAW_78tD7YHFEQ",
+    "ZOOM_REDIRECT_URI": "https://nf6fp9tcn6.execute-api.eu-north-1.amazonaws.com/connect/zoom-callback",
+    "resetpasswordlink": "https://voycell-call-center-admin-frontend.vercel.app/reset-password"
 }
