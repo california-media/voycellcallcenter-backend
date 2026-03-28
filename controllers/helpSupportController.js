@@ -16,7 +16,7 @@ const uploadImageToS3 = async (file) => {
   const fileName = `helpAndSupportAttachments/${name}_${Date.now()}${ext}`;
 
   const params = {
-    Bucket: AWS_BUCKET_NAME,
+    Bucket: process.env.AWS_BUCKET_NAME,
     Key: fileName,
     Body: file.buffer,
     ContentType: file.mimetype,
@@ -24,7 +24,7 @@ const uploadImageToS3 = async (file) => {
 
   try {
     await s3.send(new PutObjectCommand(params));
-    return `https://${AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+    return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
   } catch (error) {
     throw new Error("Image upload failed");
   }

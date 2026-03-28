@@ -124,7 +124,7 @@ const uploadImageToS3 = async (file) => {
 
   const params = {
     // Bucket: process.env.AWS_BUCKET_NAME,
-    Bucket: AWS_BUCKET_NAME,
+    Bucket: process.env.AWS_BUCKET_NAME,
     Key: fileName,
     Body: file.buffer,
     ContentType: file.mimetype,
@@ -132,7 +132,7 @@ const uploadImageToS3 = async (file) => {
 
   await s3.send(new PutObjectCommand(params));
 
-  return `https://${AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+  return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
 };
 
 const addEditContactisLeads = async (req, res) => {
@@ -1174,7 +1174,7 @@ const updateAttachments = async (req, res) => {
 
       const params = {
         // Bucket: process.env.AWS_BUCKET_NAME,
-        Bucket: AWS_BUCKET_NAME,
+        Bucket: process.env.AWS_BUCKET_NAME,
         Key: fileName,
         Body: file.buffer,
         ContentType: file.mimetype,
@@ -1182,7 +1182,7 @@ const updateAttachments = async (req, res) => {
 
       try {
         await s3.send(new PutObjectCommand(params));
-        const fileURL = `https://${AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+        const fileURL = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
         return fileURL;
       } catch (error) {
         throw new Error("File upload failed");
