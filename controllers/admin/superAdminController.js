@@ -28,9 +28,40 @@ exports.getAllCompanyAdmins = async (req, res) => {
       }
       : {};
 
+    // 🔍 Step 2: Find company admins via agent search
+    let agentCompanyAdminIds = [];
+
+    if (search) {
+      const agents = await User.find({
+        role: "user",
+        $or: [
+          { firstname: { $regex: search, $options: "i" } },
+          { lastname: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { telephone: { $regex: search, $options: "i" } },
+          { "phonenumbers.number": { $regex: search, $options: "i" } },
+        ],
+      }).select("createdByWhichCompanyAdmin");
+
+      agentCompanyAdminIds = agents
+        .map(a => a.createdByWhichCompanyAdmin)
+        .filter(id => id);
+    }
+
+    // const companyAdmins = await User.find({
+    //   role: "companyAdmin",
+    //   ...searchQuery,
+    // })
     const companyAdmins = await User.find({
       role: "companyAdmin",
-      ...searchQuery,
+      ...(search
+        ? {
+          $or: [
+            ...searchQuery.$or,
+            { _id: { $in: agentCompanyAdminIds } }, // 🔥 NEW LINE
+          ],
+        }
+        : {}),
     })
       .select(
         "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName"
@@ -39,9 +70,21 @@ exports.getAllCompanyAdmins = async (req, res) => {
       .limit(limit)
       .lean();
 
+    // const totalAdmins = await User.countDocuments({
+    //   role: "companyAdmin",
+    //   ...searchQuery,
+    // });
+
     const totalAdmins = await User.countDocuments({
       role: "companyAdmin",
-      ...searchQuery,
+      ...(search
+        ? {
+          $or: [
+            ...searchQuery.$or,
+            { _id: { $in: agentCompanyAdminIds } },
+          ],
+        }
+        : {}),
     });
 
     res.status(200).json({
@@ -303,7 +346,7 @@ exports.getAgentDetails = async (req, res) => {
 };
 
 exports.editCompanyAdminAndAgent = async (req, res) => {
-  const {FRONTEND_URL} = getConfig()
+  const { FRONTEND_URL } = getConfig()
   try {
     const {
       userId,
