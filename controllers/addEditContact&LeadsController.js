@@ -7,7 +7,7 @@ const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const path = require("path");
 const { logActivityToContact } = require("../utils/activityLogger");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 // --------------------------
 // company-wide duplicate helper
@@ -117,7 +117,7 @@ const parseBoolean = (val) => {
 };
 
 const uploadImageToS3 = async (file) => {
-  const {AWS_BUCKET_NAME} = getConfig()
+  // const {AWS_BUCKET_NAME} = getConfig()
   const ext = path.extname(file.originalname);
   const name = path.basename(file.originalname, ext);
   const fileName = `contactImages/${name}_${Date.now()}${ext}`;
@@ -1167,7 +1167,7 @@ const updateAttachments = async (req, res) => {
 
     // Upload files to S3
     const uploadFileToS3 = async (file) => {
-      const {AWS_BUCKET_NAME} =getConfig()
+      // const {AWS_BUCKET_NAME} = getConfig()
       const ext = path.extname(file.originalname);
       const name = path.basename(file.originalname, ext);
       const fileName = `attachments/${Date.now()}_${name}${ext}`;

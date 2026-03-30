@@ -3,13 +3,13 @@ const mongoose = require("mongoose");
 const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const User = require("../models/userModel");
 const s3 = require("../utils/s3");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 
 
 // === Upload Image to S3 ===
 const uploadImageToS3 = async (file) => {
-   const { AWS_BUCKET_NAME } = getConfig(); 
+  //  const { AWS_BUCKET_NAME } = getConfig(); 
 
   const ext = path.extname(file.originalname);
   const name = path.basename(file.originalname, ext);
@@ -31,7 +31,7 @@ const uploadImageToS3 = async (file) => {
 
 // === Delete Image from S3 ===
 const deleteImageFromS3 = async (imageUrl) => {
-  const { AWS_BUCKET_NAME } = getConfig(); 
+  // const { AWS_BUCKET_NAME } = getConfig(); 
   try {
     if (!imageUrl) return;
 

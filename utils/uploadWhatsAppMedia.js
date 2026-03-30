@@ -1,7 +1,7 @@
 const path = require("path");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const s3 = require("./s3");
-const { getConfig } = require("./getConfig");
+// const { getConfig } = require("./getConfig");
 
 const MEDIA_FOLDER_MAP = {
   image: "images",
@@ -27,7 +27,7 @@ async function uploadWhatsAppMediaToS3({
   mimeType,
   originalName = "file"
 }) {
-  const { AWS_BUCKET_NAME_WABA } = getConfig()
+  // const { AWS_BUCKET_NAME_WABA } = getConfig()
   const ext = mimeType.split("/")[1] || "bin";
   const folder = MEDIA_FOLDER_MAP[messageType] || "others";
 
@@ -54,7 +54,7 @@ async function uploadWhatsAppMediaTemplateToS3({
   mimeType,
   originalName = "file"
 }) {
-  const { AWS_BUCKET_NAME_WABA } = getConfig()
+  // const { AWS_BUCKET_NAME_WABA } = getConfig()
   const ext = mimeType.split("/")[1] || "bin";
   const folder = Template_MEDIA_FOLDER_MAP[messageType] || "others";
   const key = `users/${userId}/whatsapp/template/${folder}/${originalName}_${Date.now()}.${ext}`;
@@ -79,7 +79,7 @@ async function uploadWhatsAppMediaProfileToS3({
   mimeType,
   originalName = "profile"
 }) {
-  const { AWS_BUCKET_NAME_WABA } = getConfig()
+  // const { AWS_BUCKET_NAME_WABA } = getConfig()
   const ext = mimeType.split("/")[1] || "bin";
 
   const key = `users/${userId}/whatsapp/profile/${originalName}_${Date.now()}.${ext}`;

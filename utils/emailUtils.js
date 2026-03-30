@@ -1,6 +1,6 @@
 require("dotenv").config();
 const nodemailer = require("nodemailer");
-const { getConfig } = require("./getConfig");
+// const { getConfig } = require("./getConfig");
 
 // MAIL_HOST=smtp.titan.email
 // MAIL_PORT=465
@@ -22,15 +22,15 @@ const { getConfig } = require("./getConfig");
 //   },
 // });
 const getTransporter = () => {
-  const { MAIL_HOST, MAIL_PORT } = getConfig()
+  // const { MAIL_HOST, MAIL_PORT } = getConfig()
   console.log("MAIL_HOST, MAIL_PORT", MAIL_HOST, MAIL_PORT);
   return nodemailer.createTransport({
     // service: "gmail",
     service: "smtp",
-    //   host: process.env.MAIL_HOST,
-    host: MAIL_HOST,
-    //   port: Number(process.env.MAIL_PORT),
-    port: Number(MAIL_PORT),
+    host: process.env.MAIL_HOST,
+    // host: MAIL_HOST,
+    port: Number(process.env.MAIL_PORT),
+    // port: Number(MAIL_PORT),
     secure: false, // Gmail on port 587 uses TLS (not SSL)
     auth: {
       user: process.env.MAIL_USERNAME,
@@ -42,9 +42,9 @@ const getTransporter = () => {
   });
 }
 
-// const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const sendVerificationEmail = async (email, link) => {
-  const { FRONTEND_URL } = getConfig()
+  // const { FRONTEND_URL } = getConfig()
   console.log("FRONTEND_URL", FRONTEND_URL);
   const mailOptions = {
     from: '"VOYCELL" <noreply@voycell.com>',
@@ -206,7 +206,7 @@ const sendVerificationEmail = async (email, link) => {
 
 const sendPostVerificationDemoEmail = async (user) => {
 
-  const { FRONTEND_URL } = getConfig()
+  // const { FRONTEND_URL } = getConfig()
   const clientName =
     `${user.firstname || ""} ${user.lastname || ""}`.trim() || "Client";
 
@@ -435,7 +435,7 @@ const sendHelpSupportReplyNotification = async (
   adminMessage,
   ticketId,
 ) => {
-  const { FRONTEND_URL } = getConfig()
+  // const { FRONTEND_URL } = getConfig()
   const ticketsPageUrl = `${FRONTEND_URL || "https://app.voycell.com"
     }/my-tickets?ticketId=${ticketId}`;
   //   const ticketsPageUrl = `${
@@ -570,7 +570,7 @@ const sendEmailChangeVerification = async (
   userId,
   verificationLink,
 ) => {
-  const { FRONTEND_URL } = getConfig()
+  // const { FRONTEND_URL } = getConfig()
   const mailOptions = {
     from: '"VOYCELL" <noreply@voycell.com>',
     to: newEmail,
@@ -735,7 +735,7 @@ const sendEmailChangeVerification = async (
 };
 
 const sendMagicLinkEmail = async (email, link) => {
-  const { FRONTEND_URL } = getConfig()
+  // const { FRONTEND_URL } = getConfig()
   const mailOptions = {
     from: '"VOYCELL" <noreply@voycell.com>',
     to: email,

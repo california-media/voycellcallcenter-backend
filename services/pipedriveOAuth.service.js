@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 // const PIPEDRIVE_AUTH_BASE = "https://oauth.pipedrive.com/marketplace/oauth/authorize";
 const PIPEDRIVE_AUTH_BASE = "https://oauth.pipedrive.com/oauth/authorize";

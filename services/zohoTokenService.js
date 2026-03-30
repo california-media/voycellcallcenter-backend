@@ -1,9 +1,9 @@
 // services/zohoTokenService.js
 const axios = require("axios");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 exports.getValidZohoToken = async (connection) => {
-  const {ZOHO_CLIENT_ID} = getConfig()
+  // const {ZOHO_CLIENT_ID} = getConfig()
   if (connection.expiresAt && Date.now() < connection.expiresAt.getTime()) {
     return connection.accessToken;
   }
@@ -15,8 +15,8 @@ exports.getValidZohoToken = async (connection) => {
       params: {
         grant_type: "refresh_token",
         refresh_token: connection.refreshToken,
-        // client_id: process.env.ZOHO_CLIENT_ID,
-        client_id: ZOHO_CLIENT_ID,
+        client_id: process.env.ZOHO_CLIENT_ID,
+        // client_id: ZOHO_CLIENT_ID,
         client_secret: process.env.ZOHO_CLIENT_SECRET
       }
     }

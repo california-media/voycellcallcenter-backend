@@ -164,7 +164,7 @@ async function findRecord(details, allowedUserIds) {
 }
 
 exports.fetchAndStoreCallHistory = async (req, res) => {
-  const {YEASTAR_TZ} = getConfig()
+  // const {YEASTAR_TZ} = getConfig()
   try {
     const userId = req.user._id;
 
@@ -181,8 +181,8 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     const deviceId = user.PBXDetails.assignedDeviceId;
     const token = await getDeviceToken(deviceId, "pbx");
     // Always use Yeastar PBX timezone
-    // const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
-    const TZ = YEASTAR_TZ || "Asia/Dubai";
+    const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
+    // const TZ = YEASTAR_TZ || "Asia/Dubai";
 
     // Build time window in Yeastar timezone
     const endMoment = moment().tz(TZ);
@@ -392,7 +392,7 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
 };
 
 exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
-  const {YEASTAR_TZ} = getConfig()
+  // const {YEASTAR_TZ} = getConfig()
   try {
     const userId = req.user._id;
 
@@ -409,8 +409,8 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
     const deviceId = user.PBXDetails.assignedDeviceId;
     const token = await getDeviceToken(deviceId, "pbx");
     // Always use Yeastar PBX timezone
-    // const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
-    const TZ = YEASTAR_TZ || "Asia/Dubai";
+    const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
+    // const TZ = YEASTAR_TZ || "Asia/Dubai";
 
     // Build time window in Yeastar timezone
     const endMoment = moment().tz(TZ);
@@ -1933,6 +1933,12 @@ console.log("[DEBUG] loggedInUser.zoho.isConnected:", loggedInUser?.zoho?.isConn
     await targetDoc.save();
 
     if (loggedInUser.zoho?.accessToken && loggedInUser.zoho?.refreshToken) {
+      console.log("Zoho sync block entered — triggering zohoAfterCallSync");
+      console.log("Zoho credentials:", {
+        hasAccessToken: !!loggedInUser.zoho?.accessToken,
+        hasRefreshToken: !!loggedInUser.zoho?.refreshToken,
+        isConnected: loggedInUser.zoho?.isConnected,
+      });
       zohoAfterCallSync({
         user: loggedInUser,
         targetDoc,
@@ -2157,7 +2163,7 @@ exports.findByPhoneNumber = async (req, res) => {
 };
 
 const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 const lambdaClient = new LambdaClient({
   region: "eu-north-1",

@@ -4,7 +4,7 @@ const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
 const Contact = require("../models/contactModel");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 /**
  * =====================================================
@@ -87,16 +87,16 @@ async function loadCompanyDuplicateData(user) {
  * =====================================================
  */
 exports.connectFacebook = async (req, res) => {
-  const {META_REDIRECT_URI} = getConfig()
-  const {META_APP_ID} = getConfig()
+  // const {META_REDIRECT_URI} = getConfig()
+  // const {META_APP_ID} = getConfig()
   const userId = req.user._id.toString();
-  // const redirectUri = process.env.META_REDIRECT_URI;
-  const redirectUri = META_REDIRECT_URI;
+  const redirectUri = process.env.META_REDIRECT_URI;
+  // const redirectUri = META_REDIRECT_URI;
 
   const authUrl =
     "https://www.facebook.com/v24.0/dialog/oauth" +
-    // `?client_id=${process.env.META_APP_ID}` +
-    `?client_id=${META_APP_ID}` +
+    `?client_id=${process.env.META_APP_ID}` +
+    // `?client_id=${META_APP_ID}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&state=${userId}` +
     `&response_type=code` +
@@ -112,7 +112,7 @@ exports.connectFacebook = async (req, res) => {
  * =====================================================
  */
 exports.facebookCallback = async (req, res) => {
-  const {META_APP_ID,META_REDIRECT_URI} = getConfig()
+  // const {META_APP_ID,META_REDIRECT_URI} = getConfig()
   try {
     const { code, state: userId } = req.query;
     if (!code || !userId) {
@@ -132,11 +132,11 @@ exports.facebookCallback = async (req, res) => {
       "https://graph.facebook.com/v24.0/oauth/access_token",
       {
         params: {
-          // client_id: process.env.META_APP_ID,
-          client_id: META_APP_ID,
+          client_id: process.env.META_APP_ID,
+          // client_id: META_APP_ID,
           client_secret: process.env.META_APP_SECRET,
-          // redirect_uri: process.env.META_REDIRECT_URI,
-          redirect_uri: META_REDIRECT_URI,
+          redirect_uri: process.env.META_REDIRECT_URI,
+          // redirect_uri: META_REDIRECT_URI,
           code,
         },
       }
@@ -305,7 +305,7 @@ exports.getFacebookPages = async (req, res) => {
  */
 exports.subscribeToPage = async (req, res) => {
   try {
-    const {META_APP_ID} = getConfig()
+    // const {META_APP_ID} = getConfig()
     const { pageId, pageName, pageAccessToken, subscribe } = req.body;
 
     if (!pageId || !pageName || !pageAccessToken) {
@@ -371,8 +371,8 @@ exports.subscribeToPage = async (req, res) => {
       // Unsubscribe from page
       try {
         // Unsubscribe requires app access token (APP_ID|APP_SECRET)
-        // const appAccessToken = `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
-        const appAccessToken = `${META_APP_ID}|${process.env.META_APP_SECRET}`;
+        const appAccessToken = `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
+        // const appAccessToken = `${META_APP_ID}|${process.env.META_APP_SECRET}`;
 
         await axios.delete(
           `https://graph.facebook.com/v24.0/${pageId}/subscribed_apps?access_token=${appAccessToken}`

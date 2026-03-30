@@ -1,9 +1,9 @@
 const User = require("../models/userModel");
 const { getValidToken } = require("../utils/yeastarClient");
 const { createHmac, randomBytes } = require("crypto");
-// const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL; // e.g. https://cmedia.ras.yeastar.com/openapi/v1.0
+const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL; // e.g. https://cmedia.ras.yeastar.com/openapi/v1.0
 const axios = require("axios");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 const changePassword = async (req, res) => {
   try {
@@ -79,7 +79,7 @@ function validateYeastarPassword(password) {
 
 // ✅ FINAL API
 const changeSipSecret = async (req, res) => {
-  const {YEASTAR_BASE_URL} = getConfig()
+  // const {YEASTAR_BASE_URL} = getConfig()
   try {
     const userId = req.user._id;
     const { password } = req.body; // ✅ Password comes from user

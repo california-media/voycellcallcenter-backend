@@ -6,7 +6,7 @@ const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const Contact = require("../models/contactModel");
 const Lead = require("../models/leadModel");
 const User = require("../models/userModel");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 require("dotenv").config();
 
 
@@ -94,7 +94,7 @@ const isGlobalDuplicate = ({
 /* ================= STEP 1: REDIRECT ================= */
 exports.redirectToZoho = (req, res) => {
 
-  const {ZOHO_CLIENT_ID, ZOHO_REDIRECT_URI2} = getConfig()
+  // const {ZOHO_CLIENT_ID, ZOHO_REDIRECT_URI2} = getConfig()
   // const { type = "contact", defaultCountryCode = "971" } = req.body; // Removed domain
   const defaultCountryCode = req.query.defaultCountryCode || "971";
   const tags = req.query.tags || "[]"; // 👈 ADD
@@ -107,12 +107,12 @@ exports.redirectToZoho = (req, res) => {
 
   const params = querystring.stringify({
     scope,
-    // client_id: process.env.ZOHO_CLIENT_ID,
-    client_id: ZOHO_CLIENT_ID,
+    client_id: process.env.ZOHO_CLIENT_ID,
+    // client_id: ZOHO_CLIENT_ID,
     response_type: "code",
     access_type: "offline",
-    // redirect_uri: process.env.ZOHO_REDIRECT_URI2,
-    redirect_uri: ZOHO_REDIRECT_URI2,
+    redirect_uri: process.env.ZOHO_REDIRECT_URI2,
+    // redirect_uri: ZOHO_REDIRECT_URI2,
     // Note: We removed domain from the state string
     // state: `${userId}::${type}::${defaultCountryCode}`,
     state: Buffer.from(
@@ -135,7 +135,7 @@ exports.redirectToZoho = (req, res) => {
 
 /* ================= STEP 2: CALLBACK ================= */
 exports.handleZohoCallback = async (req, res) => {
-  const {ZOHO_CLIENT_ID, ZOHO_REDIRECT_URI2} = getConfig()
+  // const {ZOHO_CLIENT_ID, ZOHO_REDIRECT_URI2} = getConfig()
   const { code, state, "accounts-server": accountsServer } = req.query;
   if (!code) return res.status(400).send("Missing code");
 
@@ -158,11 +158,11 @@ exports.handleZohoCallback = async (req, res) => {
       tokenUrl,
       querystring.stringify({
         grant_type: "authorization_code",
-        // client_id: process.env.ZOHO_CLIENT_ID,
-        client_id: ZOHO_CLIENT_ID,
+        client_id: process.env.ZOHO_CLIENT_ID,
+        // client_id: ZOHO_CLIENT_ID,
         client_secret: process.env.ZOHO_CLIENT_SECRET,
-        // redirect_uri: process.env.ZOHO_REDIRECT_URI2,
-        redirect_uri: ZOHO_REDIRECT_URI2,
+        redirect_uri: process.env.ZOHO_REDIRECT_URI2,
+        // redirect_uri: ZOHO_REDIRECT_URI2,
         code,
       }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }

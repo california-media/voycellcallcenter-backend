@@ -1,7 +1,7 @@
 const User = require("../models/userModel");
 const oauth = require("../services/pipedriveOAuth.service");
 const { getPipedriveCurrentUser } = require("../services/pipedriveApi.service");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 exports.connectPipedrive = async (req, res) => {
   try {

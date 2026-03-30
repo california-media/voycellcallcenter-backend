@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { getConfig } = require("./getConfig");
+// const { getConfig } = require("./getConfig");
 
 function buildZoomStartTime(date, time, timezone = "UTC") {
   if (!date) throw new Error("Meeting date is required");
@@ -36,7 +36,7 @@ function buildZoomStartTime(date, time, timezone = "UTC") {
 }
 
 async function getZoomAccessToken(user) {
-  const {ZOOM_CLIENT_ID} = getConfig()
+  // const {ZOOM_CLIENT_ID} = getConfig()
   // 1. Check if token is expired
   const now = Date.now();
   if (user.zoom.tokenExpiry && now < user.zoom.tokenExpiry) {
@@ -50,8 +50,8 @@ async function getZoomAccessToken(user) {
       refresh_token: user.zoom.refreshToken,
     },
     auth: {
-      // username: process.env.ZOOM_CLIENT_ID,
-      username: ZOOM_CLIENT_ID,
+      username: process.env.ZOOM_CLIENT_ID,
+      // username: ZOOM_CLIENT_ID,
       password: process.env.ZOOM_CLIENT_SECRET,
     },
   });
