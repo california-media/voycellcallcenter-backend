@@ -38,7 +38,7 @@ const scriptRoutes = require("./routes/scriptRoutes");
 const callmeServeRoute = require("./routes/callmeServeRoute");
 // const callmeServerFormCallRoutes = require("./routes/callmeServerFormCallRoutes");
 const getExtensionCallHistory = require("./routes/getYeasterCallHistoryRoutes");
-const getYeasterValidAccessTokenRoutes = require("./routes/getValidAccessTokenRoutes");
+// const getYeasterValidAccessTokenRoutes = require("./routes/getValidAccessTokenRoutes");
 const editProfileRoutes = require("./routes/editProfileRoutes");
 const getUserRoutes = require("./routes/getUserRoutes");
 const emailPasswordResetRoutes = require("./routes/emailPasswordResetRoutes");
@@ -113,11 +113,11 @@ app.use("/api/script", scriptRoutes); // script generation (auth)
 app.use("/voycell_callback", callmeServeRoute); // serves callme.js (no auth)
 // app.use("/voyCell_form_call", callmeServerFormCallRoutes); // serves form_call.js (no auth)
 app.use("/call", checkForAuthentication(), getExtensionCallHistory);
-app.use(
-  "/integrations/token",
-  checkForAuthentication(),
-  getYeasterValidAccessTokenRoutes
-);
+// app.use(
+//   "/integrations/token",
+//   checkForAuthentication(),
+//   getYeasterValidAccessTokenRoutes
+// );
 app.use(
   "/editProfile",
   checkForAuthentication(),

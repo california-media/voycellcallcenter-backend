@@ -1,6 +1,5 @@
 const axios = require("axios");
 const YeastarToken = require("../models/YeastarToken");
-// const { getValidToken } = require("../utils/yeastarClient");
 const { getDeviceToken } = require("../services/yeastarTokenService");
 const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
@@ -183,46 +182,46 @@ async function makeCallHandler(req, res) {
 /**
  * Get call details via call ID
  */
-async function getCallHandler(req, res) {
-  try {
-    const { call_id } = req.query;
+// async function getCallHandler(req, res) {
+//   try {
+//     const { call_id } = req.query;
 
-    if (!call_id) {
-      return res.status(400).json({
-        status: "error",
-        message: "call_id is required",
-      });
-    }
+//     if (!call_id) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "call_id is required",
+//       });
+//     }
 
-    const token = await getValidToken();
+//     const token = await getValidToken();
 
-    const queryUrl = `/call/query?access_token=${encodeURIComponent(
-      token
-    )}&call_id=${encodeURIComponent(call_id)}`;
+//     const queryUrl = `/call/query?access_token=${encodeURIComponent(
+//       token
+//     )}&call_id=${encodeURIComponent(call_id)}`;
 
-    const response = await api.get(queryUrl);
-    const data = response.data;
+//     const response = await api.get(queryUrl);
+//     const data = response.data;
 
-    if (data?.errcode === 0 || data?.errmsg === "SUCCESS") {
-      return res.status(200).json({
-        status: "success",
-        message: "Call details retrieved successfully",
-        data,
-      });
-    } else {
-      return res.status(500).json({
-        status: "error",
-        message: "Failed to retrieve call details",
-        error: data,
-      });
-    }
-  } catch (err) {
-    return res.status(500).json({
-      status: "error",
-      message: "Yeastar get call failed",
-      error: err.response?.data || err.message,
-    });
-  }
-}
+//     if (data?.errcode === 0 || data?.errmsg === "SUCCESS") {
+//       return res.status(200).json({
+//         status: "success",
+//         message: "Call details retrieved successfully",
+//         data,
+//       });
+//     } else {
+//       return res.status(500).json({
+//         status: "error",
+//         message: "Failed to retrieve call details",
+//         error: data,
+//       });
+//     }
+//   } catch (err) {
+//     return res.status(500).json({
+//       status: "error",
+//       message: "Yeastar get call failed",
+//       error: err.response?.data || err.message,
+//     });
+//   }
+// }
 
-module.exports = { makeCallHandler, getCallHandler };
+module.exports = { makeCallHandler };

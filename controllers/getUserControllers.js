@@ -2,13 +2,6 @@ const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
 const Contact = require("../models/contactModel");
 const mongoose = require("mongoose");
-// const YeastarToken = require("../models/YeastarToken");
-// const { getValidToken } = require("../utils/yeastarClient");
-// const axios = require("axios");
-
-// const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL?.trim();
-// const YEASTAR_SDK_ACCESS_ID = process.env.YEASTAR_SDK_ACCESS_ID?.trim();
-// const YEASTAR_SDK_ACCESS_KEY = process.env.YEASTAR_SDK_ACCESS_KEY?.trim();
 
 const getUserData = async (req, res) => {
   try {

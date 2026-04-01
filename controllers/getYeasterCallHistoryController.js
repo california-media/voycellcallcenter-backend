@@ -2,7 +2,6 @@ const axios = require("axios");
 // const moment = require("moment");
 const mongoose = require("mongoose");
 const https = require("https");
-const { getValidToken } = require("../utils/yeastarClient");
 const { getDeviceToken } = require("../services/yeastarTokenService");
 const User = require("../models/userModel"); // make sure to import
 const CallHistory = require("../models/CallHistory");
@@ -18,7 +17,6 @@ const { hubspotAfterCallSync } = require("../services/hubspotSync.service");
 
 //show all calls of number agent and company admin calls, show proper agent ya company admin name in call,extention is change so call is not show
 
-const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL;
 /**
  * Format date like PHP (m/d/Y H:i:s)
  */
@@ -1295,7 +1293,6 @@ exports.callRecordingDownload = async (req, res) => {
     const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL;
 
     const { record_file } = req.body;
-    // const token = await getValidToken();
 
     if (!record_file) {
       return res.status(400).json({

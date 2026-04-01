@@ -18,7 +18,6 @@ const { google } = require("googleapis");
 const querystring = require("querystring");
 const axios = require("axios");
 const ReferralLog = require("../models/referralLogModel");
-const { createYeastarExtensionForUser } = require("../utils/yeastarClient");
 const { META_GRAPH_URL } = require("../config/whatsapp");
 // const { getConfig } = require("../utils/getConfig");
 
