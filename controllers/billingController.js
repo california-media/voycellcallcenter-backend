@@ -355,6 +355,53 @@ const upgradePlan = async (req, res) => {
   }
 };
 
+// ─── Sync invoices from Stripe into local DB ──────────────────────────────────
+const syncStripeInvoices = async (userId, stripeCustomerId) => {
+  try {
+    const subscription = await Subscription.findOne({ userId }).sort({ createdAt: -1 });
+    let allInvoices = [];
+    let hasMore = true;
+    let startingAfter = null;
+    while (hasMore) {
+      const result = await stripeService.listInvoices(stripeCustomerId, 100, startingAfter);
+      allInvoices = allInvoices.concat(result.data);
+      hasMore = result.has_more;
+      if (hasMore && result.data.length > 0) {
+        startingAfter = result.data[result.data.length - 1].id;
+      } else {
+        hasMore = false;
+      }
+    }
+    for (const si of allInvoices) {
+      if (si.status === "draft") continue;
+      await Invoice.findOneAndUpdate(
+        { stripeInvoiceId: si.id },
+        {
+          userId,
+          subscriptionId: subscription?._id || null,
+          planId: subscription?.planId || null,
+          stripeInvoiceId: si.id,
+          stripeCustomerId,
+          stripeChargeId: si.charge || null,
+          invoiceNumber: si.number || null,
+          amount: si.amount_due,
+          amountPaid: si.amount_paid,
+          currency: si.currency,
+          status: si.status,
+          invoicePdf: si.invoice_pdf || null,
+          hostedInvoiceUrl: si.hosted_invoice_url || null,
+          billingPeriodStart: si.period_start ? new Date(si.period_start * 1000) : null,
+          billingPeriodEnd: si.period_end ? new Date(si.period_end * 1000) : null,
+          stripeCreatedAt: si.created ? new Date(si.created * 1000) : null,
+        },
+        { upsert: true, new: true }
+      );
+    }
+  } catch (err) {
+    console.error("syncStripeInvoices error:", err.message);
+  }
+};
+
 // ─── Get Invoices ─────────────────────────────────────────────────────────────
 const getInvoices = async (req, res) => {
   try {
@@ -362,8 +409,15 @@ const getInvoices = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const userId = req.user._id;
 
+    const user = await User.findById(userId).select("stripeCustomerId");
+
+    // Sync from Stripe if user has a Stripe customer (covers local dev without webhooks)
+    if (user?.stripeCustomerId) {
+      await syncStripeInvoices(userId, user.stripeCustomerId);
+    }
+
     const [invoices, total] = await Promise.all([
-      Invoice.find({ userId }).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)).populate("planId", "name"),
+      Invoice.find({ userId }).sort({ stripeCreatedAt: -1, createdAt: -1 }).skip(skip).limit(parseInt(limit)).populate("planId", "name"),
       Invoice.countDocuments({ userId }),
     ]);
 

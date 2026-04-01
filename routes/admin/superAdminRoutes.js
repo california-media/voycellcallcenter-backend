@@ -15,6 +15,7 @@ const {
   getYeastarDeviceById,
   getAllCompanyAdminsByDevice,
   getAgentsOfCompanyAdminByDevice,
+  getCompanyBillingDetails,
 } = require("../../controllers/admin/superAdminController");
 
 // Super Admin only
@@ -43,5 +44,8 @@ router.delete("/deletePBXDevice", deleteYeastarDeviceBySuperAdmin);
 router.get("/getAllPBXDevices", getAllYeastarDevicesBySuperAdmin);
 
 router.get("/getPBXDeviceById", getYeastarDeviceById);
+
+// Company billing details
+router.get("/companies/:userId/billing", getCompanyBillingDetails);
 
 module.exports = router;

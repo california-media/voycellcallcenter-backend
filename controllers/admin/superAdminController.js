@@ -1,12 +1,13 @@
 const User = require("../../models/userModel");
 const Subscription = require("../../models/Subscription");
+const Invoice = require("../../models/Invoice");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { sendEmailChangeVerification } = require("../../utils/emailUtils");
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+// const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const getDeviceToken = require("../../services/yeastarTokenService").getDeviceToken;
 const axios = require("axios");
-// const { getConfig } = require("../../utils/getConfig");
+const { getConfig } = require("../../utils/getConfig");
 
 exports.getAllCompanyAdmins = async (req, res) => {
   try {
@@ -32,7 +33,7 @@ exports.getAllCompanyAdmins = async (req, res) => {
     const [companyAdmins, totalAdmins] = await Promise.all([
       User.find({ role: "companyAdmin", ...searchQuery })
         .select(
-          "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialEndsAt"
+          "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialStartedAt trialEndsAt trialDurationDays"
         )
         .skip(skip)
         .limit(limit)
@@ -314,7 +315,7 @@ exports.getAgentDetails = async (req, res) => {
 };
 
 exports.editCompanyAdminAndAgent = async (req, res) => {
-  // const { FRONTEND_URL } = getConfig()
+  const {FRONTEND_URL} = getConfig()
   try {
     const {
       userId,
@@ -1189,5 +1190,91 @@ exports.getYeastarDeviceById = async (req, res) => {
       success: false,
       message: "Internal Server Error",
     });
+  }
+};
+// ─── Get Company Billing Details (superAdmin) ─────────────────────────────────
+exports.getCompanyBillingDetails = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const user = await User.findById(userId)
+      .select("firstname lastname email planStatus trialStartedAt trialEndsAt trialDurationDays stripeCustomerId createdAt")
+      .lean();
+
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    // Sync Stripe invoices if user has a Stripe customer (handles local dev without webhooks)
+    if (user.stripeCustomerId) {
+      const stripeService = require("../../services/stripeService");
+      try {
+        const result = await stripeService.listInvoices(user.stripeCustomerId, 100);
+        const sub = await Subscription.findOne({ userId }).sort({ createdAt: -1 });
+        for (const si of result.data || []) {
+          if (si.status === "draft") continue;
+          await Invoice.findOneAndUpdate(
+            { stripeInvoiceId: si.id },
+            {
+              userId: user._id,
+              subscriptionId: sub?._id || null,
+              planId: sub?.planId || null,
+              stripeInvoiceId: si.id,
+              stripeCustomerId: user.stripeCustomerId,
+              stripeChargeId: si.charge || null,
+              invoiceNumber: si.number || null,
+              amount: si.amount_due,
+              amountPaid: si.amount_paid,
+              currency: si.currency,
+              status: si.status,
+              invoicePdf: si.invoice_pdf || null,
+              hostedInvoiceUrl: si.hosted_invoice_url || null,
+              billingPeriodStart: si.period_start ? new Date(si.period_start * 1000) : null,
+              billingPeriodEnd: si.period_end ? new Date(si.period_end * 1000) : null,
+              stripeCreatedAt: si.created ? new Date(si.created * 1000) : null,
+            },
+            { upsert: true, new: true }
+          );
+        }
+      } catch (_) {}
+    }
+
+    const subscription = await Subscription.findOne({
+      userId,
+      status: { $in: ["trialing", "active", "paused", "cancelled"] },
+    })
+      .populate("planId", "name pricing")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const [invoices, totalInvoices] = await Promise.all([
+      Invoice.find({ userId })
+        .populate("planId", "name")
+        .sort({ stripeCreatedAt: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Invoice.countDocuments({ userId }),
+    ]);
+
+    const totalPaid = await Invoice.aggregate([
+      { $match: { userId: require("mongoose").Types.ObjectId.createFromHexString(userId.toString()), status: "paid" } },
+      { $group: { _id: null, total: { $sum: "$amountPaid" } } },
+    ]);
+
+    res.json({
+      success: true,
+      user,
+      subscription,
+      invoices,
+      totalInvoices,
+      page,
+      limit,
+      totalPaid: totalPaid[0]?.total || 0,
+    });
+  } catch (err) {
+    console.error("getCompanyBillingDetails error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch billing details" });
   }
 };
