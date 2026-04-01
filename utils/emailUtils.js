@@ -23,7 +23,7 @@ const nodemailer = require("nodemailer");
 // });
 const getTransporter = () => {
   // const { MAIL_HOST, MAIL_PORT } = getConfig()
-  console.log("MAIL_HOST, MAIL_PORT", MAIL_HOST, MAIL_PORT);
+  // console.log("MAIL_HOST, MAIL_PORT", MAIL_HOST, MAIL_PORT);
   return nodemailer.createTransport({
     // service: "gmail",
     service: "smtp",
