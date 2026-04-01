@@ -100,7 +100,7 @@ exports.connectFacebook = async (req, res) => {
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&state=${userId}` +
     `&response_type=code` +
-    `&scope=pages_manage_metadata,pages_read_engagement,pages_manage_ads,leads_retrieval,pages_show_list`;
+    `&scope=pages_manage_metadata,leads_retrieval,pages_show_list`;
 
   return res.json({ authUrl });
 };
