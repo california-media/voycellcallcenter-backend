@@ -1,7 +1,6 @@
 const crypto = require("crypto");
 const User = require("../../models/userModel");
 const { sendVerificationEmail } = require("../../utils/emailUtils");
-const { createYeastarExtensionForUser } = require("../../utils/yeastarClient");
 const { createTokenforUser } = require("../../services/authentication");
 
 

@@ -4,10 +4,6 @@ const Lead = require("../../models/leadModel");
 const mongoose = require("mongoose");
 const Contact = require("../../models/contactModel");
 const { sendVerificationEmail } = require("../../utils/emailUtils");
-const {
-  createYeastarExtensionForUser,
-  deleteYeastarExtension,
-} = require("../../utils/yeastarClient");
 const { createTokenforUser } = require("../../services/authentication");
 // const { getConfig } = require("../../utils/getConfig");
 
@@ -372,15 +368,6 @@ exports.deleteAgent = async (req, res) => {
         message:
           "Agent not found or you don't have permission to delete this agent",
       });
-    }
-
-    // Delete Yeastar extension if it exists
-    if (user.yeastarExtensionId) {
-      try {
-        await deleteYeastarExtension(user.yeastarExtensionId);
-      } catch (err) {
-        // Continue with user deletion even if Yeastar deletion fails
-      }
     }
 
     // Delete the user from database
