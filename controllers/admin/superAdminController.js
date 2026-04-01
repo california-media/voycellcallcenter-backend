@@ -315,7 +315,7 @@ exports.getAgentDetails = async (req, res) => {
 };
 
 exports.editCompanyAdminAndAgent = async (req, res) => {
-  const {FRONTEND_URL} = getConfig()
+  // const {FRONTEND_URL} = getConfig()
   try {
     const {
       userId,

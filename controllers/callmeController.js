@@ -59,7 +59,7 @@ exports.serveCallmeJS = async (req, res) => {
 };
 
 async function getPopupJS(req, tokenDoc, user) {
-  const { API_BASE_URL } = getConfig();
+  // const { API_BASE_URL } = getConfig();
   const {
     themeColor: themeColorQuery = "#4CAF50",
     popupHeading: popupHeadingQuery = "📞 Request a Call Back",
@@ -556,7 +556,7 @@ async function servePopupScript(req, res, tokenDoc, user) {
 }
 
 async function getFormJS(req, tokenDoc, fieldName, user) {
-const { API_BASE_URL } = getConfig();
+// const { API_BASE_URL } = getConfig();
   if (!tokenDoc) {
     return `// Invalid form token`;
   }
