@@ -1,19 +1,25 @@
 const User = require("../models/userModel");
 const oauth = require("../services/pipedriveOAuth.service");
 const { getPipedriveCurrentUser } = require("../services/pipedriveApi.service");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 exports.connectPipedrive = async (req, res) => {
   try {
 
-    const {PIPEDRIVE_REDIRECT_URI} = getConfig()
+    // const { PIPEDRIVE_REDIRECT_URI, PIPEDRIVE_CLIENT_ID } = getConfig()
     const userId = req.user._id.toString();
+
+    const PIPEDRIVE_REDIRECT_URI = process.env.PIPEDRIVE_REDIRECT_URI;
+
 
     const url = oauth.getAuthURL({
       // redirectUri: process.env.PIPEDRIVE_REDIRECT_URI,
       redirectUri: PIPEDRIVE_REDIRECT_URI,
       state: userId,
     });
+
+    // const url = `https://oauth.pipedrive.com/oauth/authorize?client_id=${PIPEDRIVE_CLIENT_ID}&redirect_uri=${encodeURIComponent(PIPEDRIVE_REDIRECT_URI)}&state=${userId}`;
+
 
     console.log("[Pipedrive] Auth URL:", url);
     return res.json({ status: "success", url });
@@ -24,7 +30,9 @@ exports.connectPipedrive = async (req, res) => {
 
 exports.pipedriveCallback = async (req, res) => {
   const { code, state } = req.query;
-const {PIPEDRIVE_REDIRECT_URI} = getConfig()
+  // const { PIPEDRIVE_REDIRECT_URI } = getConfig()
+  const PIPEDRIVE_REDIRECT_URI = process.env.PIPEDRIVE_REDIRECT_URI;
+
   console.log("[Pipedrive Callback] code:", code ? "EXISTS" : "MISSING");
   console.log("[Pipedrive Callback] state:", state);
 
@@ -48,10 +56,10 @@ const {PIPEDRIVE_REDIRECT_URI} = getConfig()
     // 2. Save tokens — use api_domain returned by Pipedrive as the base URL
     user.pipedrive = {
       ...user.pipedrive,
-      accessToken:    tokens.access_token,
-      refreshToken:   tokens.refresh_token,
-      isConnected:    true,
-      apiBaseUrl:     tokens.api_domain || "https://api.pipedrive.com",
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      isConnected: true,
+      apiBaseUrl: tokens.api_domain || "https://api.pipedrive.com",
       tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
     };
 
@@ -61,17 +69,17 @@ const {PIPEDRIVE_REDIRECT_URI} = getConfig()
     const pipedriveUser = await getPipedriveCurrentUser(user);
 
     await User.findByIdAndUpdate(user._id, {
-      "pipedrive.userId":        String(pipedriveUser.id),
-      "pipedrive.email":         pipedriveUser.email,
+      "pipedrive.userId": String(pipedriveUser.id),
+      "pipedrive.email": pipedriveUser.email,
       "pipedrive.companyDomain": pipedriveUser.company_domain,
     });
 
     const resultData = {
-      status:            "success",
-      message:           "Pipedrive Connected",
+      status: "success",
+      message: "Pipedrive Connected",
       pipedriveConnected: true,
-      pipedriveUserId:   pipedriveUser.id,
-      pipedriveEmail:    pipedriveUser.email,
+      pipedriveUserId: pipedriveUser.id,
+      pipedriveEmail: pipedriveUser.email,
     };
 
     // 4. Same popup-close pattern as Zoho/HubSpot
@@ -124,12 +132,12 @@ exports.disconnectPipedrive = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ status: "error", message: "User not found" });
 
-    user.pipedrive.accessToken    = undefined;
-    user.pipedrive.refreshToken   = undefined;
-    user.pipedrive.isConnected    = false;
-    user.pipedrive.userId         = undefined;
-    user.pipedrive.email          = undefined;
-    user.pipedrive.companyDomain  = undefined;
+    user.pipedrive.accessToken = undefined;
+    user.pipedrive.refreshToken = undefined;
+    user.pipedrive.isConnected = false;
+    user.pipedrive.userId = undefined;
+    user.pipedrive.email = undefined;
+    user.pipedrive.companyDomain = undefined;
     user.pipedrive.tokenExpiresAt = undefined;
 
     await user.save();
@@ -137,9 +145,9 @@ exports.disconnectPipedrive = async (req, res) => {
     return res.json({ status: "success", message: "Pipedrive CRM Disconnected" });
   } catch (error) {
     return res.status(500).json({
-      status:  "error",
+      status: "error",
       message: "Failed to disconnect Pipedrive",
-      error:   error.message,
+      error: error.message,
     });
   }
 };

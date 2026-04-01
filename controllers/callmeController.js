@@ -162,7 +162,7 @@ async function getPopupJS(req, tokenDoc, user) {
   // const apiUrl = API_BASE_URL.replace(/\/+$/, "") + "/api/yeastar/make-call";
 
   
-  const baseUrl = API_BASE_URL || req.protocol + "://" + req.get("host");
+  const baseUrl = process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
   const apiUrl = baseUrl.replace(/\/+$/, "") + "/api/yeastar/make-call";
 
   // Build JS to send to browser
@@ -179,7 +179,7 @@ async function getPopupJS(req, tokenDoc, user) {
   const CALL_TO_ACTION = ${JSON.stringify(calltoaction)};
   const PHONE_ICON_COLOR = ${JSON.stringify(phoneIconColor || "black")};
   const API_URL = ${JSON.stringify(apiUrl)};
-  const API_BASE_URL = ${JSON.stringify(API_BASE_URL)};
+  const API_BASE_URL = ${JSON.stringify(process.env.API_BASE_URL)};
 
   let countdownInterval;
   let autoPopupTriggered = false;
@@ -648,7 +648,7 @@ const { API_BASE_URL } = getConfig();
 
   const API_BASE =
     // process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
-    API_BASE_URL || req.protocol + "://" + req.get("host");
+    process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
 
   const apiUrl = API_BASE.replace(/\/+$/, "") + "/api/yeastar/make-call";
 

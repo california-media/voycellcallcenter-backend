@@ -1,7 +1,7 @@
 const path = require("path");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const s3 = require("./s3");
-const { getConfig } = require("./getConfig");
+// const { getConfig } = require("./getConfig");
 
 const MEDIA_FOLDER_MAP = {
   image: "images",
@@ -27,7 +27,7 @@ async function uploadWhatsAppMediaToS3({
   mimeType,
   originalName = "file"
 }) {
-  const {AWS_BUCKET_NAME_WABA} = getConfig()
+  // const { AWS_BUCKET_NAME_WABA } = getConfig()
   const ext = mimeType.split("/")[1] || "bin";
   const folder = MEDIA_FOLDER_MAP[messageType] || "others";
 
@@ -36,14 +36,14 @@ async function uploadWhatsAppMediaToS3({
   await s3.send(
     new PutObjectCommand({
       // Bucket: process.env.AWS_BUCKET_NAME_WABA,
-      Bucket:AWS_BUCKET_NAME_WABA,
+      Bucket: process.env.AWS_BUCKET_NAME_WABA,
       Key: key,
       Body: buffer,
       ContentType: mimeType
     })
   );
 
-  return `https://${AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
   // return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
@@ -54,7 +54,7 @@ async function uploadWhatsAppMediaTemplateToS3({
   mimeType,
   originalName = "file"
 }) {
-   const {AWS_BUCKET_NAME_WABA} = getConfig()
+  // const { AWS_BUCKET_NAME_WABA } = getConfig()
   const ext = mimeType.split("/")[1] || "bin";
   const folder = Template_MEDIA_FOLDER_MAP[messageType] || "others";
   const key = `users/${userId}/whatsapp/template/${folder}/${originalName}_${Date.now()}.${ext}`;
@@ -62,7 +62,7 @@ async function uploadWhatsAppMediaTemplateToS3({
   await s3.send(
     new PutObjectCommand({
       // Bucket: process.env.AWS_BUCKET_NAME_WABA,
-      Bucket: AWS_BUCKET_NAME_WABA,
+      Bucket: process.env.AWS_BUCKET_NAME_WABA,
       Key: key,
       Body: buffer,
       ContentType: mimeType
@@ -70,7 +70,7 @@ async function uploadWhatsAppMediaTemplateToS3({
   );
 
   // return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-  return `https://${AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
 async function uploadWhatsAppMediaProfileToS3({
@@ -79,7 +79,7 @@ async function uploadWhatsAppMediaProfileToS3({
   mimeType,
   originalName = "profile"
 }) {
-   const {AWS_BUCKET_NAME_WABA} = getConfig()
+  // const { AWS_BUCKET_NAME_WABA } = getConfig()
   const ext = mimeType.split("/")[1] || "bin";
 
   const key = `users/${userId}/whatsapp/profile/${originalName}_${Date.now()}.${ext}`;
@@ -87,7 +87,7 @@ async function uploadWhatsAppMediaProfileToS3({
   await s3.send(
     new PutObjectCommand({
       // Bucket: process.env.AWS_BUCKET_NAME_WABA,
-      Bucket: AWS_BUCKET_NAME_WABA,
+      Bucket: process.env.AWS_BUCKET_NAME_WABA,
       Key: key,
       Body: buffer,
       ContentType: mimeType
@@ -95,7 +95,7 @@ async function uploadWhatsAppMediaProfileToS3({
   );
 
   // return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-  return `https://${AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
 

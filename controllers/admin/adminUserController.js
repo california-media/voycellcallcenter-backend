@@ -9,7 +9,7 @@ const {
   deleteYeastarExtension,
 } = require("../../utils/yeastarClient");
 const { createTokenforUser } = require("../../services/authentication");
-const { getConfig } = require("../../utils/getConfig");
+// const { getConfig } = require("../../utils/getConfig");
 
 /**
  * ======================================================
@@ -18,7 +18,7 @@ const { getConfig } = require("../../utils/getConfig");
  * Admin creates a user → sends verification email
  */
 
-// const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 const disallowedEmailDomains = [
   // "gmail.com",
@@ -41,7 +41,7 @@ const disallowedEmailDomains = [
 ];
 
 exports.adminRegisterUser = async (req, res) => {
-  const {FRONTEND_URL} = getConfig()
+  // const {FRONTEND_URL} = getConfig()
   try {
     const { email, firstname = "", lastname = "" } = req.body;
 

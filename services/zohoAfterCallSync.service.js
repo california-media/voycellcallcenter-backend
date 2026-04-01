@@ -41,6 +41,7 @@ exports.zohoAfterCallSync = async ({
   let module, recordId;
 
   if (found) {
+    console.log(`Found matching record in Zoho: ${found.module} with ID ${found.record.id}. Updating it.`);
     module = found.module;
     recordId = found.record.id;
     await updateRecord({
@@ -50,6 +51,7 @@ exports.zohoAfterCallSync = async ({
       data: zohoData,
     });
   } else {
+    console.log("No matching record found in Zoho. Creating new lead.");
     const res = await createLead({
       user,
       data: zohoData,

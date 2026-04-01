@@ -1,11 +1,11 @@
 const axios = require("axios");
 const qs = require("querystring");
 const https = require("https");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 const agent = new https.Agent({ keepAlive: false });
 
 exports.getAuthURL = ({ accountsUrl, redirectUri, state }) => {
-  const {ZOHO_CLIENT_ID} = getConfig()
+  // const {ZOHO_CLIENT_ID} = getConfig()
   const scope = [
     "ZohoCRM.modules.ALL",
     "ZohoCRM.users.READ",
@@ -19,8 +19,8 @@ exports.getAuthURL = ({ accountsUrl, redirectUri, state }) => {
 
   return `${accountsUrl}/oauth/v2/auth?` + qs.stringify({
     scope,
-    // client_id: process.env.ZOHO_CLIENT_ID,
-    client_id: ZOHO_CLIENT_ID,
+    client_id: process.env.ZOHO_CLIENT_ID,
+    // client_id: ZOHO_CLIENT_ID,
     response_type: "code",
     access_type: "offline",
     prompt: "consent",
@@ -30,13 +30,13 @@ exports.getAuthURL = ({ accountsUrl, redirectUri, state }) => {
 };
 
 exports.getTokens = async ({ code, accountsUrl, redirectUri }) => {
-  const {ZOHO_CLIENT_ID} = getConfig()
+  // const {ZOHO_CLIENT_ID} = getConfig()
   return axios.post(
     `${accountsUrl}/oauth/v2/token`,
     qs.stringify({
       grant_type: "authorization_code",
-      // client_id: process.env.ZOHO_CLIENT_ID,
-      client_id: ZOHO_CLIENT_ID,
+      client_id: process.env.ZOHO_CLIENT_ID,
+      // client_id: ZOHO_CLIENT_ID,
       client_secret: process.env.ZOHO_CLIENT_SECRET,
       redirect_uri: redirectUri,
       code
@@ -52,13 +52,13 @@ exports.getTokens = async ({ code, accountsUrl, redirectUri }) => {
 };
 
 exports.refreshToken = async ({ refreshToken, accountsUrl }) => {
-  const {ZOHO_CLIENT_ID} = getConfig()
+  // const {ZOHO_CLIENT_ID} = getConfig()
   const res = await axios.post(
     `${accountsUrl}/oauth/v2/token`,
     qs.stringify({
       refresh_token: refreshToken,
-      // client_id: process.env.ZOHO_CLIENT_ID,
-      client_id: ZOHO_CLIENT_ID,
+      client_id: process.env.ZOHO_CLIENT_ID,
+      // client_id: ZOHO_CLIENT_ID,
       client_secret: process.env.ZOHO_CLIENT_SECRET,
       grant_type: "refresh_token"
     })

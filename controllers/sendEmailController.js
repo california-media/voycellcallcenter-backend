@@ -3,14 +3,14 @@ const axios = require('axios');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 const User = require('../models/userModel'); // Your Mongoose User Model
-const { getConfig } = require('../utils/getConfig');
+// const { getConfig } = require('../utils/getConfig');
 
-// const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-// const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
+const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
 
 exports.sendEmail = async (req, res) => {
-    const {CLIENT_ID,REDIRECT_URI} = getConfig()
+    // const {CLIENT_ID,REDIRECT_URI} = getConfig()
     const {
         emailProvider,
         fromEmail,

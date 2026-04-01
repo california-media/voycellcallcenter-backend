@@ -1,17 +1,17 @@
 const axios = require("axios");
 const moment = require("moment");
 const YeastarToken = require("../models/YeastarToken");
-const { getConfig } = require("./getConfig");
+// const { getConfig } = require("./getConfig");
 
-// const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL; // e.g. https://cmedia.ras.yeastar.com/openapi/v1.0
-// const YEASTAR_USERNAME = process.env.YEASTAR_USERNAME;
+const YEASTAR_BASE_URL = process.env.YEASTAR_BASE_URL; // e.g. https://cmedia.ras.yeastar.com/openapi/v1.0
+const YEASTAR_USERNAME = process.env.YEASTAR_USERNAME;
 const YEASTAR_PASSWORD = process.env.YEASTAR_PASSWORD;
 
 /**
  * 🔐 Step 1: Login to Yeastar and get a new token
  */
 async function loginToYeastar() {
-  const {YEASTAR_USERNAME, YEASTAR_BASE_URL} = getConfig()
+  // const {YEASTAR_USERNAME, YEASTAR_BASE_URL} = getConfig()
   const url = `${YEASTAR_BASE_URL}/get_token`;
   console.log("🔑 Logging into Yeastar:", url);
 
@@ -52,7 +52,7 @@ async function loginToYeastar() {
  * ♻️ Step 2: Refresh the token if expired
  */
 async function refreshYeastarToken(oldRefreshToken) {
-  const {YEASTAR_BASE_URL} = getConfig()
+  // const {YEASTAR_BASE_URL} = getConfig()
   const url = `${YEASTAR_BASE_URL}/refresh_token`;
   console.log("♻️ Refreshing Yeastar access token...");
 
@@ -93,7 +93,7 @@ async function refreshYeastarToken(oldRefreshToken) {
  * 🧠 Step 3: Validate if current token is still working
  */
 async function isTokenValid(token) {
-  const {YEASTAR_BASE_URL} = getConfig()
+  // const {YEASTAR_BASE_URL} = getConfig()
   try {
     const url = `${YEASTAR_BASE_URL}/extension/list?access_token=${token}`;
     const res = await axios.get(url);
@@ -144,7 +144,7 @@ async function getValidToken() {
  * 📋 Get all Yeastar extensions
  */
 async function getYeastarExtensions() {
-  const {YEASTAR_BASE_URL} = getConfig()
+  // const {YEASTAR_BASE_URL} = getConfig()
   const token = await getValidToken();
   const url = `${YEASTAR_BASE_URL}/extension/list?access_token=${token}`;
 
@@ -195,7 +195,7 @@ function generateSecret(length = 12) {
  * 🧩 Create Yeastar extension for a user
  */
 async function createYeastarExtensionForUser(user) {
-  const {YEASTAR_BASE_URL} = getConfig()
+  // const {YEASTAR_BASE_URL} = getConfig()
   const token = await getValidToken();
   const extensionNumber = await findNextAvailableExtension(1001);
   const secret = generateSecret();
@@ -287,7 +287,7 @@ async function createYeastarExtensionForUser(user) {
  * 🗑️ Delete Yeastar extension
  */
 async function deleteYeastarExtension(extensionId) {
-  const {YEASTAR_BASE_URL} = getConfig()
+  // const {YEASTAR_BASE_URL} = getConfig()
   const token = await getValidToken();
   const url = `${YEASTAR_BASE_URL}/extension/delete?id=${extensionId}&access_token=${token}`;
 

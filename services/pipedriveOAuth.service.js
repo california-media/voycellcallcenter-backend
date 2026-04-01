@@ -1,7 +1,8 @@
 const axios = require("axios");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
-const PIPEDRIVE_AUTH_BASE = "https://oauth.pipedrive.com/marketplace/oauth/authorize";
+// const PIPEDRIVE_AUTH_BASE = "https://oauth.pipedrive.com/marketplace/oauth/authorize";
+const PIPEDRIVE_AUTH_BASE = "https://oauth.pipedrive.com/oauth/authorize";
 const PIPEDRIVE_TOKEN_URL = "https://oauth.pipedrive.com/oauth/token";
 
 /**
@@ -9,12 +10,21 @@ const PIPEDRIVE_TOKEN_URL = "https://oauth.pipedrive.com/oauth/token";
  */
 exports.getAuthURL = ({ redirectUri, state }) => {
 
-  const {PIPEDRIVE_CLIENT_ID} = getConfig()
+  // const {PIPEDRIVE_CLIENT_ID} = getConfig()
+  const PIPEDRIVE_CLIENT_ID = process.env.PIPEDRIVE_CLIENT_ID;
+
+  // const url =
+  //   `${PIPEDRIVE_AUTH_BASE}` +
+  //   // `?client_id=${process.env.PIPEDRIVE_CLIENT_ID}` +
+  //   `?client_id=${PIPEDRIVE_CLIENT_ID}` +
+  //   `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+  //   `&state=${state}`;
+
   const url =
-    `${PIPEDRIVE_AUTH_BASE}` +
-    // `?client_id=${process.env.PIPEDRIVE_CLIENT_ID}` +
+    `${PIPEDRIVE_AUTH_BASE}` +  // ✅ fixed
     `?client_id=${PIPEDRIVE_CLIENT_ID}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code` +                          // ✅ added
     `&state=${state}`;
 
   return url;
@@ -25,14 +35,16 @@ exports.getAuthURL = ({ redirectUri, state }) => {
  * Pipedrive requires Basic Auth (client_id:client_secret base64 encoded)
  */
 exports.getTokens = async ({ code, redirectUri }) => {
-    const {PIPEDRIVE_CLIENT_ID} = getConfig()
+  // const {PIPEDRIVE_CLIENT_ID} = getConfig()
+  const PIPEDRIVE_CLIENT_ID = process.env.PIPEDRIVE_CLIENT_ID;
+
   const credentials = Buffer.from(
     // `${process.env.PIPEDRIVE_CLIENT_ID}:${process.env.PIPEDRIVE_CLIENT_SECRET}`
     `${PIPEDRIVE_CLIENT_ID}:${process.env.PIPEDRIVE_CLIENT_SECRET}`
   ).toString("base64");
 
   const params = new URLSearchParams({
-    grant_type:   "authorization_code",
+    grant_type: "authorization_code",
     code,
     redirect_uri: redirectUri,
   });
@@ -45,7 +57,7 @@ exports.getTokens = async ({ code, redirectUri }) => {
       params.toString(),
       {
         headers: {
-          "Content-Type":  "application/x-www-form-urlencoded",
+          "Content-Type": "application/x-www-form-urlencoded",
           "Authorization": `Basic ${credentials}`,
         },
       }
@@ -62,14 +74,16 @@ exports.getTokens = async ({ code, redirectUri }) => {
  * Refresh an expired access token
  */
 exports.refreshAccessToken = async (refreshToken) => {
-    const {PIPEDRIVE_CLIENT_ID} = getConfig()
+  // const { PIPEDRIVE_CLIENT_ID } = getConfig()
+  const PIPEDRIVE_CLIENT_ID = process.env.PIPEDRIVE_CLIENT_ID;
+
   const credentials = Buffer.from(
     // `${process.env.PIPEDRIVE_CLIENT_ID}:${process.env.PIPEDRIVE_CLIENT_SECRET}`
     `${PIPEDRIVE_CLIENT_ID}:${process.env.PIPEDRIVE_CLIENT_SECRET}`
   ).toString("base64");
 
   const params = new URLSearchParams({
-    grant_type:    "refresh_token",
+    grant_type: "refresh_token",
     refresh_token: refreshToken,
   });
 
@@ -81,7 +95,7 @@ exports.refreshAccessToken = async (refreshToken) => {
       params.toString(),
       {
         headers: {
-          "Content-Type":  "application/x-www-form-urlencoded",
+          "Content-Type": "application/x-www-form-urlencoded",
           "Authorization": `Basic ${credentials}`,
         },
       }

@@ -3,10 +3,10 @@ const Subscription = require("../../models/Subscription");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { sendEmailChangeVerification } = require("../../utils/emailUtils");
-// const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const getDeviceToken = require("../../services/yeastarTokenService").getDeviceToken;
 const axios = require("axios");
-const { getConfig } = require("../../utils/getConfig");
+// const { getConfig } = require("../../utils/getConfig");
 
 exports.getAllCompanyAdmins = async (req, res) => {
   try {
@@ -314,7 +314,7 @@ exports.getAgentDetails = async (req, res) => {
 };
 
 exports.editCompanyAdminAndAgent = async (req, res) => {
-  const {FRONTEND_URL} = getConfig()
+  // const { FRONTEND_URL } = getConfig()
   try {
     const {
       userId,

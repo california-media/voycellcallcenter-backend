@@ -3,13 +3,13 @@ const mongoose = require("mongoose");
 const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const User = require("../models/userModel");
 const s3 = require("../utils/s3");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 
 
 // === Upload Image to S3 ===
 const uploadImageToS3 = async (file) => {
-   const { AWS_BUCKET_NAME } = getConfig(); 
+  //  const { AWS_BUCKET_NAME } = getConfig(); 
 
   const ext = path.extname(file.originalname);
   const name = path.basename(file.originalname, ext);
@@ -17,7 +17,7 @@ const uploadImageToS3 = async (file) => {
 
   const params = {
     // Bucket: process.env.AWS_BUCKET_NAME,
-    Bucket: AWS_BUCKET_NAME,
+    Bucket: process.env.AWS_BUCKET_NAME,
     Key: fileName,
     Body: file.buffer,
     ContentType: file.mimetype,
@@ -26,17 +26,17 @@ const uploadImageToS3 = async (file) => {
   const command = new PutObjectCommand(params);
   await s3.send(command);
 
-  return `https://${AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+  return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
 };
 
 // === Delete Image from S3 ===
 const deleteImageFromS3 = async (imageUrl) => {
-  const { AWS_BUCKET_NAME } = getConfig(); 
+  // const { AWS_BUCKET_NAME } = getConfig(); 
   try {
     if (!imageUrl) return;
 
     // const bucket = process.env.AWS_BUCKET_NAME;
-    const bucket = AWS_BUCKET_NAME;
+    const bucket = process.env.AWS_BUCKET_NAME;
     let fileKey;
 
     // Try robust URL parsing first (handles virtual-hosted and path-style URLs)

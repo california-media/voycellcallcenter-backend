@@ -1,6 +1,6 @@
 require("dotenv").config();
 const nodemailer = require("nodemailer");
-const { getConfig } = require("./getConfig");
+// const { getConfig } = require("./getConfig");
 
 // MAIL_HOST=smtp.titan.email
 // MAIL_PORT=465
@@ -21,29 +21,31 @@ const { getConfig } = require("./getConfig");
 //     rejectUnauthorized: false, // important for Gmail on TLS
 //   },
 // });
-const getTransporter =()=>{
-const {MAIL_HOST, MAIL_PORT} = getConfig()
-    return nodemailer.createTransport({
-  // service: "gmail",
-  service: "smtp",
-//   host: process.env.MAIL_HOST,
-  host: MAIL_HOST,
-//   port: Number(process.env.MAIL_PORT),
-  port: Number(MAIL_PORT),
-  secure: false, // Gmail on port 587 uses TLS (not SSL)
-  auth: {
-    user: process.env.MAIL_USERNAME,
-    pass: process.env.MAIL_PASSWORD,
-  },
-  tls: {
-    rejectUnauthorized: false, // important for Gmail on TLS
-  },
-});
+const getTransporter = () => {
+  // const { MAIL_HOST, MAIL_PORT } = getConfig()
+  // console.log("MAIL_HOST, MAIL_PORT", MAIL_HOST, MAIL_PORT);
+  return nodemailer.createTransport({
+    // service: "gmail",
+    service: "smtp",
+    host: process.env.MAIL_HOST,
+    // host: MAIL_HOST,
+    port: Number(process.env.MAIL_PORT),
+    // port: Number(MAIL_PORT),
+    secure: false, // Gmail on port 587 uses TLS (not SSL)
+    auth: {
+      user: process.env.MAIL_USERNAME,
+      pass: process.env.MAIL_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: false, // important for Gmail on TLS
+    },
+  });
 }
 
-// const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const sendVerificationEmail = async (email, link) => {
-    const {FRONTEND_URL} = getConfig()
+  // const { FRONTEND_URL } = getConfig()
+  console.log("FRONTEND_URL", FRONTEND_URL);
   const mailOptions = {
     from: '"VOYCELL" <noreply@voycell.com>',
     to: email,
@@ -192,13 +194,19 @@ const sendVerificationEmail = async (email, link) => {
 </html>`,
   };
 
-//   await transporter.sendMail(mailOptions);
-getTransporter().sendMail(mailOptions);
+  //   await transporter.sendMail(mailOptions);
+  // await getTransporter().sendMail(mailOptions);
+  try {
+    const info = await getTransporter().sendMail(mailOptions);
+    console.log("Email sent:", info);
+  } catch (error) {
+    console.error("Email error:", error);
+  }
 };
 
 const sendPostVerificationDemoEmail = async (user) => {
 
-    const {FRONTEND_URL} = getConfig()
+  // const { FRONTEND_URL } = getConfig()
   const clientName =
     `${user.firstname || ""} ${user.lastname || ""}`.trim() || "Client";
 
@@ -302,8 +310,8 @@ const sendPostVerificationDemoEmail = async (user) => {
 `,
   };
 
-//   await transporter.sendMail(mailOptions);
-getTransporter().sendMail(mailOptions);
+  //   await transporter.sendMail(mailOptions);
+  getTransporter().sendMail(mailOptions);
 };
 
 // const sendHelpSupportReply = async (
@@ -427,13 +435,12 @@ const sendHelpSupportReplyNotification = async (
   adminMessage,
   ticketId,
 ) => {
-    const {FRONTEND_URL} = getConfig()
-  const ticketsPageUrl = `${
-    FRONTEND_URL || "https://app.voycell.com"
-  }/my-tickets?ticketId=${ticketId}`;
-//   const ticketsPageUrl = `${
-//     process.env.FRONTEND_URL || "https://app.voycell.com"
-//   }/my-tickets?ticketId=${ticketId}`;
+  // const { FRONTEND_URL } = getConfig()
+  const ticketsPageUrl = `${FRONTEND_URL || "https://app.voycell.com"
+    }/my-tickets?ticketId=${ticketId}`;
+  //   const ticketsPageUrl = `${
+  //     process.env.FRONTEND_URL || "https://app.voycell.com"
+  //   }/my-tickets?ticketId=${ticketId}`;
 
   const mailOptions = {
     from: '"VOYCELL" <noreply@voycell.com>',
@@ -552,8 +559,8 @@ const sendHelpSupportReplyNotification = async (
 </html>`,
   };
 
-//   await transporter.sendMail(mailOptions);
-getTransporter().sendMail(mailOptions);
+  //   await transporter.sendMail(mailOptions);
+  getTransporter().sendMail(mailOptions);
 };
 
 const sendEmailChangeVerification = async (
@@ -563,7 +570,7 @@ const sendEmailChangeVerification = async (
   userId,
   verificationLink,
 ) => {
-    const {FRONTEND_URL} = getConfig()
+  // const { FRONTEND_URL } = getConfig()
   const mailOptions = {
     from: '"VOYCELL" <noreply@voycell.com>',
     to: newEmail,
@@ -643,9 +650,8 @@ const sendEmailChangeVerification = async (
 
         <div class="info-box">
             <h4 style="margin-top: 0;">Email Change Details:</h4>
-            <p style="margin: 5px 0;"><strong>Account:</strong> ${
-              userName || userId
-            }</p>
+            <p style="margin: 5px 0;"><strong>Account:</strong> ${userName || userId
+      }</p>
             <p style="margin: 5px 0;"><strong>Previous Email:</strong> ${oldEmail}</p>
             <p style="margin: 5px 0;"><strong>New Email:</strong> ${newEmail}</p>
         </div>
@@ -724,12 +730,12 @@ const sendEmailChangeVerification = async (
 </html>`,
   };
 
-//   await transporter.sendMail(mailOptions);
-getTransporter().sendMail(mailOptions);
+  //   await transporter.sendMail(mailOptions);
+  getTransporter().sendMail(mailOptions);
 };
 
 const sendMagicLinkEmail = async (email, link) => {
-    const {FRONTEND_URL} = getConfig()
+  // const { FRONTEND_URL } = getConfig()
   const mailOptions = {
     from: '"VOYCELL" <noreply@voycell.com>',
     to: email,
@@ -801,8 +807,8 @@ const sendMagicLinkEmail = async (email, link) => {
     `,
   };
 
-//   await transporter.sendMail(mailOptions);
-getTransporter().sendMail(mailOptions);
+  //   await transporter.sendMail(mailOptions);
+  getTransporter().sendMail(mailOptions);
 };
 
 module.exports = {
