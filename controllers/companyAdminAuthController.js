@@ -19,7 +19,7 @@ const querystring = require("querystring");
 const axios = require("axios");
 const ReferralLog = require("../models/referralLogModel");
 const { META_GRAPH_URL } = require("../config/whatsapp");
-const { getConfig } = require("../utils/getConfig");
+// const { getConfig } = require("../utils/getConfig");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -47,7 +47,7 @@ const disallowedEmailDomains = [
   // "lycos.com",
 ];
 
-// const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 // Requires: User and ReferralLog models in scope.
 // Put this near top of your controller file:
@@ -172,7 +172,7 @@ async function addOrUpdateReferral(referrerId, referredUser) {
 
 const signupWithEmail = async (req, res) => {
 
-  const {FRONTEND_URL} = getConfig()
+  // const {FRONTEND_URL} = getConfig()
   try {
     const {
       email = "",
@@ -509,10 +509,10 @@ const demoEmailSend = async (req, res) => {
 };
 
 async function sendWhatsAppOtp(toPhoneNumber, otp) {
-  const {WHATSAPP_PHONE_NUMBER_ID} = getConfig()
+  // const {WHATSAPP_PHONE_NUMBER_ID} = getConfig()
   try {
-    // const url = `${META_GRAPH_URL}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-    const url = `${META_GRAPH_URL}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    const url = `${META_GRAPH_URL}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    // const url = `${META_GRAPH_URL}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
     const payload = {
       messaging_product: "whatsapp",
@@ -693,7 +693,7 @@ const verifyRealPhoneNumber = async (req, res) => {
 };
 
 const resendVerificationLink = async (req, res) => {
-  const {FRONTEND_URL} = getConfig()
+  // const {FRONTEND_URL} = getConfig()
   try {
     const { email = "" } = req.body;
 
@@ -743,7 +743,7 @@ const resendVerificationLink = async (req, res) => {
 };
 
 const signupWithPhoneNumber = async (req, res) => {
-  const {FRONTEND_URL} = getConfig()
+  // const {FRONTEND_URL} = getConfig()
   try {
     const {
       countryCode,
@@ -1299,7 +1299,7 @@ const unifiedLogin = async (req, res) => {
 };
 
 const generateMagicLink = async (req, res) => {
-  const {FRONTEND_URL} = getConfig()
+  // const {FRONTEND_URL} = getConfig()
   try {
     // const userId = req.user._id; // ✅ from auth middleware
 

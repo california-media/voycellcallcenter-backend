@@ -664,27 +664,27 @@ const userSchema = new Schema(
       timezone: { type: String },     // ✅ REQUIRED
     },
 
-hubspot: {
-  accessToken: { type: String },
-  refreshToken: { type: String },
-  isConnected: { type: Boolean, default: false },
-  userId: { type: String },       // HubSpot portal/hub ID
-  email: { type: String },
-  timezone: { type: String },
-  apiBaseUrl: { type: String, default: "https://api.hubapi.com" },
-  tokenExpiresAt: { type: Date }, // HubSpot tokens expire in 30 min
-},
+    hubspot: {
+      accessToken: { type: String },
+      refreshToken: { type: String },
+      isConnected: { type: Boolean, default: false },
+      userId: { type: String },       // HubSpot portal/hub ID
+      email: { type: String },
+      timezone: { type: String },
+      apiBaseUrl: { type: String, default: "https://api.hubapi.com" },
+      tokenExpiresAt: { type: Date }, // HubSpot tokens expire in 30 min
+    },
 
-pipedrive: {
-  accessToken:    { type: String },
-  refreshToken:   { type: String },
-  isConnected:    { type: Boolean, default: false },
-  userId:         { type: String },
-  email:          { type: String },
-  companyDomain:  { type: String }, // e.g. "mycompany.pipedrive.com"
-  apiBaseUrl:     { type: String }, // e.g. "https://mycompany.pipedrive.com"
-  tokenExpiresAt: { type: Date },
-},
+    pipedrive: {
+      accessToken: { type: String },
+      refreshToken: { type: String },
+      isConnected: { type: Boolean, default: false },
+      userId: { type: String },
+      email: { type: String },
+      companyDomain: { type: String }, // e.g. "mycompany.pipedrive.com"
+      apiBaseUrl: { type: String }, // e.g. "https://mycompany.pipedrive.com"
+      tokenExpiresAt: { type: Date },
+    },
 
     password: {
       type: String,
@@ -845,7 +845,7 @@ pipedrive: {
     // Plan status (denormalized for quick access)
     planStatus: {
       type: String,
-      enum: ["none", "trial", "active", "paused", "expired"],
+      enum: ["none", "trial", "active", "paused", "expired", "cancelled"],
       default: "none",
     },
 
