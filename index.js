@@ -70,8 +70,7 @@ const addEditTempleteRoutes = require("./routes/addEditTempleteRoutes");
 const whatsappRoutes = require("./routes/whatsapp.routes");
 const hubspotAuthRoutes = require("./routes/hubspot.routes");
 const pipedriveAuthRoutes = require("./routes/pipedrive.routes");
-
-
+const billingRoutes = require("./routes/billingRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -79,11 +78,20 @@ const adminUserRoutes = require("./routes/admin/adminUserRoutes");
 const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
 const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
 const superadmin = require("./routes/admin/superAdminRoutes");
+const planAdminRoutes = require("./routes/admin/planAdminRoutes");
+const couponAdminRoutes = require("./routes/admin/couponAdminRoutes");
 const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
 // const chatAgentRoutes = require("./routes/chatAgentRoutes");
 // const initGraphQL = require("./graphql");
 
 app.use(cors());
+
+// Stripe webhook must use raw body — register BEFORE express.json()
+app.post(
+  "/billing/webhook",
+  express.raw({ type: "application/json" }),
+  require("./controllers/billingController").handleStripeWebhook
+);
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -252,6 +260,28 @@ app.use(
   checkForAuthentication(),
   checkRole(["superadmin"]),
   superadmin
+);
+
+// Plan & coupon management (superAdmin only)
+app.use(
+  "/superAdmin/plans",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  planAdminRoutes
+);
+app.use(
+  "/superAdmin/coupons",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  couponAdminRoutes
+);
+
+// Billing & subscription (companyAdmin only)
+app.use(
+  "/billing",
+  checkForAuthentication(),
+  checkRole(["companyAdmin"]),
+  billingRoutes
 );
 
 

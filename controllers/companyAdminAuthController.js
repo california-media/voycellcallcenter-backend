@@ -203,6 +203,16 @@ const signupWithEmail = async (req, res) => {
         user.signupMethod = "email";
       }
 
+      // ── Start trial period on email verification (companyAdmin only) ──────────
+      if (user.role === "companyAdmin" && !user.trialStartedAt) {
+        const trialDays = user.trialDurationDays || 7;
+        const trialStart = new Date();
+        const trialEnd = new Date(trialStart.getTime() + trialDays * 24 * 60 * 60 * 1000);
+        user.planStatus = "trial";
+        user.trialStartedAt = trialStart;
+        user.trialEndsAt = trialEnd;
+      }
+
       // Setup initial plan after email verification (skip for superadmin)
       if (user.role !== "superadmin") {
         if (user.referredBy) {

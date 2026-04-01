@@ -1,4 +1,5 @@
 const User = require("../../models/userModel");
+const Subscription = require("../../models/Subscription");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { sendEmailChangeVerification } = require("../../utils/emailUtils");
@@ -28,21 +29,31 @@ exports.getAllCompanyAdmins = async (req, res) => {
       }
       : {};
 
-    const companyAdmins = await User.find({
-      role: "companyAdmin",
-      ...searchQuery,
-    })
-      .select(
-        "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName"
-      )
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    const [companyAdmins, totalAdmins] = await Promise.all([
+      User.find({ role: "companyAdmin", ...searchQuery })
+        .select(
+          "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialEndsAt"
+        )
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      User.countDocuments({ role: "companyAdmin", ...searchQuery }),
+    ]);
 
-    const totalAdmins = await User.countDocuments({
-      role: "companyAdmin",
-      ...searchQuery,
-    });
+    // Attach active subscription info (plan name) for each company admin
+    const userIds = companyAdmins.map((u) => u._id);
+    const subscriptions = await Subscription.find({
+      userId: { $in: userIds },
+      status: { $in: ["active", "trialing", "paused"] },
+    }).populate("planId", "name").lean();
+
+    const subMap = {};
+    subscriptions.forEach((s) => { subMap[s.userId.toString()] = s; });
+
+    const data = companyAdmins.map((u) => ({
+      ...u,
+      subscription: subMap[u._id.toString()] || null,
+    }));
 
     res.status(200).json({
       status: "success",
@@ -51,7 +62,7 @@ exports.getAllCompanyAdmins = async (req, res) => {
       limit,
       totalAdmins,
       totalPages: Math.ceil(totalAdmins / limit),
-      data: companyAdmins,
+      data,
     });
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
