@@ -313,6 +313,15 @@ exports.connectWhatsApp = async (req, res) => {
             });
         }
 
+        await User.findOne({ "whatsappWaba.phoneNumberId": phoneNumberId }).lean().then(existing => {
+            if (existing) {
+                return res.status(400).json({
+                    status: "error",
+                    message: "This WABA Account Already Connected"
+                });
+            }
+        });
+
         /* ================================
            4️⃣ SAVE CONNECTION
         =================================*/
@@ -341,7 +350,7 @@ exports.connectWhatsApp = async (req, res) => {
         });
     }
 };
- 
+
 exports.disconnectWhatsApp = async (req, res) => {
     try {
         await User.findByIdAndUpdate(req.user._id, {
@@ -880,7 +889,7 @@ exports.refreshWabaToken = async (req, res) => {
         });
     }
 };
- 
+
 /**
  * STEP 3: Webhook verification
  */
