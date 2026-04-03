@@ -1214,6 +1214,13 @@ exports.getCompanyBillingDetails = async (req, res) => {
         const sub = await Subscription.findOne({ userId }).sort({ createdAt: -1 });
         for (const si of result.data || []) {
           if (si.status === "draft") continue;
+          const lineItem = si.lines?.data?.[0];
+          const periodStart = lineItem?.period?.start
+            ? new Date(lineItem.period.start * 1000)
+            : (si.period_start ? new Date(si.period_start * 1000) : null);
+          const periodEnd = lineItem?.period?.end
+            ? new Date(lineItem.period.end * 1000)
+            : (si.period_end ? new Date(si.period_end * 1000) : null);
           await Invoice.findOneAndUpdate(
             { stripeInvoiceId: si.id },
             {
@@ -1230,8 +1237,8 @@ exports.getCompanyBillingDetails = async (req, res) => {
               status: si.status,
               invoicePdf: si.invoice_pdf || null,
               hostedInvoiceUrl: si.hosted_invoice_url || null,
-              billingPeriodStart: si.period_start ? new Date(si.period_start * 1000) : null,
-              billingPeriodEnd: si.period_end ? new Date(si.period_end * 1000) : null,
+              billingPeriodStart: periodStart,
+              billingPeriodEnd: periodEnd,
               stripeCreatedAt: si.created ? new Date(si.created * 1000) : null,
             },
             { upsert: true, new: true }
@@ -1258,9 +1265,10 @@ exports.getCompanyBillingDetails = async (req, res) => {
       Invoice.countDocuments({ userId }),
     ]);
 
-    const totalPaid = await Invoice.aggregate([
-      { $match: { userId: require("mongoose").Types.ObjectId.createFromHexString(userId.toString()), status: "paid" } },
-      { $group: { _id: null, total: { $sum: "$amountPaid" } } },
+    const mongoose = require("mongoose");
+    const paidSummary = await Invoice.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(userId.toString()) } },
+      { $group: { _id: null, totalPaid: { $sum: "$amountPaid" }, totalDue: { $sum: "$amount" } } },
     ]);
 
     res.json({
@@ -1271,7 +1279,8 @@ exports.getCompanyBillingDetails = async (req, res) => {
       totalInvoices,
       page,
       limit,
-      totalPaid: totalPaid[0]?.total || 0,
+      totalPaid: paidSummary[0]?.totalPaid || 0,
+      totalDue: paidSummary[0]?.totalDue || 0,
     });
   } catch (err) {
     console.error("getCompanyBillingDetails error:", err);

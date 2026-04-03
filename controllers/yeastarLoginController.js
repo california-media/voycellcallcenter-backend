@@ -17,6 +17,11 @@ async function getYeastarLoginSignature(req, res) {
       return res.status(400).json({ status: "error", message: "User/Extension not configured" });
     }
 
+
+if (user.extensionStatus !== true) {
+      return res.status(400).json({ status: "error", message: "Your extension is disabled!" });
+    }
+
     const deviceId = user.PBXDetails.assignedDeviceId;
 
     // 1️⃣ Initial attempt to get token (from DB or fresh)

@@ -40,47 +40,54 @@ const getAllPlans = async (req, res) => {
 // ─── Create Plan ──────────────────────────────────────────────────────────────
 const createPlan = async (req, res) => {
   try {
-    const { name, description, tag, tagColor, isActive, features, commonFeatures, pricing } = req.body;
+    const { name, description, tag, tagColor, isActive, features, commonFeatures, pricing, agentPrice, isEnterprise } = req.body;
 
     if (!name) return res.status(400).json({ success: false, message: "Plan name is required" });
 
-    // Create Stripe products & prices for each billing period
+    // Enterprise plans have no pricing — skip Stripe product/price creation
     const pricingResult = {};
-    const periods = ["monthly", "quarterly", "yearly"];
-    const intervalConfig = {
-      monthly:   { interval: "month", intervalCount: 1 },
-      quarterly: { interval: "month", intervalCount: 3 },
-      yearly:    { interval: "year",  intervalCount: 1 },
-    };
+    if (!isEnterprise) {
+      const periods = ["monthly", "quarterly", "yearly"];
+      const intervalConfig = {
+        monthly:   { interval: "month", intervalCount: 1 },
+        quarterly: { interval: "month", intervalCount: 3 },
+        yearly:    { interval: "year",  intervalCount: 1 },
+      };
 
-    for (const period of periods) {
-      const tier = pricing?.[period];
-      if (tier && tier.price > 0) {
-        const product = await stripeService.createStripeProduct(
-          `${name} - ${period.charAt(0).toUpperCase() + period.slice(1)}`,
-          description
-        );
-        const cfg = intervalConfig[period];
-        const price = await stripeService.createStripePrice(
-          product.id,
-          tier.price,
-          cfg.interval,
-          cfg.intervalCount
-        );
-        pricingResult[period] = {
-          price: tier.price,
-          discountPercent: tier.discountPercent || 0,
-          stripeProductId: product.id,
-          stripePriceId: price.id,
-        };
-      } else {
-        pricingResult[period] = {
-          price: tier?.price || 0,
-          discountPercent: tier?.discountPercent || 0,
-          stripeProductId: null,
-          stripePriceId: null,
-        };
+      for (const period of periods) {
+        const tier = pricing?.[period];
+        if (tier && tier.price > 0) {
+          const product = await stripeService.createStripeProduct(
+            `${name} - ${period.charAt(0).toUpperCase() + period.slice(1)}`,
+            description
+          );
+          const cfg = intervalConfig[period];
+          const price = await stripeService.createStripePrice(
+            product.id,
+            tier.price,
+            cfg.interval,
+            cfg.intervalCount
+          );
+          pricingResult[period] = {
+            price: tier.price,
+            discountPercent: tier.discountPercent || 0,
+            stripeProductId: product.id,
+            stripePriceId: price.id,
+          };
+        } else {
+          pricingResult[period] = {
+            price: tier?.price || 0,
+            discountPercent: tier?.discountPercent || 0,
+            stripeProductId: null,
+            stripePriceId: null,
+          };
+        }
       }
+    } else {
+      // Enterprise: no pricing stored
+      ["monthly", "quarterly", "yearly"].forEach((period) => {
+        pricingResult[period] = { price: 0, discountPercent: 0, stripeProductId: null, stripePriceId: null };
+      });
     }
 
     // Get highest order number
@@ -96,6 +103,8 @@ const createPlan = async (req, res) => {
       features: features || [],
       commonFeatures: commonFeatures || [],
       pricing: pricingResult,
+      agentPrice: agentPrice || 0,
+      isEnterprise: isEnterprise || false,
       order,
     });
 
@@ -110,7 +119,7 @@ const createPlan = async (req, res) => {
 const updatePlan = async (req, res) => {
   try {
     const { planId } = req.params;
-    const { name, description, tag, tagColor, isActive, features, commonFeatures, pricing } = req.body;
+    const { name, description, tag, tagColor, isActive, features, commonFeatures, pricing, agentPrice, isEnterprise } = req.body;
 
     const plan = await Plan.findOne({ _id: planId, isDeleted: false });
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
@@ -163,6 +172,8 @@ const updatePlan = async (req, res) => {
     if (isActive !== undefined) plan.isActive = isActive;
     if (features !== undefined) plan.features = features;
     if (commonFeatures !== undefined) plan.commonFeatures = commonFeatures;
+    if (agentPrice !== undefined) plan.agentPrice = agentPrice;
+    if (isEnterprise !== undefined) plan.isEnterprise = isEnterprise;
 
     plan.markModified("pricing");
     await plan.save();

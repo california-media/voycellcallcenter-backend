@@ -10,8 +10,12 @@ const {
   removePaymentMethod,
   setDefaultPaymentMethod,
   subscribeToPlan,
+  activateSubscription,
   cancelSubscription,
   upgradePlan,
+  getAgentQuota,
+  previewAgentSeats,
+  updateAgentSeats,
   getInvoices,
 } = require("../controllers/billingController");
 
@@ -21,8 +25,14 @@ router.get("/plans", getActivePlans);
 // Subscription
 router.get("/subscription", getCurrentSubscription);
 router.post("/subscribe", subscribeToPlan);
+router.post("/subscription/activate", activateSubscription);
 router.post("/cancel", cancelSubscription);
 router.post("/upgrade", upgradePlan);
+
+// Agent seats
+router.get("/agents/quota", getAgentQuota);
+router.post("/agents/preview", previewAgentSeats);
+router.post("/agents/update", updateAgentSeats);
 
 // Coupons
 router.post("/coupon/validate", validateCoupon);

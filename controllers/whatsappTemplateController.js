@@ -656,6 +656,132 @@ function mergeComponents(metaComponents, dbComponents = []) {
 // controllers/wabaTemplateController.js
 // 📌 Get all APPROVED templates of logged-in user
 
+// exports.getWabaTemplates = async (req, res) => {
+//   try {
+//     const userId = req.user?._id;
+//     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+//     // Pagination + Search params
+//     const page = parseInt(req.body.page) || 1;
+//     const limit = parseInt(req.body.limit) || 10;
+//     const search = req.body.search || "";
+//     const skip = (page - 1) * limit;
+
+
+//     const user = await User.findById(userId);
+//     if (!user?.whatsappWaba) {
+//       return res.status(400).json({ message: "WhatsApp WABA not connected" });
+//     }
+
+//     const { wabaId, accessToken } = user.whatsappWaba;
+//     if (!wabaId || !accessToken)
+//       return res.status(400).json({ message: "Missing WABA credentials" });
+
+//     // Step 1: Fetch templates from Meta API
+//     const url = `${META_GRAPH_URL}/${wabaId}/message_templates?limit=100`;
+
+//     const response = await axios.get(url, {
+//       headers: {
+//         Authorization: `Bearer ${accessToken}`,
+//         "Content-Type": "application/json",
+//       },
+//     });
+
+//     const metaTemplates = response.data.data;
+
+//     const syncedTemplates = [];
+//     for (const t of metaTemplates) {
+//       const existingTemplate = await WabaTemplate.findOne({
+//         metaTemplateId: t.id,
+//       });
+
+//       let mergedComponents;
+
+//       if (existingTemplate) {
+//         mergedComponents = mergeComponents(
+//           t.components,
+//           existingTemplate.components
+//         );
+//       } else {
+//         mergedComponents = t.components;
+//       }
+
+//       const updated = await WabaTemplate.findOneAndUpdate(
+//         { metaTemplateId: t.id },
+//         {
+//           user: userId,
+//           wabaId,
+//           name: t.name,
+//           category: t.category,
+//           language: t.language,
+//           // components: mergedComponents, // ✅ IMPORTANT
+//           status: t.status,
+//           syncedAt: new Date(),
+//         },
+//         { upsert: true, new: true }
+//       );
+
+//       syncedTemplates.push(updated);
+//     }
+
+//     // Build search filter
+//     const searchFilter = {
+//       user: userId,
+//       wabaId,
+//       name: { $regex: search, $options: "i" }, // case-insensitive
+//     };
+
+//     // Get total count
+//     const totalTemplates = await WabaTemplate.countDocuments(searchFilter);
+
+//     // Fetch paginated templates
+//     const templates = await WabaTemplate.find(searchFilter)
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(limit);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Fetched and synced WABA templates",
+//       data: templates,
+//       pagination: {
+//         total: totalTemplates,
+//         page,
+//         limit,
+//         totalPages: Math.ceil(totalTemplates / limit),
+//       },
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch WABA templates",
+//       error: error.message,
+//     });
+//   }
+// };
+
+const syncComponentTextOnly = (metaComponents = [], existingComponents = []) => {
+  return metaComponents.map((metaComp) => {
+    const existingComp = existingComponents.find(
+      (c) => c.type === metaComp.type
+    );
+
+    // 🆕 If no existing → create new with ONLY text
+    if (!existingComp) {
+      return {
+        type: metaComp.type,
+        text: metaComp.text || "",
+      };
+    }
+
+    // 🔁 If exists → update ONLY text
+    return {
+      ...existingComp.toObject(), // keep everything
+      text: metaComp.text || existingComp.text, // update only text
+    };
+  });
+};
+
 exports.getWabaTemplates = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -695,15 +821,30 @@ exports.getWabaTemplates = async (req, res) => {
         metaTemplateId: t.id,
       });
 
-      let mergedComponents;
+      // let mergedComponents;
+
+      // if (existingTemplate) {
+      //   mergedComponents = mergeComponents(
+      //     t.components,
+      //     existingTemplate.components
+      //   );
+      // } else {
+      //   mergedComponents = t.components;
+      // }
+
+      let updatedComponents;
 
       if (existingTemplate) {
-        mergedComponents = mergeComponents(
+        updatedComponents = syncComponentTextOnly(
           t.components,
           existingTemplate.components
         );
       } else {
-        mergedComponents = t.components;
+        // 🆕 New template → store ONLY text
+        updatedComponents = t.components.map((c) => ({
+          type: c.type,
+          text: c.text || "",
+        }));
       }
 
       const updated = await WabaTemplate.findOneAndUpdate(
@@ -715,6 +856,7 @@ exports.getWabaTemplates = async (req, res) => {
           category: t.category,
           language: t.language,
           // components: mergedComponents, // ✅ IMPORTANT
+          components: updatedComponents,
           status: t.status,
           syncedAt: new Date(),
         },

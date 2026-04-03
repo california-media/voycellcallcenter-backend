@@ -3,6 +3,7 @@ const User = require("../../models/userModel");
 const Lead = require("../../models/leadModel");
 const mongoose = require("mongoose");
 const Contact = require("../../models/contactModel");
+const Subscription = require("../../models/Subscription");
 const { sendVerificationEmail } = require("../../utils/emailUtils");
 const { createTokenforUser } = require("../../services/authentication");
 // const { getConfig } = require("../../utils/getConfig");
@@ -72,8 +73,43 @@ exports.adminRegisterUser = async (req, res) => {
       });
     }
 
+    // ── Agent quota check ─────────────────────────────────────────────────────
+    const companyAdminId = req.user._id;
+    const currentAgentCount = await User.countDocuments({
+      createdByWhichCompanyAdmin: companyAdminId,
+      role: "user",
+      accountStatus: { $ne: "deleted" },
+    });
+
+    const activeSubscription = await Subscription.findOne({
+      userId: companyAdminId,
+      status: { $in: ["active", "trialing"] },
+    });
+
+    let allowedAgentCount = 0;
+    if (activeSubscription) {
+      allowedAgentCount = activeSubscription.agentCount || 1;
+    } else {
+      // Trial users get 1 free seat
+      const admin = await User.findById(companyAdminId).select("planStatus");
+      if (admin?.planStatus === "trial") allowedAgentCount = 1;
+    }
+
+    if (currentAgentCount >= allowedAgentCount) {
+      return res.status(403).json({
+        status: "error",
+        message: activeSubscription
+          ? `You have used all ${allowedAgentCount} agent seat(s) included in your plan. Please upgrade your agent count from the billing page.`
+          : "You need an active subscription to add agents. Please upgrade your plan.",
+        agentLimitReached: true,
+        allowedAgentCount,
+        currentAgentCount,
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const emailVerificationToken = crypto.randomBytes(32).toString("hex");
-    const createdByWhichCompanyAdmin = req.user._id;
+    const createdByWhichCompanyAdmin = companyAdminId;
 
     const newUser = await User.create({
       email,

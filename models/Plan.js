@@ -3,6 +3,7 @@ const { Schema, model } = require("mongoose");
 const featureSchema = new Schema(
   {
     text: { type: String, required: true },
+    description: { type: String, default: "" },
     order: { type: Number, default: 0 },
   },
   { _id: false }
@@ -42,6 +43,12 @@ const planSchema = new Schema(
       quarterly: { type: pricingTierSchema, default: () => ({ price: 0, discountPercent: 0 }) },
       yearly: { type: pricingTierSchema, default: () => ({ price: 0, discountPercent: 0 }) },
     },
+
+    // Per-agent monthly price (set by superAdmin). Total = base + agentCount * agentPrice
+    agentPrice: { type: Number, default: 0 },
+
+    // Enterprise plans show a "Contact Us" button instead of price/subscribe
+    isEnterprise: { type: Boolean, default: false },
 
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },

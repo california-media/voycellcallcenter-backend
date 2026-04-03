@@ -102,14 +102,135 @@ const parseMetaError = (error, step) => {
     };
 };
 
+// exports.connectWhatsApp = async (req, res) => {
+//     try {
+//         const {
+//             accessToken,
+//             businessAccountId,
+//             wabaId,
+//             phoneNumberId
+//         } = req.body;
+
+//         /* ================================
+//            1️⃣ VERIFY BUSINESS
+//         =================================*/
+//         let businessRes;
+//         try {
+//             businessRes = await axios.get(
+//                 `${META_GRAPH_URL}/${businessAccountId}`,
+//                 { headers: { Authorization: `Bearer ${accessToken}` } }
+//             );
+//         } catch (error) {
+//             const parsed = parseMetaError(error, "Business Account");
+//             return res.status(400).json({
+//                 status: "error",
+//                 // step: parsed.step,
+//                 message: parsed.message,
+//                 // error: parsed.meta
+//             });
+//         }
+
+//         /* ================================
+//            2️⃣ VERIFY WABA UNDER BUSINESS
+//         =================================*/
+//         let wabaList;
+//         try {
+//             wabaList = await axios.get(
+//                 `${META_GRAPH_URL}/${businessAccountId}/owned_whatsapp_business_accounts`,
+//                 { headers: { Authorization: `Bearer ${accessToken}` } }
+//             );
+//         } catch (error) {
+//             const parsed = parseMetaError(error, "WABA fetch");
+//             return res.status(400).json({
+//                 status: "error",
+//                 // step: parsed.step,
+//                 message: parsed.message,
+//                 // error: parsed.meta
+//             });
+//         }
+
+//         const wabaExists = wabaList.data.data.find(
+//             w => w.id === wabaId
+//         );
+
+//         if (!wabaExists) {
+//             return res.status(400).json({
+//                 status: "error",
+//                 // step: "WABA Validation",
+//                 message: "WABA does not belong to this Business Account"
+//             });
+//         }
+
+//         /* ================================
+//            3️⃣ VERIFY PHONE UNDER WABA
+//         =================================*/
+//         let phoneList;
+//         try {
+//             phoneList = await axios.get(
+//                 `${META_GRAPH_URL}/${wabaId}/phone_numbers`,
+//                 { headers: { Authorization: `Bearer ${accessToken}` } }
+//             );
+//         } catch (error) {
+//             const parsed = parseMetaError(error, "Phone Numbers fetch");
+//             return res.status(400).json({
+//                 status: "error",
+//                 // step: parsed.step,
+//                 message: parsed.message,
+//                 // error: parsed.meta
+//             });
+//         }
+
+//         const phoneExists = phoneList.data.data.find(
+//             p => p.id === phoneNumberId
+//         );
+
+//         if (!phoneExists) {
+//             return res.status(400).json({
+//                 status: "error",
+//                 // step: "Phone Validation",
+//                 message: "Phone Number does not belong to this WABA"
+//             });
+//         }
+
+//         /* ================================
+//            4️⃣ SAVE CONNECTION
+//         =================================*/
+//         await User.findByIdAndUpdate(req.user._id, {
+//             whatsappWaba: {
+//                 isConnected: true,
+//                 businessAccountId,
+//                 wabaId,
+//                 phoneNumberId,
+//                 phoneNumber: phoneExists.display_phone_number,
+//                 accessToken
+//             }
+//         });
+
+//         return res.json({
+//             status: "success",
+//             message: "WABA Connected Successfully"
+//         });
+
+//     } catch (err) {
+//         return res.status(500).json({
+//             status: "error",
+//             step: "Server",
+//             message: "Internal server error",
+//             error: err.message
+//         });
+//     }
+// };
+
 exports.connectWhatsApp = async (req, res) => {
     try {
         const {
             accessToken,
-            businessAccountId,
+            appId,
             wabaId,
             phoneNumberId
         } = req.body;
+
+        const businessAccountId = appId;
 
         /* ================================
            1️⃣ VERIFY BUSINESS
@@ -120,6 +241,7 @@ exports.connectWhatsApp = async (req, res) => {
                 `${META_GRAPH_URL}/${businessAccountId}`,
                 { headers: { Authorization: `Bearer ${accessToken}` } }
             );
+            console.log("Business fetch response:", businessRes.data);
         } catch (error) {
             const parsed = parseMetaError(error, "Business Account");
             return res.status(400).json({
@@ -136,9 +258,10 @@ exports.connectWhatsApp = async (req, res) => {
         let wabaList;
         try {
             wabaList = await axios.get(
-                `${META_GRAPH_URL}/${businessAccountId}/owned_whatsapp_business_accounts`,
+                `${META_GRAPH_URL}/${wabaId}`,
                 { headers: { Authorization: `Bearer ${accessToken}` } }
             );
+            console.log("WABA list response:", wabaList.data);
         } catch (error) {
             const parsed = parseMetaError(error, "WABA fetch");
             return res.status(400).json({
@@ -149,9 +272,7 @@ exports.connectWhatsApp = async (req, res) => {
             });
         }
 
-        const wabaExists = wabaList.data.data.find(
-            w => w.id === wabaId
-        );
+        const wabaExists = wabaList.data.id === wabaId;
 
         if (!wabaExists) {
             return res.status(400).json({
@@ -220,7 +341,7 @@ exports.connectWhatsApp = async (req, res) => {
         });
     }
 };
-
+ 
 exports.disconnectWhatsApp = async (req, res) => {
     try {
         await User.findByIdAndUpdate(req.user._id, {
@@ -634,6 +755,69 @@ exports.updateWabaProfile = async (req, res) => {
 };
 
 // controllers/whatsapp/refreshToken.js
+// exports.refreshWabaToken = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+//         const access_token_waba = req.body.access_token_waba;
+
+//         const user = await User.findById(userId);
+
+//         const wabaId = user.whatsappWaba.wabaId;
+//         const businessAccountId = user.whatsappWaba.businessAccountId;
+
+//         /* -------- SAVE NEW TOKEN -------- */
+
+//         let wabaList;
+//         try {
+//             wabaList = await axios.get(
+//                 `${META_GRAPH_URL}/${businessAccountId}/owned_whatsapp_business_accounts`,
+//                 { headers: { Authorization: `Bearer ${access_token_waba}` } }
+//             );
+//         } catch (error) {
+//             const parsed = parseMetaError(error, "WABA fetch");
+//             return res.status(400).json({
+//                 status: "error",
+//                 // step: parsed.step,
+//                 message: parsed.message,
+//                 // error: parsed.meta
+//             });
+//         }
+
+//         const wabaExists = wabaList.data.data.find(
+//             w => w.id === wabaId
+//         );
+
+//         if (!wabaExists) {
+//             return res.status(400).json({
+//                 status: "error",
+//                 // step: "WABA Validation",
+//                 message: "WABA does not belong to this Business Account"
+//             });
+//         }
+
+//         user.whatsappWaba.accessToken = access_token_waba;
+
+//         // expires in seconds
+//         // user.whatsappWaba.tokenExpiresAt = new Date(
+//         //     Date.now() + 60 * 60 * 1000 // 1 hour in milliseconds
+//         // );
+
+//         await user.save();
+
+//         res.json({
+//             success: true,
+//             message: "Access token refreshed",
+//             accessToken: access_token_waba,
+//             // expiresIn: 60 * 60,
+//         });
+
+//     } catch (error) {
+//         res.status(500).json({
+//             success: false,
+//             message: "Failed to refresh token",
+//         });
+//     }
+// };
 exports.refreshWabaToken = async (req, res) => {
     try {
         const userId = req.user._id;
@@ -646,31 +830,30 @@ exports.refreshWabaToken = async (req, res) => {
 
         /* -------- SAVE NEW TOKEN -------- */
 
-        let wabaList;
+        /* ================================
+           1️⃣ VERIFY BUSINESS
+        =================================*/
+        let businessRes;
         try {
-            wabaList = await axios.get(
-                `${META_GRAPH_URL}/${businessAccountId}/owned_whatsapp_business_accounts`,
+            businessRes = await axios.get(
+                `${META_GRAPH_URL}/${wabaId}`,
                 { headers: { Authorization: `Bearer ${access_token_waba}` } }
             );
+            console.log("Business fetch response:", businessRes.data);
+            if (!businessRes.data || businessRes.data.id !== wabaId) {
+                return res.status(400).json({
+                    status: "error",
+                    message: "Business Account does not match"
+                });
+            }
+
         } catch (error) {
-            const parsed = parseMetaError(error, "WABA fetch");
+            const parsed = parseMetaError(error, "Business Account");
             return res.status(400).json({
                 status: "error",
                 // step: parsed.step,
                 message: parsed.message,
                 // error: parsed.meta
-            });
-        }
-
-        const wabaExists = wabaList.data.data.find(
-            w => w.id === wabaId
-        );
-
-        if (!wabaExists) {
-            return res.status(400).json({
-                status: "error",
-                // step: "WABA Validation",
-                message: "WABA does not belong to this Business Account"
             });
         }
 
@@ -697,7 +880,7 @@ exports.refreshWabaToken = async (req, res) => {
         });
     }
 };
-
+ 
 /**
  * STEP 3: Webhook verification
  */

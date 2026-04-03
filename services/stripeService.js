@@ -131,10 +131,28 @@ const createSubscription = async ({
   paymentMethodId,
   trialEnd = null,
   couponId = null,
+  // Optional: dynamic price for agent-based billing
+  priceData = null, // { amount (USD), interval, intervalCount, productName }
 }) => {
+  let resolvedPriceId = stripePriceId;
+
+  // Create a real Stripe product+price on-the-fly for dynamic (agent-based) pricing
+  if (priceData) {
+    const product = await stripe.products.create({
+      name: priceData.productName || "Subscription",
+    });
+    const price = await stripe.prices.create({
+      product: product.id,
+      unit_amount: Math.round(priceData.amount * 100),
+      currency: "usd",
+      recurring: { interval: priceData.interval, interval_count: priceData.intervalCount },
+    });
+    resolvedPriceId = price.id;
+  }
+
   const params = {
     customer: stripeCustomerId,
-    items: [{ price: stripePriceId }],
+    items: [{ price: resolvedPriceId }],
     default_payment_method: paymentMethodId,
     payment_behavior: "default_incomplete",
     expand: ["latest_invoice.payment_intent", "pending_setup_intent"],
@@ -339,4 +357,5 @@ module.exports = {
   listInvoices,
   retrieveInvoice,
   constructWebhookEvent,
+  stripe, // raw Stripe instance for advanced operations
 };

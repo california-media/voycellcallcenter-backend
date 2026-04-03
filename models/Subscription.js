@@ -50,6 +50,9 @@ const subscriptionSchema = new Schema(
     couponCode: { type: String, default: null },
     stripeCouponId: { type: String, default: null },
 
+    // Agent seats
+    agentCount: { type: Number, default: 1, min: 1 },
+
     // Metadata
     autoRenewal: { type: Boolean, default: true },
     lastInvoiceId: { type: String, default: null },

@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Plan = require("../models/Plan");
 const Subscription = require("../models/Subscription");
 const Invoice = require("../models/Invoice");
@@ -176,9 +177,22 @@ const setDefaultPaymentMethod = async (req, res) => {
 };
 
 // ─── Subscribe to a Plan ──────────────────────────────────────────────────────
+// ── Helper: compute total price (base + agents) for a billing period ─────────
+const calcTotalPrice = (plan, billingPeriod, agentCount) => {
+  const tier = plan.pricing[billingPeriod];
+  const basePrice = tier.price || 0;
+  const discount = tier.discountPercent || 0;
+  const agentPrice = plan.agentPrice || 0;
+  const periodMultiplier = billingPeriod === "monthly" ? 1 : billingPeriod === "quarterly" ? 3 : 12;
+  const totalPerMonth = basePrice + agentCount * agentPrice;
+  const totalBeforeDiscount = totalPerMonth * periodMultiplier;
+  return totalBeforeDiscount * (1 - discount / 100);
+};
+
 const subscribeToPlan = async (req, res) => {
   try {
-    const { planId, billingPeriod, paymentMethodId, couponCode } = req.body;
+    const { planId, billingPeriod, paymentMethodId, couponCode, agentCount: rawAgentCount } = req.body;
+    const agentCount = Math.max(1, parseInt(rawAgentCount) || 1);
 
     if (!planId || !billingPeriod || !paymentMethodId) {
       return res.status(400).json({ success: false, message: "planId, billingPeriod, and paymentMethodId are required" });
@@ -197,13 +211,21 @@ const subscribeToPlan = async (req, res) => {
 
     const user = await User.findById(req.user._id);
 
-    // Check for existing active/trialing subscription
+    // Check for existing subscription — cancel any stale incomplete ones, block truly active ones
     const existingSub = await Subscription.findOne({
       userId: user._id,
-      status: { $in: ["active", "trialing", "paused"] },
+      status: { $in: ["active", "trialing", "paused", "incomplete"] },
     });
     if (existingSub) {
-      return res.status(400).json({ success: false, message: "You already have an active subscription. Please cancel or upgrade it." });
+      if (existingSub.status === "incomplete") {
+        // Previous payment was never confirmed — cancel it and allow fresh subscribe
+        if (existingSub.stripeSubscriptionId) {
+          try { await stripeService.cancelSubscription(existingSub.stripeSubscriptionId, false); } catch (_) {}
+        }
+        await Subscription.deleteOne({ _id: existingSub._id });
+      } else {
+        return res.status(400).json({ success: false, message: "You already have an active subscription. Please cancel or upgrade it." });
+      }
     }
 
     // Get or create Stripe customer
@@ -236,19 +258,30 @@ const subscribeToPlan = async (req, res) => {
       }
     }
 
-    // Trial end date (for trialing users upgrading mid-trial)
-    let trialEnd = null;
-    if (user.planStatus === "trial" && user.trialEndsAt && new Date(user.trialEndsAt) > new Date()) {
-      trialEnd = user.trialEndsAt;
-    }
+    // Always start paid subscription immediately — do not inherit remaining trial period
+    const trialEnd = null;
+
+    // Calculate total price including agent seats
+    const totalAmount = calcTotalPrice(plan, billingPeriod, agentCount);
+    const intervalConfig = {
+      monthly:   { interval: "month", intervalCount: 1 },
+      quarterly: { interval: "month", intervalCount: 3 },
+      yearly:    { interval: "year",  intervalCount: 1 },
+    };
+    const { interval, intervalCount } = intervalConfig[billingPeriod];
+
+    // Use dynamic price_data if agentPrice > 0 OR total differs from base price, else use stored stripePriceId
+    const hasAgentPricing = (plan.agentPrice || 0) > 0;
+    const usesDynamicPrice = hasAgentPricing || agentCount > 1;
 
     // Create Stripe subscription
     const stripeSub = await stripeService.createSubscription({
       stripeCustomerId: customer.id,
-      stripePriceId: pricingTier.stripePriceId,
+      stripePriceId: usesDynamicPrice ? null : pricingTier.stripePriceId,
       paymentMethodId,
       trialEnd,
       couponId,
+      priceData: usesDynamicPrice ? { amount: totalAmount, interval, intervalCount, productName: `${plan.name} - ${agentCount} agent${agentCount !== 1 ? "s" : ""} (${billingPeriod})` } : null,
     });
 
     // Save subscription in DB
@@ -258,11 +291,17 @@ const subscribeToPlan = async (req, res) => {
     const periodEnd = stripeSub.current_period_end
       ? new Date(stripeSub.current_period_end * 1000) : null;
 
+    // Map Stripe status to our DB status
+    const dbStatus = stripeSub.status === "trialing" ? "trialing"
+      : stripeSub.status === "active" ? "active"
+      : "incomplete";
+
     const subscription = await Subscription.create({
       userId: user._id,
       planId: plan._id,
       billingPeriod,
-      status: stripeSub.status === "trialing" ? "trialing" : "active",
+      agentCount,
+      status: dbStatus,
       stripeSubscriptionId: stripeSub.id,
       stripeCustomerId: customer.id,
       currentPeriodStart: periodStart,
@@ -273,21 +312,99 @@ const subscribeToPlan = async (req, res) => {
       stripeCouponId: couponId,
     });
 
-    // Update user plan status
+    // Only mark user as active once payment is confirmed (webhook or confirmCardPayment)
+    // For now set to "active" optimistically — webhook will correct if needed
     await User.findByIdAndUpdate(user._id, {
-      planStatus: "active",
+      planStatus: dbStatus === "incomplete" ? user.planStatus : "active",
       reminderEmailsSent: [],
     });
+
+    // Save invoice to DB immediately so it shows in billing views without waiting for webhook/sync
+    const stripeInvoice = stripeSub.latest_invoice;
+    if (stripeInvoice && typeof stripeInvoice === "object" && stripeInvoice.id && stripeInvoice.status !== "draft") {
+      try {
+        const lineItem = stripeInvoice.lines?.data?.[0];
+        const invPeriodStart = lineItem?.period?.start
+          ? new Date(lineItem.period.start * 1000) : periodStart;
+        const invPeriodEnd = lineItem?.period?.end
+          ? new Date(lineItem.period.end * 1000) : periodEnd;
+        await Invoice.findOneAndUpdate(
+          { stripeInvoiceId: stripeInvoice.id },
+          {
+            userId: user._id,
+            subscriptionId: subscription._id,
+            planId: plan._id,
+            stripeInvoiceId: stripeInvoice.id,
+            stripeCustomerId: customer.id,
+            stripeChargeId: stripeInvoice.charge || null,
+            invoiceNumber: stripeInvoice.number || null,
+            amount: stripeInvoice.amount_due,
+            amountPaid: stripeInvoice.amount_paid,
+            currency: stripeInvoice.currency || "usd",
+            status: stripeInvoice.status,
+            invoicePdf: stripeInvoice.invoice_pdf || null,
+            hostedInvoiceUrl: stripeInvoice.hosted_invoice_url || null,
+            billingPeriodStart: invPeriodStart,
+            billingPeriodEnd: invPeriodEnd,
+            stripeCreatedAt: stripeInvoice.created ? new Date(stripeInvoice.created * 1000) : new Date(),
+            couponCode: appliedCouponCode || null,
+          },
+          { upsert: true, new: true }
+        );
+      } catch (invoiceErr) {
+        console.error("Failed to save initial invoice to DB:", invoiceErr.message);
+      }
+    }
 
     res.status(201).json({
       success: true,
       message: "Subscription created successfully",
       subscription,
-      clientSecret: stripeSub.latest_invoice?.payment_intent?.client_secret || null,
+      clientSecret: stripeInvoice?.payment_intent?.client_secret || null,
     });
   } catch (err) {
     console.error("subscribeToPlan error:", err);
     res.status(500).json({ success: false, message: err.message || "Failed to create subscription" });
+  }
+};
+
+// ─── Activate Subscription after payment confirmed on frontend ────────────────
+const activateSubscription = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const subscription = await Subscription.findOne({
+      userId,
+      status: { $in: ["incomplete", "active", "trialing"] },
+    }).sort({ createdAt: -1 });
+
+    if (!subscription) {
+      return res.status(404).json({ success: false, message: "No subscription found" });
+    }
+
+    // Verify with Stripe that the subscription is now active
+    if (subscription.stripeSubscriptionId) {
+      const stripeSub = await stripeService.retrieveSubscription(subscription.stripeSubscriptionId);
+      if (stripeSub.status === "active" || stripeSub.status === "trialing") {
+        subscription.status = stripeSub.status;
+        const periodStart = stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : subscription.currentPeriodStart;
+        const periodEnd = stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : subscription.currentPeriodEnd;
+        subscription.currentPeriodStart = periodStart;
+        subscription.currentPeriodEnd = periodEnd;
+        await subscription.save();
+        await User.findByIdAndUpdate(userId, { planStatus: "active" });
+      } else if (stripeSub.status === "incomplete") {
+        return res.status(400).json({ success: false, message: "Payment not yet confirmed. Please try again." });
+      }
+    } else {
+      subscription.status = "active";
+      await subscription.save();
+      await User.findByIdAndUpdate(userId, { planStatus: "active" });
+    }
+
+    res.json({ success: true, message: "Subscription activated", subscription });
+  } catch (err) {
+    console.error("activateSubscription error:", err);
+    res.status(500).json({ success: false, message: "Failed to activate subscription" });
   }
 };
 
@@ -374,6 +491,15 @@ const syncStripeInvoices = async (userId, stripeCustomerId) => {
     }
     for (const si of allInvoices) {
       if (si.status === "draft") continue;
+      // Use line item period for accurate subscription start/end dates
+      const lineItem = si.lines?.data?.[0];
+      const periodStart = lineItem?.period?.start
+        ? new Date(lineItem.period.start * 1000)
+        : (si.period_start ? new Date(si.period_start * 1000) : null);
+      const periodEnd = lineItem?.period?.end
+        ? new Date(lineItem.period.end * 1000)
+        : (si.period_end ? new Date(si.period_end * 1000) : null);
+
       await Invoice.findOneAndUpdate(
         { stripeInvoiceId: si.id },
         {
@@ -390,8 +516,8 @@ const syncStripeInvoices = async (userId, stripeCustomerId) => {
           status: si.status,
           invoicePdf: si.invoice_pdf || null,
           hostedInvoiceUrl: si.hosted_invoice_url || null,
-          billingPeriodStart: si.period_start ? new Date(si.period_start * 1000) : null,
-          billingPeriodEnd: si.period_end ? new Date(si.period_end * 1000) : null,
+          billingPeriodStart: periodStart,
+          billingPeriodEnd: periodEnd,
           stripeCreatedAt: si.created ? new Date(si.created * 1000) : null,
         },
         { upsert: true, new: true }
@@ -399,6 +525,270 @@ const syncStripeInvoices = async (userId, stripeCustomerId) => {
     }
   } catch (err) {
     console.error("syncStripeInvoices error:", err.message);
+  }
+};
+
+// ─── Get Agent Quota (how many seats bought vs used) ─────────────────────────
+const getAgentQuota = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const subscription = await Subscription.findOne({
+      userId,
+      status: { $in: ["active", "trialing"] },
+    }).populate("planId", "name agentPrice");
+
+    const usedCount = await User.countDocuments({
+      createdByWhichCompanyAdmin: userId,
+      role: "user",
+      accountStatus: { $ne: "deleted" },
+    });
+
+    // Trial users get 1 free agent seat
+    if (!subscription) {
+      const user = await User.findById(userId).select("planStatus");
+      const allowedCount = user?.planStatus === "trial" ? 1 : 0;
+      return res.json({ success: true, agentCount: allowedCount, usedCount, remaining: Math.max(0, allowedCount - usedCount), onTrial: true });
+    }
+
+    const agentCount = subscription.agentCount || 1;
+    res.json({
+      success: true,
+      agentCount,
+      usedCount,
+      remaining: Math.max(0, agentCount - usedCount),
+      agentPrice: subscription.planId?.agentPrice || 0,
+      billingPeriod: subscription.billingPeriod,
+    });
+  } catch (err) {
+    console.error("getAgentQuota error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch agent quota" });
+  }
+};
+
+// ─── Preview Agent Seat Cost (prorated, no charge) ───────────────────────────
+const previewAgentSeats = async (req, res) => {
+  try {
+    const { agentCount: rawAgentCount } = req.body;
+    const newAgentCount = Math.max(1, parseInt(rawAgentCount) || 1);
+    const userId = req.user._id;
+
+    const subscription = await Subscription.findOne({
+      userId,
+      status: { $in: ["active", "trialing"] },
+    }).populate("planId");
+
+    if (!subscription) {
+      return res.status(404).json({ success: false, message: "No active subscription found" });
+    }
+    if (newAgentCount <= subscription.agentCount) {
+      return res.status(400).json({ success: false, message: "New count must be greater than current" });
+    }
+
+    const plan = subscription.planId;
+    const newTotal = calcTotalPrice(plan, subscription.billingPeriod, newAgentCount);
+    const oldTotal = calcTotalPrice(plan, subscription.billingPeriod, subscription.agentCount);
+    const additionalPerPeriod = newTotal - oldTotal;
+
+    // Calculate prorated amount using Stripe upcoming invoice
+    let proratedAmount = null;
+    if (subscription.stripeSubscriptionId) {
+      try {
+        const intervalConfig = {
+          monthly:   { interval: "month", intervalCount: 1 },
+          quarterly: { interval: "month", intervalCount: 3 },
+          yearly:    { interval: "year",  intervalCount: 1 },
+        };
+        const { interval, intervalCount } = intervalConfig[subscription.billingPeriod];
+        const product = await stripeService.stripe.products.create({
+          name: `Preview - ${plan.name} ${newAgentCount} agents`,
+        });
+        const newPrice = await stripeService.stripe.prices.create({
+          product: product.id,
+          unit_amount: Math.round(newTotal * 100),
+          currency: "usd",
+          recurring: { interval, interval_count: intervalCount },
+        });
+        const stripeSub = await stripeService.retrieveSubscription(subscription.stripeSubscriptionId);
+        const existingItemId = stripeSub.items?.data?.[0]?.id;
+        const upcoming = await stripeService.stripe.invoices.retrieveUpcoming({
+          customer: subscription.stripeCustomerId,
+          subscription: subscription.stripeSubscriptionId,
+          subscription_items: [{ id: existingItemId, price: newPrice.id }],
+        });
+        proratedAmount = upcoming.amount_due; // cents
+        // Clean up temp price/product
+        await stripeService.stripe.prices.update(newPrice.id, { active: false });
+        await stripeService.stripe.products.update(product.id, { active: false });
+      } catch (_) {
+        // fallback: just show the additional monthly cost
+      }
+    }
+
+    res.json({
+      success: true,
+      currentAgentCount: subscription.agentCount,
+      newAgentCount,
+      additionalPerPeriod, // USD, per billing period
+      proratedAmount,       // cents, what they'll be charged now
+      billingPeriod: subscription.billingPeriod,
+      agentPrice: plan.agentPrice || 0,
+    });
+  } catch (err) {
+    console.error("previewAgentSeats error:", err);
+    res.status(500).json({ success: false, message: "Failed to preview agent seat cost" });
+  }
+};
+
+// ─── Update Agent Seats (increase agent count on active subscription) ─────────
+const updateAgentSeats = async (req, res) => {
+  try {
+    const { agentCount: rawAgentCount, couponCode } = req.body;
+    const newAgentCount = Math.max(1, parseInt(rawAgentCount) || 1);
+    const userId = req.user._id;
+
+    const subscription = await Subscription.findOne({
+      userId,
+      status: { $in: ["active", "trialing", "incomplete"] },
+    }).populate("planId");
+
+    if (!subscription) {
+      return res.status(404).json({ success: false, message: "No active subscription found" });
+    }
+
+    // Verify Stripe status — incomplete subscriptions cannot be modified
+    if (subscription.stripeSubscriptionId) {
+      const stripeSub = await stripeService.retrieveSubscription(subscription.stripeSubscriptionId);
+      if (stripeSub.status === "incomplete") {
+        return res.status(400).json({
+          success: false,
+          message: "Your subscription payment is not yet confirmed. Please complete your initial payment before adding more seats.",
+        });
+      }
+      // Sync status if Stripe says active but DB says incomplete
+      if (stripeSub.status === "active" && subscription.status === "incomplete") {
+        subscription.status = "active";
+        await subscription.save();
+        await User.findByIdAndUpdate(userId, { planStatus: "active" });
+      }
+    }
+
+    if (newAgentCount < subscription.agentCount) {
+      return res.status(400).json({ success: false, message: "Cannot reduce agent count on an active subscription. Please cancel and resubscribe." });
+    }
+
+    const plan = subscription.planId;
+    const newTotal = calcTotalPrice(plan, subscription.billingPeriod, newAgentCount);
+    const intervalConfig = {
+      monthly:   { interval: "month", intervalCount: 1 },
+      quarterly: { interval: "month", intervalCount: 3 },
+      yearly:    { interval: "year",  intervalCount: 1 },
+    };
+    const { interval, intervalCount } = intervalConfig[subscription.billingPeriod];
+
+    // Resolve coupon if provided
+    let stripeCouponId = null;
+    if (couponCode) {
+      const coupon = await Coupon.findOne({
+        code: couponCode.toUpperCase(),
+        isActive: true,
+        isDeleted: false,
+        $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+      });
+      if (coupon) stripeCouponId = coupon.stripeCouponId;
+    }
+
+    // Update Stripe subscription with new price_data
+    if (subscription.stripeSubscriptionId) {
+      const stripeSub = await stripeService.retrieveSubscription(subscription.stripeSubscriptionId);
+      const existingItemId = stripeSub.items?.data?.[0]?.id;
+      const product = await stripeService.stripe.products.create({
+        name: `${plan.name} - ${newAgentCount} agent${newAgentCount !== 1 ? "s" : ""} (${subscription.billingPeriod})`,
+      });
+      const newPrice = await stripeService.stripe.prices.create({
+        product: product.id,
+        unit_amount: Math.round(newTotal * 100),
+        currency: "usd",
+        recurring: { interval, interval_count: intervalCount },
+      });
+      const updateParams = {
+        items: [{ id: existingItemId, price: newPrice.id }],
+        proration_behavior: "always_invoice",
+        expand: ["latest_invoice.payment_intent"],
+      };
+      if (stripeCouponId) updateParams.discounts = [{ coupon: stripeCouponId }];
+      const updatedSub = await stripeService.stripe.subscriptions.update(subscription.stripeSubscriptionId, updateParams);
+
+      // "always_invoice" creates a new invoice immediately — pay it if not already paid
+      const latestInvoice = updatedSub.latest_invoice;
+      let clientSecret = null;
+      let finalInvoice = latestInvoice;
+
+      if (latestInvoice && latestInvoice.amount_due > 0 && latestInvoice.status !== "paid") {
+        try {
+          finalInvoice = await stripeService.stripe.invoices.pay(latestInvoice.id, {
+            expand: ["lines.data"],
+          });
+          if (finalInvoice.status !== "paid") {
+            clientSecret = latestInvoice.payment_intent?.client_secret || null;
+          }
+        } catch (payErr) {
+          // Payment requires action — return clientSecret for frontend confirmation
+          clientSecret = latestInvoice.payment_intent?.client_secret || null;
+          // Fetch finalized invoice for DB save even if payment requires action
+          try {
+            finalInvoice = await stripeService.stripe.invoices.retrieve(latestInvoice.id, {
+              expand: ["lines.data"],
+            });
+          } catch (_) {}
+        }
+      }
+
+      // Save invoice to DB immediately so it appears in companyAdmin and superAdmin
+      if (finalInvoice && finalInvoice.id && finalInvoice.status !== "draft") {
+        const lineItem = finalInvoice.lines?.data?.[0];
+        const periodStart = lineItem?.period?.start
+          ? new Date(lineItem.period.start * 1000)
+          : (subscription.currentPeriodStart || null);
+        const periodEnd = lineItem?.period?.end
+          ? new Date(lineItem.period.end * 1000)
+          : (subscription.currentPeriodEnd || null);
+        await Invoice.findOneAndUpdate(
+          { stripeInvoiceId: finalInvoice.id },
+          {
+            userId,
+            subscriptionId: subscription._id,
+            planId: subscription.planId._id || subscription.planId,
+            stripeInvoiceId: finalInvoice.id,
+            stripeCustomerId: subscription.stripeCustomerId,
+            stripeChargeId: finalInvoice.charge || null,
+            invoiceNumber: finalInvoice.number || null,
+            amount: finalInvoice.amount_due,
+            amountPaid: finalInvoice.amount_paid,
+            currency: finalInvoice.currency || "usd",
+            status: finalInvoice.status,
+            invoicePdf: finalInvoice.invoice_pdf || null,
+            hostedInvoiceUrl: finalInvoice.hosted_invoice_url || null,
+            billingPeriodStart: periodStart,
+            billingPeriodEnd: periodEnd,
+            stripeCreatedAt: finalInvoice.created ? new Date(finalInvoice.created * 1000) : new Date(),
+            couponCode: couponCode || null,
+          },
+          { upsert: true, new: true }
+        );
+      }
+
+      subscription.agentCount = newAgentCount;
+      await subscription.save();
+      return res.json({ success: true, message: `Agent seats updated to ${newAgentCount}`, subscription, clientSecret });
+    }
+
+    subscription.agentCount = newAgentCount;
+    await subscription.save();
+
+    res.json({ success: true, message: `Agent seats updated to ${newAgentCount}`, subscription, clientSecret: null });
+  } catch (err) {
+    console.error("updateAgentSeats error:", err);
+    res.status(500).json({ success: false, message: err.message || "Failed to update agent seats" });
   }
 };
 
@@ -421,13 +811,14 @@ const getInvoices = async (req, res) => {
       Invoice.countDocuments({ userId }),
     ]);
 
-    // Billing summary
+    // Billing summary — cast to ObjectId for aggregate
+    const userObjId = new mongoose.Types.ObjectId(userId.toString());
     const summary = await Invoice.aggregate([
-      { $match: { userId: userId } },
-      { $group: { _id: null, totalPaid: { $sum: "$amountPaid" }, totalBills: { $sum: 1 } } },
+      { $match: { userId: userObjId, status: { $in: ["paid", "open", "uncollectible"] } } },
+      { $group: { _id: null, totalPaid: { $sum: "$amountPaid" }, totalDue: { $sum: "$amount" }, totalBills: { $sum: 1 } } },
     ]);
 
-    const { totalPaid = 0, totalBills = 0 } = summary[0] || {};
+    const { totalPaid = 0, totalDue = 0, totalBills = 0 } = summary[0] || {};
 
     res.json({
       success: true,
@@ -436,7 +827,7 @@ const getInvoices = async (req, res) => {
       page: parseInt(page),
       limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
-      summary: { totalPaid, totalBills },
+      summary: { totalPaid, totalDue, totalBills },
     });
   } catch (err) {
     console.error("getInvoices error:", err);
@@ -465,6 +856,15 @@ const handleStripeWebhook = async (req, res) => {
 
         const sub = await Subscription.findOne({ stripeSubscriptionId: stripeInvoice.subscription });
 
+        // Use line item period for accurate subscription dates
+        const wLineItem = stripeInvoice.lines?.data?.[0];
+        const wPeriodStart = wLineItem?.period?.start
+          ? new Date(wLineItem.period.start * 1000)
+          : (stripeInvoice.period_start ? new Date(stripeInvoice.period_start * 1000) : null);
+        const wPeriodEnd = wLineItem?.period?.end
+          ? new Date(wLineItem.period.end * 1000)
+          : (stripeInvoice.period_end ? new Date(stripeInvoice.period_end * 1000) : null);
+
         // Upsert invoice
         await Invoice.findOneAndUpdate(
           { stripeInvoiceId: stripeInvoice.id },
@@ -482,8 +882,8 @@ const handleStripeWebhook = async (req, res) => {
             status: stripeInvoice.status,
             invoicePdf: stripeInvoice.invoice_pdf || null,
             hostedInvoiceUrl: stripeInvoice.hosted_invoice_url || null,
-            billingPeriodStart: stripeInvoice.period_start ? new Date(stripeInvoice.period_start * 1000) : null,
-            billingPeriodEnd: stripeInvoice.period_end ? new Date(stripeInvoice.period_end * 1000) : null,
+            billingPeriodStart: wPeriodStart,
+            billingPeriodEnd: wPeriodEnd,
             stripeCreatedAt: stripeInvoice.created ? new Date(stripeInvoice.created * 1000) : null,
           },
           { upsert: true, new: true }
@@ -562,8 +962,12 @@ module.exports = {
   removePaymentMethod,
   setDefaultPaymentMethod,
   subscribeToPlan,
+  activateSubscription,
   cancelSubscription,
   upgradePlan,
+  getAgentQuota,
+  previewAgentSeats,
+  updateAgentSeats,
   getInvoices,
   handleStripeWebhook,
 };
