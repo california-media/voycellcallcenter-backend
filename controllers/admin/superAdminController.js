@@ -331,6 +331,14 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     const PBX_EXTENSION_NUMBER = extensionNumber;
     const PBX_TELEPHONE = telephone;
 
+    console.log("Edit Request Received:", {
+      userId,
+      extensionNumber,
+      telephone,
+      status,
+      newEmail,
+    });
+
     if (!userId) {
       return res.status(400).json({ error: "userId is required" });
     }
@@ -490,9 +498,16 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
           "PBXDetails.PBX_EXTENSION_NUMBER": PBX_EXTENSION_NUMBER,
         });
 
+
+
         if (existingExtensionUser) {
+
+          const fullName = `${existingExtensionUser.firstname} ${existingExtensionUser.lastname}`.trim();
+
+          const userRole = existingExtensionUser.role === "companyAdmin" ? "Company Admin" : "User";
+
           return res.status(400).json({
-            error: `Extension ${PBX_EXTENSION_NUMBER} is already used by another user.`,
+            error: `Extension ${PBX_EXTENSION_NUMBER} is already used by ${fullName} (${userRole}).`,
           });
         }
       }
@@ -508,9 +523,16 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
           "PBXDetails.PBX_TELEPHONE": PBX_TELEPHONE,
         });
 
+
+
         if (existingTelephoneUser) {
+
+          const fullName = `${existingTelephoneUser.firstname} ${existingTelephoneUser.lastname}`.trim();
+
+          const userRole = existingTelephoneUser.role === "companyAdmin" ? "Company Admin" : "User";
+
           return res.status(400).json({
-            error: `Telephone ${PBX_TELEPHONE} is already used by another user.`,
+            error: `Telephone ${PBX_TELEPHONE} is already used by ${fullName} (${userRole}).`,
           });
         }
       }
@@ -1244,7 +1266,7 @@ exports.getCompanyBillingDetails = async (req, res) => {
             { upsert: true, new: true }
           );
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     const subscription = await Subscription.findOne({
