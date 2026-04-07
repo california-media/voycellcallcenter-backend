@@ -61,9 +61,9 @@ async function addOrUpdateReferral(referrerId, referredUser) {
   // Normalize phone objects from referredUser
   const phoneObjs = Array.isArray(referredUser.phonenumbers)
     ? referredUser.phonenumbers.map((p) => ({
-        countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
-        number: (p.number || "").toString().replace(/^\+/, ""),
-      }))
+      countryCode: (p.countryCode || "").toString().replace(/^\+/, ""),
+      number: (p.number || "").toString().replace(/^\+/, ""),
+    }))
     : [];
 
   const referredIdStr = referredUser._id.toString();
@@ -724,8 +724,18 @@ const resendVerificationLink = async (req, res) => {
     user.emailVerificationToken = crypto.randomBytes(32).toString("hex");
     await user.save();
 
+
+    let verificationLink = "";
+
+
+    if (user.role === "user") {
+      verificationLink =
+        FRONTEND_URL + `/agent-setup?verificationToken=${user.emailVerificationToken}`;
+    } else {
+      verificationLink = `${FRONTEND_URL}/user-verification?verificationToken=${user.emailVerificationToken}`;
+    }
+
     // Build link and send email
-    const verificationLink = `${FRONTEND_URL}/user-verification?verificationToken=${user.emailVerificationToken}`;
     await sendVerificationEmail(user.email, verificationLink);
 
     return res.status(200).json({
