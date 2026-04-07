@@ -14,6 +14,7 @@ const { createGoogleMeetEvent } = require("../utils/googleCalendar");
 const incomingcallConnection = require("../models/incomingcallConnection");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const { hubspotAfterCallSync } = require("../services/hubspotSync.service");
+const Notification = require("../models/Notification");
 
 //show all calls of number agent and company admin calls, show proper agent ya company admin name in call,extention is change so call is not show
 
@@ -338,6 +339,29 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
       });
 
       // ==========================================
+      // 🔔 Missed call notification
+      // ==========================================
+      if (call.disposition === "NO ANSWER" && call.call_type === "Inbound") {
+        const callerDisplay = from_number || "Unknown";
+        // Determine who to notify: the agent who owns this extension, and their companyAdmin
+        const notifyIds = [userId];
+        if (user.role === "user" && user.createdByWhichCompanyAdmin) {
+          notifyIds.push(user.createdByWhichCompanyAdmin);
+        }
+        const missedNotifDocs = notifyIds.map((uid) => ({
+          userId: uid,
+          companyId: user.role === "companyAdmin" ? userId : user.createdByWhichCompanyAdmin,
+          title: "Missed Call",
+          description: `You missed an incoming call from ${callerDisplay}.`,
+          body: "",
+          attachments: [],
+          category: "missed_call",
+          createdBy: userId,
+        }));
+        await Notification.insertMany(missedNotifDocs);
+      }
+
+      // ==========================================
       // 📝 Prepare Activity
       // ==========================================
       const baseActivity = {
@@ -564,6 +588,29 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
         disposition_code: call.reason,
         trunk: call.dst_trunk,
       });
+
+      // ==========================================
+      // 🔔 Missed call notification
+      // ==========================================
+      if (call.disposition === "NO ANSWER" && call.call_type === "Inbound") {
+        const callerDisplay = from_number || "Unknown";
+        // Determine who to notify: the agent who owns this extension, and their companyAdmin
+        const notifyIds = [userId];
+        if (user.role === "user" && user.createdByWhichCompanyAdmin) {
+          notifyIds.push(user.createdByWhichCompanyAdmin);
+        }
+        const missedNotifDocs = notifyIds.map((uid) => ({
+          userId: uid,
+          companyId: user.role === "companyAdmin" ? userId : user.createdByWhichCompanyAdmin,
+          title: "Missed Call",
+          description: `You missed an incoming call from ${callerDisplay}.`,
+          body: "",
+          attachments: [],
+          category: "missed_call",
+          createdBy: userId,
+        }));
+        await Notification.insertMany(missedNotifDocs);
+      }
 
       // ==========================================
       // 📝 Prepare Activity

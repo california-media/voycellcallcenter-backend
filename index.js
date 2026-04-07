@@ -71,6 +71,7 @@ const whatsappRoutes = require("./routes/whatsapp.routes");
 const hubspotAuthRoutes = require("./routes/hubspot.routes");
 const pipedriveAuthRoutes = require("./routes/pipedrive.routes");
 const billingRoutes = require("./routes/billingRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -282,6 +283,13 @@ app.use(
   checkForAuthentication(),
   checkRole(["companyAdmin"]),
   billingRoutes
+);
+
+app.use(
+  "/notifications",
+  checkForAuthentication(),
+  checkAccountStatus,
+  notificationRoutes
 );
 
 

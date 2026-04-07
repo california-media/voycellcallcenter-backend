@@ -200,7 +200,7 @@ async function getPopupJS(req, tokenDoc, user) {
       *{box-sizing:border-box}
       .callme-btn{
         position:fixed;
-        bottom:25px;
+        bottom:75px;
         right:25px;
         width:60px;height:60px;
         background:var(--callme-float);
