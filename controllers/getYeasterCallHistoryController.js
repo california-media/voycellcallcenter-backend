@@ -664,6 +664,40 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
   }
 };
 
+// 🌍 GLOBAL PHONE NORMALIZATION
+const normalizeForCustomerNameNumber = (num) => {
+  if (!num) return "";
+
+  // 1️⃣ Remove non-digits
+  let cleaned = num.toString().replace(/\D/g, "");
+
+  // 2️⃣ Remove leading zeros
+  cleaned = cleaned.replace(/^0+/, "");
+
+  return cleaned;
+};
+
+// 🔥 Generate possible match variants
+const getNumberVariants = (num) => {
+  const normalized = normalizeForCustomerNameNumber(num);
+
+  if (!normalized) return [];
+
+  const variants = new Set();
+
+  // full number
+  variants.add(normalized);
+
+  // last 12, 11, 10, 9, 8, 7 digits (fallback matching)
+  for (let i = 7; i <= 12; i++) {
+    if (normalized.length >= i) {
+      variants.add(normalized.slice(-i));
+    }
+  }
+
+  return Array.from(variants);
+};
+
 exports.getCompanyCallHistory = async (req, res) => {
   try {
     const loginUserId = req.user._id;
@@ -811,6 +845,15 @@ exports.getCompanyCallHistory = async (req, res) => {
       },
       { $unwind: "$owner" },
 
+      // {
+      //   $addFields: {
+      //     ownerName: {
+      //       $concat: ["$owner.firstname", " ", "$owner.lastname"],
+      //     },
+      //     ownerRole: "$owner.role",
+      //   },
+      // },
+
       {
         $addFields: {
           ownerName: {
@@ -831,6 +874,99 @@ exports.getCompanyCallHistory = async (req, res) => {
     const recordResult = await CallHistory.aggregate(recordsPipeline);
 
     const callRecords = recordResult[0]?.records || [];
+
+    // ------------------------------------
+    // 🔥 CUSTOMER NAME LOOKUP
+    // ------------------------------------
+
+    // 1️⃣ Collect all numbers from call records
+    const allNumbersSet = new Set();
+
+    callRecords.forEach((call) => {
+      if (call.call_from) {
+        getNumberVariants(call.call_from).forEach((v) => allNumbersSet.add(v));
+      }
+      if (call.call_to) {
+        getNumberVariants(call.call_to).forEach((v) => allNumbersSet.add(v));
+      }
+    });
+
+    const allNumbers = Array.from(allNumbersSet);
+
+    // 2️⃣ Get all contacts & leads of company
+    const contacts = await Contact.find({
+      createdBy: { $in: allUserIds },
+    }).select("firstname lastname phoneNumbers");
+
+    const leads = await Lead.find({
+      createdBy: { $in: allUserIds },
+    }).select("firstname lastname phoneNumbers");
+
+    // 3️⃣ Create number → name map
+    const numberToNameMap = {};
+
+    // 🔹 From Contacts
+    contacts.forEach((c) => {
+      c.phoneNumbers.forEach((p) => {
+        const normalized = normalizeNumber(p.number);
+        getNumberVariants(p.number).forEach((variant) => {
+          if (variant && !numberToNameMap[variant]) {
+            numberToNameMap[variant] =
+              (c.firstname || "") + " " + (c.lastname || "");
+          }
+        });
+      });
+    });
+
+    // 🔹 From Leads (only if not already found)
+    leads.forEach((l) => {
+      l.phoneNumbers.forEach((p) => {
+        const normalized = normalizeNumber(p.number);
+        // if (normalized && !numberToNameMap[normalized]) {
+        //   numberToNameMap[normalized] =
+        //     (l.firstname || "") + " " + (l.lastname || "");
+        // }
+
+        getNumberVariants(p.number).forEach((variant) => {
+          if (variant && !numberToNameMap[variant]) {
+            numberToNameMap[variant] =
+              (l.firstname || "") + " " + (l.lastname || "");
+          }
+        });
+      });
+    });
+
+    // 4️⃣ Attach customerName in callRecords
+    const updatedCallRecords = callRecords.map((call) => {
+      // let customerNumber =
+      //   call.direction === "Inbound"
+      //     ? normalizeNumber(call.call_from)
+      //     : normalizeNumber(call.call_to);
+      let numberToCheck =
+        call.direction === "Inbound"
+          ? call.call_from
+          : call.call_to;
+
+      let customerName = "";
+
+      // try all variants
+      const variants = getNumberVariants(numberToCheck);
+
+      for (let v of variants) {
+        if (numberToNameMap[v]) {
+          customerName = numberToNameMap[v];
+          break;
+        }
+      }
+
+      // const customerName = numberToNameMap[customerNumber] || "";
+
+      return {
+        ...call,
+        customerName: customerName.trim(),
+      };
+    });
+
     const totalRecords = recordResult[0]?.total[0]?.count || 0;
 
     // ------------------------------------
@@ -881,7 +1017,7 @@ exports.getCompanyCallHistory = async (req, res) => {
       page,
       page_size,
       totalRecords,
-      callRecords,
+      callRecords: updatedCallRecords,
     });
   } catch (err) {
     res.status(500).json({
@@ -926,12 +1062,12 @@ exports.getAgentCallHistory = async (req, res) => {
     let agentName = `${agent.firstname} ${agent.lastname}`;
 
     let query = {
-      extensionNumber: finalExtension,
+      // extensionNumber: finalExtension,
       userId: loginUserId,
     };
 
     // ❌ Exclude Internal calls globally
-    query.direction = { $ne: "Internal" };
+    // query.direction = { $ne: "Internal" };
 
     // 5️⃣ Search filter
     if (search.trim() !== "") {
@@ -974,6 +1110,39 @@ exports.getAgentCallHistory = async (req, res) => {
     }
 
     // 8️⃣ Date Filter (SAFE for STRING + DATE + NULL values)
+    // if (startDate && endDate) {
+    //   query.$expr = {
+    //     $and: [
+    //       {
+    //         $gte: [
+    //           {
+    //             $dateFromString: {
+    //               dateString: { $toString: "$start_time" }, // ✅ forces to string
+    //               format: "%m/%d/%Y %H:%M:%S",
+    //               onError: new Date("1970-01-01"), // ✅ prevents crash
+    //               onNull: new Date("1970-01-01"), // ✅ prevents crash
+    //             },
+    //           },
+    //           new Date(startDate),
+    //         ],
+    //       },
+    //       {
+    //         $lte: [
+    //           {
+    //             $dateFromString: {
+    //               dateString: { $toString: "$start_time" }, // ✅ forces to string
+    //               format: "%m/%d/%Y %H:%M:%S",
+    //               onError: new Date("2999-01-01"), // ✅ prevents crash
+    //               onNull: new Date("2999-01-01"), // ✅ prevents crash
+    //             },
+    //           },
+    //           new Date(endDate),
+    //         ],
+    //       },
+    //     ],
+    //   };
+    // }
+
     if (startDate && endDate) {
       query.$expr = {
         $and: [
@@ -981,10 +1150,11 @@ exports.getAgentCallHistory = async (req, res) => {
             $gte: [
               {
                 $dateFromString: {
-                  dateString: { $toString: "$start_time" }, // ✅ forces to string
+                  dateString: "$start_time",
                   format: "%m/%d/%Y %H:%M:%S",
-                  onError: new Date("1970-01-01"), // ✅ prevents crash
-                  onNull: new Date("1970-01-01"), // ✅ prevents crash
+                  timezone: "UTC",
+                  onError: new Date("1970-01-01"),
+                  onNull: new Date("1970-01-01"),
                 },
               },
               new Date(startDate),
@@ -994,10 +1164,11 @@ exports.getAgentCallHistory = async (req, res) => {
             $lte: [
               {
                 $dateFromString: {
-                  dateString: { $toString: "$start_time" }, // ✅ forces to string
+                  dateString: "$start_time",
                   format: "%m/%d/%Y %H:%M:%S",
-                  onError: new Date("2999-01-01"), // ✅ prevents crash
-                  onNull: new Date("2999-01-01"), // ✅ prevents crash
+                  timezone: "UTC",
+                  onError: new Date("2999-01-01"),
+                  onNull: new Date("2999-01-01"),
                 },
               },
               new Date(endDate),
@@ -1017,9 +1188,66 @@ exports.getAgentCallHistory = async (req, res) => {
       .skip(skip)
       .limit(page_size);
 
+    // ------------------------------------
+    // 🔥 CUSTOMER NAME LOOKUP (AGENT ONLY)
+    // ------------------------------------
+
+    // 1️⃣ Collect all numbers from calls
+    const allNumbersSet = new Set();
+
+    callRecords.forEach((call) => {
+      if (call.call_from) {
+        getNumberVariants(call.call_from).forEach((v) =>
+          allNumbersSet.add(v)
+        );
+      }
+      if (call.call_to) {
+        getNumberVariants(call.call_to).forEach((v) =>
+          allNumbersSet.add(v)
+        );
+      }
+    });
+
+    // 2️⃣ Fetch ONLY agent's contacts & leads
+    const contacts = await Contact.find({
+      createdBy: loginUserId,
+    }).select("firstname lastname phoneNumbers");
+
+    const leads = await Lead.find({
+      createdBy: loginUserId,
+    }).select("firstname lastname phoneNumbers");
+
+    // 3️⃣ Create number → name map
+    const numberToNameMap = {};
+
+    // 🔹 Contacts
+    contacts.forEach((c) => {
+      c.phoneNumbers.forEach((p) => {
+        getNumberVariants(p.number).forEach((variant) => {
+          if (variant && !numberToNameMap[variant]) {
+            numberToNameMap[variant] =
+              (c.firstname || "") + " " + (c.lastname || "");
+          }
+        });
+      });
+    });
+
+    // 🔹 Leads
+    leads.forEach((l) => {
+      l.phoneNumbers.forEach((p) => {
+        getNumberVariants(p.number).forEach((variant) => {
+          if (variant && !numberToNameMap[variant]) {
+            numberToNameMap[variant] =
+              (l.firstname || "") + " " + (l.lastname || "");
+          }
+        });
+      });
+    });
+
+
     // 🔟 Summary filter
     const summaryFilter = {
-      extensionNumber: finalExtension,
+      // extensionNumber: finalExtension,
       userId: loginUserId,
     };
 
@@ -1042,10 +1270,36 @@ exports.getAgentCallHistory = async (req, res) => {
     // + internal;
 
     // 1️⃣1️⃣ Add agentName to each record
-    const finalData = callRecords.map((c) => ({
-      ...c._doc,
-      agentName,
-    }));
+    // const finalData = callRecords.map((c) => ({
+    //   ...c._doc,
+    //   agentName,
+    // }));
+
+    // 1️⃣1️⃣ Add agentName + customerName
+    const finalData = callRecords.map((c) => {
+      // 🔥 Decide which number is customer
+      let numberToCheck =
+        c.direction === "Inbound" ? c.call_from : c.call_to;
+
+      let customerName = "";
+
+      // 🔥 Generate all variants
+      const variants = getNumberVariants(numberToCheck);
+
+      // 🔥 Find first match
+      for (let v of variants) {
+        if (numberToNameMap[v]) {
+          customerName = numberToNameMap[v];
+          break;
+        }
+      }
+
+      return {
+        ...c._doc,
+        agentName,
+        customerName: customerName.trim(), // ✅ FINAL FIELD
+      };
+    });
 
     return res.json({
       status: "success",
@@ -1510,9 +1764,8 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         "Dec",
       ];
 
-      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${
-        months[dateObj.getUTCMonth()]
-      } ${dateObj.getUTCFullYear()}`;
+      return `${String(dateObj.getUTCDate()).padStart(2, "0")} ${months[dateObj.getUTCMonth()]
+        } ${dateObj.getUTCFullYear()}`;
     };
 
     // ------------------------------
@@ -1716,11 +1969,11 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
 
 
 
-console.log("[DEBUG] userId being queried:", userId);
-console.log("[DEBUG] loggedInUser._id:", loggedInUser?._id);
-console.log("[DEBUG] loggedInUser.pipedrive raw:", JSON.stringify(loggedInUser?.pipedrive, null, 2));
-console.log("[DEBUG] loggedInUser.hubspot.isConnected:", loggedInUser?.hubspot?.isConnected);
-console.log("[DEBUG] loggedInUser.zoho.isConnected:", loggedInUser?.zoho?.isConnected);
+    console.log("[DEBUG] userId being queried:", userId);
+    console.log("[DEBUG] loggedInUser._id:", loggedInUser?._id);
+    console.log("[DEBUG] loggedInUser.pipedrive raw:", JSON.stringify(loggedInUser?.pipedrive, null, 2));
+    console.log("[DEBUG] loggedInUser.hubspot.isConnected:", loggedInUser?.hubspot?.isConnected);
+    console.log("[DEBUG] loggedInUser.zoho.isConnected:", loggedInUser?.zoho?.isConnected);
 
 
 
@@ -2028,30 +2281,30 @@ console.log("[DEBUG] loggedInUser.zoho.isConnected:", loggedInUser?.zoho?.isConn
       }
     }
     console.log("[Pipedrive Check]", {
-  isConnected: loggedInUser.pipedrive?.isConnected,
-  hasAccessToken: !!loggedInUser.pipedrive?.accessToken,
-  hasRefreshToken: !!loggedInUser.pipedrive?.refreshToken,
-});
-    // ✅ Add after HubSpot sync block
-if (loggedInUser.pipedrive?.accessToken && loggedInUser.pipedrive?.isConnected) {
-  const { pipedriveAfterCallSync } = require("../services/pipedriveSync.service");
-
-  try {
-    await pipedriveAfterCallSync({
-      user: loggedInUser,
-      targetDoc,
-      phone: `+${rawCountry}${rawNumber}`,
-      status,
-      note,
-      meeting,
+      isConnected: loggedInUser.pipedrive?.isConnected,
+      hasAccessToken: !!loggedInUser.pipedrive?.accessToken,
+      hasRefreshToken: !!loggedInUser.pipedrive?.refreshToken,
     });
-    console.log("[Pipedrive] Sync completed successfully");
-  } catch (err) {
-    console.error("[Pipedrive Sync Failed] Status:", err?.response?.status);
-    console.error("[Pipedrive Sync Failed] Data:", JSON.stringify(err?.response?.data, null, 2));
-    console.error("[Pipedrive Sync Failed] Message:", err.message);
-  }
-}
+    // ✅ Add after HubSpot sync block
+    if (loggedInUser.pipedrive?.accessToken && loggedInUser.pipedrive?.isConnected) {
+      const { pipedriveAfterCallSync } = require("../services/pipedriveSync.service");
+
+      try {
+        await pipedriveAfterCallSync({
+          user: loggedInUser,
+          targetDoc,
+          phone: `+${rawCountry}${rawNumber}`,
+          status,
+          note,
+          meeting,
+        });
+        console.log("[Pipedrive] Sync completed successfully");
+      } catch (err) {
+        console.error("[Pipedrive Sync Failed] Status:", err?.response?.status);
+        console.error("[Pipedrive Sync Failed] Data:", JSON.stringify(err?.response?.data, null, 2));
+        console.error("[Pipedrive Sync Failed] Message:", err.message);
+      }
+    }
 
     return res.status(200).json({
       message: "Call form data saved successfully",
