@@ -271,12 +271,33 @@ exports.handleZohoCallback = async (req, res) => {
         firstname = "";
       }
 
+      // let phoneObj = null;
+      // if (rawPhone) {
+      //   const parsed = parsePhoneNumberFromString(
+      //     rawPhone,
+      //     defaultCountryCode
+      //   );
+
+      //   phoneObj = {
+      //     countryCode:
+      //       parsed?.countryCallingCode || defaultCountryCode,
+      //     number:
+      //       parsed?.nationalNumber ||
+      //       rawPhone.replace(/^0+/, ""),
+      //   };
+      // }
+
       let phoneObj = null;
+
       if (rawPhone) {
-        const parsed = parsePhoneNumberFromString(
-          rawPhone,
-          defaultCountryCode
-        );
+        let parsed;
+
+        // ✅ If number starts with country code (length > 10 or starts with 9/8/7 etc)
+        if (rawPhone.length > 10) {
+          parsed = parsePhoneNumberFromString("+" + rawPhone);
+        } else {
+          parsed = parsePhoneNumberFromString(rawPhone, defaultCountryCode);
+        }
 
         phoneObj = {
           countryCode:
