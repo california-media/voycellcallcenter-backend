@@ -259,6 +259,26 @@ exports.handleZohoCallback = async (req, res) => {
 
     const toInsert = [];
 
+
+    const loggedInUser = await User.findById(userId).lean();
+    if (!loggedInUser) throw new Error("User not found");
+
+    // determine the company admin id
+    let companyAdminId = null;
+    if (String(loggedInUser.role) === "companyAdmin") {
+      companyAdminId = loggedInUser._id;
+    } else if (loggedInUser.createdByWhichCompanyAdmin) {
+      companyAdminId = loggedInUser.createdByWhichCompanyAdmin;
+    } else {
+      companyAdminId = loggedInUser._id;
+    }
+
+    const companyUsers = await User.find({
+      $or: [{ _id: companyAdminId }, { createdByWhichCompanyAdmin: companyAdminId }],
+    }).select("_id").lean();
+
+    const allUserIds = companyUsers.map((u) => u._id);
+
     /* ===== PROCESS ===== */
     for (const z of records) {
       let firstname = z.First_Name || "";
@@ -287,60 +307,118 @@ exports.handleZohoCallback = async (req, res) => {
       //   };
       // }
 
+      // let phoneObj = null;
+
+      // if (rawPhone) {
+      //   let parsed;
+
+      //   // ✅ If number starts with country code (length > 10 or starts with 9/8/7 etc)
+      //   if (rawPhone.length > 10) {
+      //     parsed = parsePhoneNumberFromString("+" + rawPhone);
+      //   } else {
+      //     parsed = parsePhoneNumberFromString(rawPhone, defaultCountryCode);
+      //   }
+
+      //   phoneObj = {
+      //     countryCode:
+      //       parsed?.countryCallingCode || defaultCountryCode,
+      //     number:
+      //       parsed?.nationalNumber ||
+      //       rawPhone.replace(/^0+/, ""),
+      //   };
+      // }
+
       let phoneObj = null;
+      let normalizedNumbers = [];
 
       if (rawPhone) {
+        const digits = rawPhone.replace(/\D/g, "");
+
         let parsed;
 
-        // ✅ If number starts with country code (length > 10 or starts with 9/8/7 etc)
-        if (rawPhone.length > 10) {
-          parsed = parsePhoneNumberFromString("+" + rawPhone);
+        if (digits.startsWith("0")) {
+          parsed = parsePhoneNumberFromString(
+            digits.replace(/^0+/, ""),
+            defaultCountryCode
+          );
+        } else if (digits.length > 10) {
+          parsed = parsePhoneNumberFromString("+" + digits);
         } else {
-          parsed = parsePhoneNumberFromString(rawPhone, defaultCountryCode);
+          parsed = parsePhoneNumberFromString(digits, defaultCountryCode);
         }
 
+        const cc = parsed?.countryCallingCode || defaultCountryCode;
+        const national =
+          parsed?.nationalNumber || digits.replace(/^0+/, "");
+
         phoneObj = {
-          countryCode:
-            parsed?.countryCallingCode || defaultCountryCode,
-          number:
-            parsed?.nationalNumber ||
-            rawPhone.replace(/^0+/, ""),
+          countryCode: cc,
+          number: national,
         };
+
+        normalizedNumbers = [
+          national,
+          `${cc}${national}`,
+          `+${cc}${national}`,
+        ];
       }
 
-      // const duplicate = isGlobalDuplicate({
-      //   phoneObj,
-      //   email,
-      //   existingPhones,
-      //   existingEmails,
+      const memoryDuplicate = isGlobalDuplicate({
+        phoneObj,
+        email,
+        existingPhones,
+        existingEmails,
+      });
+
+      if (memoryDuplicate) continue;
+
+      // const loggedInUser = await User.findById(userId).lean();
+      // if (!loggedInUser) throw new Error("User not found");
+
+      // // determine the company admin id
+      // let companyAdminId = null;
+      // if (String(loggedInUser.role) === "companyAdmin") {
+      //   companyAdminId = loggedInUser._id;
+      // } else if (loggedInUser.createdByWhichCompanyAdmin) {
+      //   companyAdminId = loggedInUser.createdByWhichCompanyAdmin;
+      // } else {
+      //   companyAdminId = loggedInUser._id;
+      // }
+
+      // const companyUsers = await User.find({
+      //   $or: [{ _id: companyAdminId }, { createdByWhichCompanyAdmin: companyAdminId }],
+      // }).select("_id").lean();
+
+      // const allUserIds = companyUsers.map((u) => u._id);
+
+      // const duplicate = await TargetModel.exists({
+      //   createdBy: { $in: allUserIds },
+      //   $or: [
+      //     { emailAddresses: email },
+      //     { "phoneNumbers.number": phoneObj?.number }
+      //   ]
       // });
 
-      const loggedInUser = await User.findById(userId).lean();
-      if (!loggedInUser) throw new Error("User not found");
+      // if (duplicate) continue;
 
-      // determine the company admin id
-      let companyAdminId = null;
-      if (String(loggedInUser.role) === "companyAdmin") {
-        companyAdminId = loggedInUser._id;
-      } else if (loggedInUser.createdByWhichCompanyAdmin) {
-        companyAdminId = loggedInUser.createdByWhichCompanyAdmin;
-      } else {
-        companyAdminId = loggedInUser._id;
-      }
+      const [contactDuplicate, leadDuplicate] = await Promise.all([
+        Contact.exists({
+          createdBy: { $in: allUserIds },
+          $or: [
+            { emailAddresses: email },
+            { "phoneNumbers.number": { $in: normalizedNumbers } }
+          ]
+        }),
+        Lead.exists({
+          createdBy: { $in: allUserIds },
+          $or: [
+            { emailAddresses: email },
+            { "phoneNumbers.number": { $in: normalizedNumbers } }
+          ]
+        })
+      ]);
 
-      const companyUsers = await User.find({
-        $or: [{ _id: companyAdminId }, { createdByWhichCompanyAdmin: companyAdminId }],
-      }).select("_id").lean();
-
-      const allUserIds = companyUsers.map((u) => u._id);
-
-      const duplicate = await TargetModel.exists({
-        createdBy: { $in: allUserIds },
-        $or: [
-          { emailAddresses: email },
-          { "phoneNumbers.number": phoneObj?.number }
-        ]
-      });
+      const duplicate = contactDuplicate || leadDuplicate;
 
       if (duplicate) continue;
 
