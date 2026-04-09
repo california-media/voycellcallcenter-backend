@@ -3,6 +3,7 @@ const {
   getAllContactsOrLeads,
   getSingleContactOrLead,
   getAllContactOrLeadForEvent,
+  getAllContactOrLeadForWhatsapp,
   getAllActivities,
   searchByPhone,
 } = require("../controllers/getAllContactsOrLeadsController");
@@ -13,6 +14,7 @@ const checkAccountStatus = require("../middlewares/checkAccountStatus")
 router.post("/", checkAccountStatus, getAllContactsOrLeads);
 router.post("/single", checkAccountStatus, getSingleContactOrLead);
 router.get("/ForEvent", checkAccountStatus, getAllContactOrLeadForEvent);
+router.get("/ForWhatsapp", checkAccountStatus, getAllContactOrLeadForWhatsapp);
 router.get("/activities", checkAccountStatus, getAllActivities);
 router.get("/searchByPhone", checkAccountStatus, searchByPhone);
 

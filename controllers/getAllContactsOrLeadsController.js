@@ -687,6 +687,240 @@ exports.getAllContactOrLeadForEvent = async (req, res) => {
   }
 };
 
+exports.getAllContactOrLeadForWhatsapp = async (req, res) => {
+  try {
+    const createdBy = req.user._id;
+    const { search = "" } = req.query;
+
+    // Base query for both contacts and leads
+    const baseQuery = { createdBy };
+
+    // Add search functionality if search term is provided
+    if (search && search.trim() !== "") {
+      const searchTerm = search.trim();
+      const escaped = escapeRegex(searchTerm);
+      const regexInsensitive = new RegExp(escaped, "i");
+
+      const normalizedPhone = normalizePhone(searchTerm);
+      const phoneRegex =
+        normalizedPhone.length > 0 ? new RegExp(normalizedPhone) : null;
+
+      // 🔹 Phone search conditions
+      const phoneConditions = [];
+
+      if (phoneRegex) {
+        // 1️⃣ Match phone number only (e.g. 5555)
+        phoneConditions.push({
+          phoneNumbers: {
+            $elemMatch: {
+              number: { $regex: phoneRegex },
+            },
+          },
+        });
+
+        // 2️⃣ Match country code only (e.g. 91)
+        phoneConditions.push({
+          phoneNumbers: {
+            $elemMatch: {
+              countryCode: { $regex: phoneRegex },
+            },
+          },
+        });
+
+        // 3️⃣ Match combined countryCode + number (e.g. 9155)
+        if (normalizedPhone.length > 2) {
+          phoneConditions.push({
+            $and: [
+              {
+                phoneNumbers: {
+                  $elemMatch: {
+                    countryCode: normalizedPhone.slice(0, 2),
+                  },
+                },
+              },
+              {
+                phoneNumbers: {
+                  $elemMatch: {
+                    number: { $regex: normalizedPhone.slice(2) },
+                  },
+                },
+              },
+            ],
+          });
+        }
+      }
+
+      baseQuery.$or = [
+        // ✅ First name
+        { firstname: { $regex: regexInsensitive } },
+
+        // ✅ Last name
+        { lastname: { $regex: regexInsensitive } },
+
+        // ✅ Emails
+        { emailAddresses: { $elemMatch: { $regex: regexInsensitive } } },
+
+        // ✅ Full name search (top-level $expr is OK)
+        {
+          $expr: {
+            $regexMatch: {
+              input: {
+                $toLower: { $concat: ["$firstname", " ", "$lastname"] },
+              },
+              regex: searchTerm.toLowerCase(),
+            },
+          },
+        },
+        // ✅ Phone search (all variants)
+        ...phoneConditions,
+      ];
+    }
+
+
+
+    // Fetch contacts
+    // const contacts = await Contact.find(baseQuery)
+    //   .select("_id emailAddresses firstname lastname phoneNumbers isWabaChat")
+    //   .limit(50) // Limit results for better performance
+    //   .lean();
+
+    const contacts = await Contact.aggregate([
+      {
+        $match: { createdBy }, // ✅ base filter
+      },
+
+      // 🔥 APPLY SEARCH FILTER (IMPORTANT)
+      ...(search && search.trim() !== "" ? [{
+        $match: baseQuery
+      }] : []),
+
+      // 🔥 BREAK PHONE ARRAY
+      {
+        $unwind: {
+          path: "$phoneNumbers",
+          preserveNullAndEmptyArrays: true, // keep non-phone results
+        },
+      },
+
+      // 🔥 CREATE FULL NUMBER
+      {
+        $addFields: {
+          fullPhoneNumber: {
+            $concat: [
+              { $ifNull: ["$phoneNumbers.countryCode", ""] },
+              { $ifNull: ["$phoneNumbers.number", ""] },
+            ],
+          },
+        },
+      },
+
+      // 🔥 FILTER ONLY WHEN SEARCH IS PHONE
+      ...(search && normalizePhone(search).length > 0
+        ? [{
+          $match: {
+            fullPhoneNumber: {
+              $regex: normalizePhone(search),
+              $options: "i",
+            },
+          },
+        }]
+        : []),
+
+      {
+        $limit: 50,
+      },
+    ]);
+
+    // Add category field
+    const contactData = contacts.map((c) => ({
+      id: c._id.toString(),
+      firstname: c.firstname || "",
+      lastname: c.lastname || "",
+      emailAddresses: c.emailAddresses || [],
+      // phoneNumbers: c.phoneNumbers || [],
+      phoneNumbers: c.phoneNumbers ? [c.phoneNumbers] : [],
+      category: "contact",
+      isWabaChat: c.isWabaChat || false,
+    }));
+
+    // Fetch leads
+    // const leads = await Lead.find(baseQuery)
+    //   .select("_id emailAddresses firstname lastname phoneNumbers isWabaChat")
+    //   .limit(50) // Limit results for better performance
+    //   .lean();
+
+    const leads = await Lead.aggregate([
+      {
+        $match: { createdBy },
+      },
+
+      ...(search && search.trim() !== "" ? [{
+        $match: baseQuery
+      }] : []),
+
+      {
+        $unwind: {
+          path: "$phoneNumbers",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $addFields: {
+          fullPhoneNumber: {
+            $concat: [
+              { $ifNull: ["$phoneNumbers.countryCode", ""] },
+              { $ifNull: ["$phoneNumbers.number", ""] },
+            ],
+          },
+        },
+      },
+
+      ...(search && normalizePhone(search).length > 0
+        ? [{
+          $match: {
+            fullPhoneNumber: {
+              $regex: normalizePhone(search),
+              $options: "i",
+            },
+          },
+        }]
+        : []),
+
+      {
+        $limit: 50,
+      },
+    ]);
+
+    // Add category field
+    const leadData = leads.map((l) => ({
+      id: l._id.toString(),
+      firstname: l.firstname || "",
+      lastname: l.lastname || "",
+      emailAddresses: l.emailAddresses || [],
+      // phoneNumbers: l.phoneNumbers || [],
+      phoneNumbers: l.phoneNumbers ? [l.phoneNumbers] : [], // ✅ FIXED
+      category: "lead",
+      isWabaChat: l.isWabaChat || false,
+    }));
+
+    // Combine both
+    const finalData = [...contactData, ...leadData];
+
+    return res.status(200).json({
+      status: "success",
+      message: "Email addresses fetched successfully",
+      data: finalData,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
 exports.searchByPhone = async (req, res) => {
   try {
     const { phone } = req.query; // ✅ search input from query params
