@@ -14,10 +14,47 @@ export const handler = async (event) => {
         ? JSON.parse(Buffer.from(event.Payload).toString())
         : event;
 
-    const { whatsappEvent, userId, finalSenderName, s3dataurl, connections } = payload;
+    const { type, connections } = payload;
 
-    if (!whatsappEvent || !connections || connections.length === 0) {
-      console.log("No data to process");
+    if (!connections || connections.length === 0) {
+      console.log("No connections to push to");
+      return { statusCode: 200 };
+    }
+
+    // ── Handle message status updates (delivered / read / failed) ──────────
+    if (type === "message_status_update") {
+      const { metaMessageId, status, conversationId, message } = payload;
+      console.log("📬 Status update:", status, metaMessageId);
+
+      for (const conn of connections) {
+        try {
+          await apiGateway.postToConnection({
+            ConnectionId: conn.connectionId,
+            Data: JSON.stringify({
+              type: "message_status_update",
+              message: {
+                metaMessageId,
+                status,
+                conversationId: conversationId || message?.conversationId,
+              }
+            })
+          }).promise();
+        } catch (err) {
+          if (err.statusCode === 410) {
+            console.log("🧹 Stale connection:", conn.connectionId);
+          } else {
+            console.error("WS push error (status update):", err);
+          }
+        }
+      }
+      return { statusCode: 200 };
+    }
+
+    // ── Handle incoming messages ────────────────────────────────────────────
+    const { whatsappEvent, userId, finalSenderName, s3dataurl } = payload;
+
+    if (!whatsappEvent) {
+      console.log("No whatsappEvent in payload");
       return { statusCode: 200 };
     }
 

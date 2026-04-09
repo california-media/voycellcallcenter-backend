@@ -134,6 +134,263 @@ exports.redirectToZoho = (req, res) => {
 };
 
 /* ================= STEP 2: CALLBACK ================= */
+// exports.handleZohoCallback = async (req, res) => {
+//   // const {ZOHO_CLIENT_ID, ZOHO_REDIRECT_URI2} = getConfig()
+//   const { code, state, "accounts-server": accountsServer } = req.query;
+//   if (!code) return res.status(400).send("Missing code");
+
+//   // const [userId, type, defaultCountryCode] = state.split("::");
+
+//   const {
+//     userId,
+//     defaultCountryCode = "971",
+//     tags = "[]",
+//     category = "contact", // 👈 ADD
+//     type,
+//   } = JSON.parse(Buffer.from(state, "base64").toString());
+
+//   try {
+//     /* ===== TOKEN ===== */
+//     // 3. USE the dynamic accountsServer for token exchange
+//     const tokenUrl = `${accountsServer}/oauth/v2/token`;
+
+//     const tokenRes = await axios.post(
+//       tokenUrl,
+//       querystring.stringify({
+//         grant_type: "authorization_code",
+//         client_id: process.env.ZOHO_CLIENT_ID,
+//         // client_id: ZOHO_CLIENT_ID,
+//         client_secret: process.env.ZOHO_CLIENT_SECRET,
+//         redirect_uri: process.env.ZOHO_REDIRECT_URI2,
+//         // redirect_uri: ZOHO_REDIRECT_URI2,
+//         code,
+//       }),
+//       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+//     );
+
+//     // 4. USE api_domain from the response for the API calls
+//     // tokenRes.data.api_domain will be something like "https://www.zohoapis.eu"
+//     const apiBase = tokenRes.data.api_domain;
+//     const accessToken = tokenRes.data.access_token;
+
+//     const zohoUrl = type === "lead"
+//       ? `${apiBase}/crm/v2/Leads`
+//       : `${apiBase}/crm/v2/Contacts`;
+
+//     const zohoRes = await axios.get(zohoUrl, {
+//       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+//     });
+
+//     const records = zohoRes.data.data || [];
+
+//     let parsedTags = [];
+
+//     try {
+//       parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
+//       if (!Array.isArray(parsedTags)) parsedTags = [];
+//     } catch {
+//       parsedTags = [];
+//     }
+
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res
+//         .status(404)
+//         .json({ status: "error", message: "User not found" });
+//     }
+
+//     /* ===== DUPLICATE MEMORY ===== */
+//     const {
+//       existingPhones,
+//       existingEmails,
+//       addPhoneVariants,
+//       addEmailVariants,
+//     } = await buildGlobalDuplicateSets(userId);
+
+//     // const Model = type === "lead" ? Lead : Contact;
+//     const isLeadImport = category === "lead";
+
+//     // 🔥 Dynamic target model
+//     const TargetModel = isLeadImport ? Lead : Contact;
+
+//     let nextUserTagOrder =
+//       user.tags.length > 0
+//         ? Math.max(...user.tags.map(t => t.order ?? 0)) + 1
+//         : 0;
+
+//     const ensuredUserTags = [];
+
+//     for (const tagItem of parsedTags) {
+//       const tagText = tagItem.tag?.trim();
+//       const emoji = tagItem.emoji || "🏷️";
+
+//       if (!tagText) continue;
+
+//       let existingUserTag = user.tags.find(
+//         t => t.tag.toLowerCase() === tagText.toLowerCase()
+//       );
+
+//       if (!existingUserTag) {
+//         existingUserTag = {
+//           tag_id: new mongoose.Types.ObjectId(),
+//           tag: tagText,
+//           emoji,
+//           order: nextUserTagOrder++,
+//         };
+
+//         user.tags.push(existingUserTag);
+//       }
+
+//       ensuredUserTags.push(existingUserTag);
+//     }
+
+//     if (ensuredUserTags.length > 0) {
+//       await user.save();
+//     }
+
+
+//     const baseContactTags = ensuredUserTags.map((t, index) => ({
+//       tag_id: t.tag_id,
+//       tag: t.tag,
+//       emoji: t.emoji,
+//       globalOrder: t.order,
+//       order: index, // 👈 per-contact order starts from 0
+//     }));
+
+//     const toInsert = [];
+
+//     /* ===== PROCESS ===== */
+//     for (const z of records) {
+//       let firstname = z.First_Name || "";
+//       let lastname = z.Last_Name || "";
+//       let email = (z.Email || "").toLowerCase().trim();
+//       let rawPhone = (z.Phone || "").replace(/\D/g, "");
+
+//       if (!rawPhone && /\d/.test(firstname)) {
+//         rawPhone = firstname.replace(/\D/g, "");
+//         firstname = "";
+//       }
+
+//       let phoneObj = null;
+//       if (rawPhone) {
+//         const parsed = parsePhoneNumberFromString(
+//           rawPhone,
+//           defaultCountryCode
+//         );
+
+//         phoneObj = {
+//           countryCode:
+//             parsed?.countryCallingCode || defaultCountryCode,
+//           number:
+//             parsed?.nationalNumber ||
+//             rawPhone.replace(/^0+/, ""),
+//         };
+//       }
+
+//       // const duplicate = isGlobalDuplicate({
+//       //   phoneObj,
+//       //   email,
+//       //   existingPhones,
+//       //   existingEmails,
+//       // });
+
+//       const loggedInUser = await User.findById(userId).lean();
+//       if (!loggedInUser) throw new Error("User not found");
+
+//       // determine the company admin id
+//       let companyAdminId = null;
+//       if (String(loggedInUser.role) === "companyAdmin") {
+//         companyAdminId = loggedInUser._id;
+//       } else if (loggedInUser.createdByWhichCompanyAdmin) {
+//         companyAdminId = loggedInUser.createdByWhichCompanyAdmin;
+//       } else {
+//         companyAdminId = loggedInUser._id;
+//       }
+
+//       const companyUsers = await User.find({
+//         $or: [{ _id: companyAdminId }, { createdByWhichCompanyAdmin: companyAdminId }],
+//       }).select("_id").lean();
+
+//       const allUserIds = companyUsers.map((u) => u._id);
+
+//       const duplicate = await TargetModel.exists({
+//         createdBy: { $in: allUserIds },
+//         $or: [
+//           { emailAddresses: email },
+//           { "phoneNumbers.number": phoneObj?.number }
+//         ]
+//       });
+
+//       if (duplicate) continue;
+
+//       // if (duplicate) continue;
+
+//       const _id = new mongoose.Types.ObjectId();
+
+//       toInsert.push({
+//         _id,
+//         contact_id: _id,
+//         firstname,
+//         lastname,
+//         emailAddresses: email ? [email] : [],
+//         phoneNumbers: phoneObj ? [phoneObj] : [],
+//         createdBy: userId,
+
+//         isLead: isLeadImport, // 👈 ADD (true for lead)
+
+//         tags: baseContactTags.map(t => ({ ...t })),
+//         activities: [
+//           {
+//             action: isLeadImport ? "lead_created" : "contact_created",
+//             type: isLeadImport ? "lead" : "contact",
+//             title: isLeadImport
+//               ? "Lead Imported from zoho"
+//               : "Contact Imported from zoho",
+//             description: `${firstname} ${lastname}`,
+//           },
+//         ],
+//       });
+
+//       if (email) addEmailVariants(email);
+//       if (phoneObj) addPhoneVariants(phoneObj);
+//     }
+
+//     const saved = await TargetModel.insertMany(toInsert);
+
+
+//     const resultData = {
+//       status: "success",
+//       message: isLeadImport
+//         ? "Zoho Leads imported successfully"
+//         : "Zoho Contacts imported successfully",
+//       totalFetched: records.length,
+//       totalImported: saved.length,
+//       contacts: saved,
+//     };
+//     return res.send(`
+//           <!DOCTYPE html>
+//           <html>
+//           <head><title>Zoho Connected</title></head>
+//           <body style="font-family: Arial; text-align:center; padding: 50px;">
+//             <div style="color:green;">${resultData.message} ! You can close this window.</div>
+//             <script>
+//               window.opener.postMessage(${JSON.stringify(resultData)}, '*');
+//               window.close();
+//             </script>
+//           </body>
+//           </html>
+//     `);
+//   } catch (err) {
+//     return res.send(`
+//       <script>
+//         window.opener.postMessage({ status: "error" }, "*");
+//         window.close();
+//       </script>
+//     `);
+//   }
+// };
+
+
 exports.handleZohoCallback = async (req, res) => {
   // const {ZOHO_CLIENT_ID, ZOHO_REDIRECT_URI2} = getConfig()
   const { code, state, "accounts-server": accountsServer } = req.query;
@@ -271,12 +528,33 @@ exports.handleZohoCallback = async (req, res) => {
         firstname = "";
       }
 
+      // let phoneObj = null;
+      // if (rawPhone) {
+      //   const parsed = parsePhoneNumberFromString(
+      //     rawPhone,
+      //     defaultCountryCode
+      //   );
+
+      //   phoneObj = {
+      //     countryCode:
+      //       parsed?.countryCallingCode || defaultCountryCode,
+      //     number:
+      //       parsed?.nationalNumber ||
+      //       rawPhone.replace(/^0+/, ""),
+      //   };
+      // }
+
       let phoneObj = null;
+
       if (rawPhone) {
-        const parsed = parsePhoneNumberFromString(
-          rawPhone,
-          defaultCountryCode
-        );
+        let parsed;
+
+        // ✅ If number starts with country code (length > 10 or starts with 9/8/7 etc)
+        if (rawPhone.length > 10) {
+          parsed = parsePhoneNumberFromString("+" + rawPhone);
+        } else {
+          parsed = parsePhoneNumberFromString(rawPhone, defaultCountryCode);
+        }
 
         phoneObj = {
           countryCode:
@@ -388,4 +666,5 @@ exports.handleZohoCallback = async (req, res) => {
       </script>
     `);
   }
-};
+}; 
+ 

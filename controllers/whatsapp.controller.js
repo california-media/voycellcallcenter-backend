@@ -1267,10 +1267,6 @@ exports.webhookReceive = async (req, res) => {
             userId: { $in: allUserIds }
         });
 
-        if (connections.length === 0) {
-            return { statusCode: 200 };
-        }
-
         for (const msg of value.messages || []) {
             const { messageType, content } = parseWhatsAppMessage(msg);
             let s3dataurl = "";
@@ -1297,8 +1293,7 @@ exports.webhookReceive = async (req, res) => {
                     originalName: attachmentName
                 });
 
-                s3dataurl = s3Url; // ✅ THIS is gold
-                // enrich content (VERY IMPORTANT)
+                s3dataurl = s3Url;
                 content.mimeType = mimeType;
                 content.fileName = attachmentName;
                 content.fileSize = fileSize;
@@ -1307,6 +1302,7 @@ exports.webhookReceive = async (req, res) => {
                 content.isVoice = msg.type === "voice";
             }
 
+            // Always save to DB regardless of WebSocket connections
             await WhatsAppMessage.create({
                 userId: companyAdmin._id,
                 phoneNumberId,
@@ -1334,22 +1330,25 @@ exports.webhookReceive = async (req, res) => {
                 timestamp: new Date(msg.timestamp * 1000)
             });
 
-            const eventPayload = {
-                whatsappEvent: req.body,          // full Meta webhook
-                userId: companyAdmin._id.toString(),      // user reference
-                finalSenderName: finalSenderName,
-                s3dataurl,
-                attachmentName,
-                connections: connections.map(c => ({
-                    connectionId: c.connectionId
-                }))
-            };
+            // Only push real-time event if users are connected via WebSocket
+            if (connections.length > 0) {
+                const eventPayload = {
+                    whatsappEvent: req.body,
+                    userId: companyAdmin._id.toString(),
+                    finalSenderName: finalSenderName,
+                    s3dataurl,
+                    attachmentName,
+                    connections: connections.map(c => ({
+                        connectionId: c.connectionId
+                    }))
+                };
 
-            const responce = await lambdaClient.send(new InvokeCommand({
-                FunctionName: "waba-webhook",
-                InvocationType: "RequestResponse",
-                Payload: JSON.stringify(eventPayload)
-            }));
+                await lambdaClient.send(new InvokeCommand({
+                    FunctionName: "waba-webhook",
+                    InvocationType: "RequestResponse",
+                    Payload: JSON.stringify(eventPayload)
+                }));
+            }
         }
         res.status(200).send("EVENT_RECEIVED");
     } catch (err) {
@@ -1391,10 +1390,13 @@ exports.sendTextMessage = async (req, res) => {
             companyAdminId = user.createdByWhichCompanyAdmin;
 
             companyAdminDetails = await User.findById(companyAdminId);
-        } else if (user.role == "companyAdmin") {
+        } else if (user.role == "companyAdmin" || user.role == "superadmin") {
             companyAdminDetails = user;
         }
 
+        if (!companyAdminDetails) {
+            return res.status(400).json({ success: false, message: "User account not found" });
+        }
 
         const { phoneNumberId, accessToken } = companyAdminDetails.whatsappWaba || {};
 
@@ -1612,13 +1614,17 @@ exports.sendMessage = async (req, res) => {
             companyAdminId = user.createdByWhichCompanyAdmin;
 
             companyAdminDetails = await User.findById(companyAdminId);
-        } else if (user.role == "companyAdmin") {
+        } else if (user.role == "companyAdmin" || user.role == "superadmin") {
             companyAdminDetails = user;
+        }
+
+        if (!companyAdminDetails) {
+            return res.status(400).json({ success: false, message: "User account not found" });
         }
 
         companyAdminId = companyAdminDetails._id;
 
-        const { phoneNumberId, accessToken, phoneNumber } = companyAdminDetails.whatsappWaba;
+        const { phoneNumberId, accessToken, phoneNumber } = companyAdminDetails.whatsappWaba || {};
 
         // let mediaId = null;
         let mediaId = null;
@@ -1840,6 +1846,12 @@ exports.sendTemplateMessage = async (req, res) => {
             companyAdminDetails = await User.findById(companyAdminId);
         } else if (user.role == "companyAdmin") {
             companyAdminDetails = user;
+        } else if (user.role === "superadmin") {
+            companyAdminDetails = user;
+        }
+
+        if (!companyAdminDetails) {
+            return res.status(400).json({ success: false, message: "User account not found" });
         }
 
         companyAdminId = companyAdminDetails._id;
@@ -2222,6 +2234,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             campaignName,
             params = {},
             groupName = [],
+            excelNumbers = [],   // [{name, number}] from Excel upload
             schedule = "",
             name: messageName
         } = req.body;
@@ -2347,8 +2360,29 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             ...extractNumbersWithNames(leads, "lead")
         ];
 
-        /* ===== REMOVE DUPLICATES ===== */
-        recipients = [...new Set(recipients)];
+        // Add Excel-uploaded numbers (already parsed by frontend)
+        if (Array.isArray(excelNumbers) && excelNumbers.length) {
+            excelNumbers.forEach(row => {
+                const raw = String(row.number || "").replace(/[^0-9]/g, "");
+                if (!raw) return;
+                const nameParts = (row.name || "").trim().split(" ");
+                recipients.push({
+                    number: raw,
+                    name: row.name || raw,
+                    firstName: nameParts[0] || "",
+                    lastName: nameParts.slice(1).join(" ") || "",
+                    company: row.company || ""
+                });
+            });
+        }
+
+        /* ===== REMOVE DUPLICATES by number ===== */
+        const seen = new Set();
+        recipients = recipients.filter(r => {
+            if (seen.has(r.number)) return false;
+            seen.add(r.number);
+            return true;
+        });
 
         /* ===== FINAL VALIDATION ===== */
         if (!recipients.length) {
@@ -3251,7 +3285,7 @@ exports.getWhatsappConversations = async (req, res) => {
                                 }
                             }
                         },
-                        { $project: { firstname: 1, lastname: 1 } }
+                        { $project: { firstname: 1, lastname: 1, company: 1 } }
                     ],
                     as: "contactData"
                 }
@@ -3287,9 +3321,41 @@ exports.getWhatsappConversations = async (req, res) => {
                                 }
                             }
                         },
-                        { $project: { firstname: 1, lastname: 1 } }
+                        { $project: { firstname: 1, lastname: 1, company: 1 } }
                     ],
                     as: "leadData"
+                }
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    let: { convNumber: "$_id" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $in: [
+                                        "$$convNumber",
+                                        {
+                                            $map: {
+                                                input: { $ifNull: ["$phonenumbers", []] },
+                                                as: "p",
+                                                in: {
+                                                    $replaceAll: {
+                                                        input: { $concat: [{ $ifNull: ["$$p.countryCode", ""] }, { $ifNull: ["$$p.number", ""] }] },
+                                                        find: "+", replacement: ""
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        { $project: { firstname: 1, lastname: 1 } },
+                        { $limit: 1 }
+                    ],
+                    as: "userData"
                 }
             },
             {
@@ -3331,12 +3397,44 @@ exports.getWhatsappConversations = async (req, res) => {
                                             branches: [
                                                 { case: { $and: [{ $ne: ["$$contactName", null] }, { $ne: ["$$contactName", ""] }] }, then: "$$contactName" },
                                                 { case: { $and: [{ $ne: ["$$leadName", null] }, { $ne: ["$$leadName", ""] }] }, then: "$$leadName" },
+                                                {
+                                                    case: {
+                                                        $and: [
+                                                            { $gt: [{ $size: "$userData" }, 0] },
+                                                            { $ne: [{ $trim: { input: { $concat: [{ $ifNull: [{ $arrayElemAt: ["$userData.firstname", 0] }, ""] }, " ", { $ifNull: [{ $arrayElemAt: ["$userData.lastname", 0] }, ""] }] } } }, ""] }
+                                                        ]
+                                                    },
+                                                    then: { $trim: { input: { $concat: [{ $ifNull: [{ $arrayElemAt: ["$userData.firstname", 0] }, ""] }, " ", { $ifNull: [{ $arrayElemAt: ["$userData.lastname", 0] }, ""] }] } } }
+                                                },
                                                 { case: { $and: [{ $ne: ["$originalName", null] }, { $ne: ["$originalName", ""] }] }, then: "$originalName" }
                                             ],
                                             default: "$from"
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    chatCompany: {
+                        $let: {
+                            vars: {
+                                contact: { $arrayElemAt: ["$contactData", 0] },
+                                lead: { $arrayElemAt: ["$leadData", 0] }
+                            },
+                            in: {
+                                $cond: [
+                                    { $and: [{ $ne: [{ $arrayElemAt: ["$contactData", 0] }, null] }, { $ne: [{ $ifNull: [{ $arrayElemAt: ["$contactData.company", 0] }, ""] }, ""] }] },
+                                    { $arrayElemAt: ["$contactData.company", 0] },
+                                    { $cond: [
+                                        { $and: [{ $ne: [{ $arrayElemAt: ["$leadData", 0] }, null] }, { $ne: [{ $ifNull: [{ $arrayElemAt: ["$leadData.company", 0] }, ""] }, ""] }] },
+                                        { $arrayElemAt: ["$leadData.company", 0] },
+                                        null
+                                    ]}
+                                ]
                             }
                         }
                     }
@@ -3433,6 +3531,7 @@ exports.getWhatsappConversations = async (req, res) => {
                                 from: 1,
                                 originalName: 1,
                                 chatName: 1,
+                                chatCompany: 1,
                                 lastMessageTime: 1,
                                 lastIncomingTime: 1,
                                 lastMessage: 1,

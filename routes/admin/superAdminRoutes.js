@@ -48,4 +48,15 @@ router.get("/getPBXDeviceById", getYeastarDeviceById);
 // Company billing details
 router.get("/companies/:userId/billing", getCompanyBillingDetails);
 
+// SuperAdmin WhatsApp campaigns
+const {
+  sendAdminCampaign,
+  getAdminCampaigns,
+  getAdminCampaignById,
+} = require("../../controllers/admin/adminWhatsappController");
+
+router.post("/whatsapp/send-campaign", sendAdminCampaign);
+router.post("/whatsapp/campaigns", getAdminCampaigns);
+router.post("/whatsapp/campaignsById", getAdminCampaignById);
+
 module.exports = router;

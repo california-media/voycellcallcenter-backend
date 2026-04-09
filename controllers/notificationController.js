@@ -1,6 +1,7 @@
 const Notification = require("../models/Notification");
 const NotificationLog = require("../models/NotificationLog");
 const User = require("../models/userModel");
+const { sendAdminBroadcastEmail } = require("../utils/emailUtils");
 
 // ─── GET /notifications  (infinite scroll, 20 per page) ─────────────────────
 exports.getNotifications = async (req, res) => {
@@ -241,6 +242,40 @@ exports.getNotificationStats = async (req, res) => {
         isRead: r.isRead,
       })),
     });
+  } catch (err) {
+    return res.status(500).json({ status: "error", message: err.message });
+  }
+};
+
+// ─── POST /notifications/send-email  (superAdmin — broadcast email) ──────────
+// target: "all" | "companies" | "specific" (targetCompanyIds: [])
+exports.sendEmailNotification = async (req, res) => {
+  try {
+    const { subject, title, body, target = "all", targetCompanyIds = [] } = req.body;
+
+    if (!subject || !body) return res.status(400).json({ status: "error", message: "subject and body are required" });
+
+    let users = [];
+
+    if (target === "specific") {
+      if (!targetCompanyIds.length) return res.status(400).json({ status: "error", message: "targetCompanyIds required for specific target" });
+      users = await User.find({ _id: { $in: targetCompanyIds }, role: "companyAdmin" }).select("email firstname lastname");
+    } else if (target === "companies") {
+      users = await User.find({ role: "companyAdmin" }).select("email firstname lastname");
+    } else {
+      users = await User.find({ role: { $in: ["companyAdmin", "user"] } }).select("email firstname lastname");
+    }
+
+    if (!users.length) return res.status(400).json({ status: "error", message: "No users found" });
+
+    // Send in parallel (fire-and-forget per recipient)
+    await Promise.allSettled(
+      users.map((u) =>
+        sendAdminBroadcastEmail({ to: u.email, subject, title, body })
+      )
+    );
+
+    return res.json({ status: "success", message: `Email sent to ${users.length} user(s)` });
   } catch (err) {
     return res.status(500).json({ status: "error", message: err.message });
   }

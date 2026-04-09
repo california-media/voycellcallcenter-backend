@@ -14,6 +14,7 @@ const {
   createNotification,
   getSentNotifications,
   getNotificationStats,
+  sendEmailNotification,
 } = require("../controllers/notificationController");
 
 // All routes require auth + active account (added in index.js)
@@ -30,5 +31,6 @@ router.delete("/:id", deleteNotification);
 
 // SuperAdmin only: create notifications
 router.post("/", checkRole(["superadmin"]), createNotification);
+router.post("/send-email", checkRole(["superadmin"]), sendEmailNotification);
 
 module.exports = router;
