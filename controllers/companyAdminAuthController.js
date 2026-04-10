@@ -1349,7 +1349,13 @@ const generateMagicLink = async (req, res) => {
     const magicLink = `${WEBSITE_URL}/link-login?token=${magicToken}`;
 
     // ✅ SEND MAGIC LINK TO USER EMAIL ✅✅✅
-    await sendMagicLinkEmail(user.email, magicLink);
+    const emailSent = await sendMagicLinkEmail(user.email, magicLink);
+
+    console.log("Magic Link Generated:", {
+      email: user.email,
+      magicLink,
+      emailSent
+    });
 
     return res.json({
       status: "success",
@@ -1357,6 +1363,7 @@ const generateMagicLink = async (req, res) => {
       magicLink, // for testing purposes
       magicToken,
       expiresAt,
+      emailSent,
     });
   } catch (err) {
     return res.status(500).json({

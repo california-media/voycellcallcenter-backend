@@ -714,6 +714,10 @@ const sendEmailChangeVerification = async (
 
 const sendMagicLinkEmail = async (email, link) => {
   // const { FRONTEND_URL } = getConfig()
+
+  console.log("Sending magic link email to:", email);
+  console.log("Magic link:", link);
+
   const mailOptions = {
     from: '"VOYCELL" <noreply@voycell.com>',
     to: email,
@@ -764,12 +768,37 @@ const sendMagicLinkEmail = async (email, link) => {
 
         <p>You requested a secure magic link to log into your VOYCELL account.</p>
         <p><b>This link will expire in 10 minutes and can only be used once.</b></p>
+        <p>Click the button below to securely log in:</p>
 
         <center>
-        <div style="margin: 20px 0;">${link}</div>
-        <div>
-            <a href="${link}" class="button">Login Securely</a>
-        </div>
+        <div style="margin: 20px 0;">
+  <input 
+    type="text" 
+    value="${link}" 
+    readonly 
+    style="
+      width:100%;
+      padding:10px;
+      border:1px solid #ccc;
+      border-radius:5px;
+      font-size:14px;
+    "
+  />
+</div>
+
+<div style="margin-top:10px;">
+  <a href="${FRONTEND_URL}/copy-magic-link?url=${encodeURIComponent(link)}" 
+     style="
+       background:#007bff;
+       color:#fff;
+       padding:10px 20px;
+       text-decoration:none;
+       border-radius:5px;
+       display:inline-block;
+     ">
+     Copy Link & Login
+  </a>
+</div>
         </center>
 
         <p>If you did not request this login, you can safely ignore this email.</p>
@@ -786,7 +815,9 @@ const sendMagicLinkEmail = async (email, link) => {
   };
 
   //   await transporter.sendMail(mailOptions);
-  getTransporter().sendMail(mailOptions);
+  const emailSent = await getTransporter().sendMail(mailOptions);
+  console.log("Magic link email sent to:", email);
+  return emailSent;
 };
 
 // ─── sendAdminBroadcastEmail ─────────────────────────────────────────────────
