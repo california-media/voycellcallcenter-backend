@@ -48,6 +48,7 @@ const disallowedEmailDomains = [
 ];
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const WEBSITE_URL = process.env.WEBSITE_URL || "https://voycell.com";
 
 // Requires: User and ReferralLog models in scope.
 // Put this near top of your controller file:
@@ -1345,7 +1346,7 @@ const generateMagicLink = async (req, res) => {
     });
 
     // ✅ Create full magic link
-    const magicLink = `${FRONTEND_URL}/link-login?token=${magicToken}`;
+    const magicLink = `${WEBSITE_URL}/link-login?token=${magicToken}`;
 
     // ✅ SEND MAGIC LINK TO USER EMAIL ✅✅✅
     await sendMagicLinkEmail(user.email, magicLink);
