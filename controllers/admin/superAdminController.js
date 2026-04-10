@@ -9,6 +9,68 @@ const getDeviceToken = require("../../services/yeastarTokenService").getDeviceTo
 const axios = require("axios");
 const { getConfig } = require("../../utils/getConfig");
 
+// exports.getAllCompanyAdmins = async (req, res) => {
+//   try {
+//     let page = parseInt(req.body.page) || 1;
+//     let limit = parseInt(req.body.limit) || 10;
+//     let skip = (page - 1) * limit;
+
+//     const search = req.body.search?.trim() || "";
+
+//     const searchQuery = search
+//       ? {
+//         $or: [
+//           { firstname: { $regex: search, $options: "i" } },
+//           { lastname: { $regex: search, $options: "i" } },
+//           { email: { $regex: search, $options: "i" } },
+//           { "PBXDetails.PBX_EXTENSION_NUMBER": { $regex: search, $options: "i" } },
+//           { telephone: { $regex: search, $options: "i" } },
+//           { "phonenumbers.number": { $regex: search, $options: "i" } },
+//         ],
+//       }
+//       : {};
+
+//     const [companyAdmins, totalAdmins] = await Promise.all([
+//       User.find({ role: "companyAdmin", ...searchQuery })
+//         .select(
+//           "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialStartedAt trialEndsAt trialDurationDays"
+//         )
+//         .skip(skip)
+//         .limit(limit)
+//         .lean(),
+//       User.countDocuments({ role: "companyAdmin", ...searchQuery }),
+//     ]);
+
+//     // Attach active subscription info (plan name) for each company admin
+//     const userIds = companyAdmins.map((u) => u._id);
+//     const subscriptions = await Subscription.find({
+//       userId: { $in: userIds },
+//       status: { $in: ["active", "trialing", "paused"] },
+//     }).populate("planId", "name").lean();
+
+//     const subMap = {};
+//     subscriptions.forEach((s) => { subMap[s.userId.toString()] = s; });
+
+//     const data = companyAdmins.map((u) => ({
+//       ...u,
+//       subscription: subMap[u._id.toString()] || null,
+//     }));
+
+//     res.status(200).json({
+//       status: "success",
+//       message: "company admin fetched",
+//       page,
+//       limit,
+//       totalAdmins,
+//       totalPages: Math.ceil(totalAdmins / limit),
+//       data,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: "Internal Server Error" });
+//   }
+// };
+
+
 exports.getAllCompanyAdmins = async (req, res) => {
   try {
     let page = parseInt(req.body.page) || 1;
@@ -17,45 +79,84 @@ exports.getAllCompanyAdmins = async (req, res) => {
 
     const search = req.body.search?.trim() || "";
 
-    const searchQuery = search
-      ? {
+    // 🔍 STEP 1: Find matching agents (users)
+    let agentAdminIds = [];
+
+    if (search) {
+      const agents = await User.find({
+        role: "user",
         $or: [
           { firstname: { $regex: search, $options: "i" } },
           { lastname: { $regex: search, $options: "i" } },
           { email: { $regex: search, $options: "i" } },
-          { "PBXDetails.PBX_EXTENSION_NUMBER": { $regex: search, $options: "i" } },
           { telephone: { $regex: search, $options: "i" } },
           { "phonenumbers.number": { $regex: search, $options: "i" } },
+          { "PBXDetails.PBX_EXTENSION_NUMBER": { $regex: search, $options: "i" } },
         ],
-      }
-      : {};
+      }).select("createdByWhichCompanyAdmin");
 
+      agentAdminIds = agents
+        .map((a) => a.createdByWhichCompanyAdmin)
+        .filter((id) => id); // remove null
+    }
+
+    // 🔍 STEP 2: Build company admin query
+    const companyAdminQuery = {
+      role: "companyAdmin",
+    };
+
+    if (search) {
+      companyAdminQuery.$or = [
+        // 🔹 Admin fields
+        { firstname: { $regex: search, $options: "i" } },
+        { lastname: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { telephone: { $regex: search, $options: "i" } },
+        { "phonenumbers.number": { $regex: search, $options: "i" } },
+        { "PBXDetails.PBX_EXTENSION_NUMBER": { $regex: search, $options: "i" } },
+
+        // 🔹 Company name
+        { "userInfo.companyName": { $regex: search, $options: "i" } },
+
+        // 🔹 Match via agent
+        { _id: { $in: agentAdminIds } },
+      ];
+    }
+
+    // 🔍 STEP 3: Fetch company admins
     const [companyAdmins, totalAdmins] = await Promise.all([
-      User.find({ role: "companyAdmin", ...searchQuery })
+      User.find(companyAdminQuery)
         .select(
           "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialStartedAt trialEndsAt trialDurationDays"
         )
         .skip(skip)
         .limit(limit)
         .lean(),
-      User.countDocuments({ role: "companyAdmin", ...searchQuery }),
+
+      User.countDocuments(companyAdminQuery),
     ]);
 
-    // Attach active subscription info (plan name) for each company admin
+    // 🔍 STEP 4: Attach subscription info
     const userIds = companyAdmins.map((u) => u._id);
+
     const subscriptions = await Subscription.find({
       userId: { $in: userIds },
       status: { $in: ["active", "trialing", "paused"] },
-    }).populate("planId", "name").lean();
+    })
+      .populate("planId", "name")
+      .lean();
 
     const subMap = {};
-    subscriptions.forEach((s) => { subMap[s.userId.toString()] = s; });
+    subscriptions.forEach((s) => {
+      subMap[s.userId.toString()] = s;
+    });
 
     const data = companyAdmins.map((u) => ({
       ...u,
       subscription: subMap[u._id.toString()] || null,
     }));
 
+    // ✅ FINAL RESPONSE
     res.status(200).json({
       status: "success",
       message: "company admin fetched",
@@ -66,9 +167,11 @@ exports.getAllCompanyAdmins = async (req, res) => {
       data,
     });
   } catch (error) {
+    console.error("Error in getAllCompanyAdmins:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
 
 exports.getAllCompanyAdminsByDevice = async (req, res) => {
   try {

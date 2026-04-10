@@ -109,8 +109,12 @@ const sendVerificationEmail = async (email, link) => {
 <body>
     <div class="container">
 
-        <center> <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
-                    alt="VOYCELL Logo" style="width:200px; display:block;"></center>
+        <center> 
+        <a href="https://voycell.com/" target="_blank">
+        <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
+                    alt="VOYCELL Logo" style="width:200px; display:block;">
+                    
+                    </center></a>
         <p><strong>Hello,</strong></p>
 
         <p>Congratulations on creating your <strong>VOYCELL</strong> account — a powerful step toward
@@ -132,11 +136,14 @@ const sendVerificationEmail = async (email, link) => {
         <div style="width:100%; overflow:hidden;">
 
             <!-- Left Column (Image) -->
+            <a href="${FRONTEND_URL}" target="_blank">
             <div style="float:left; width:110px; margin-right:10px;">
-                <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
+            
+                <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
                     alt="VOYCELL logo" style="width:100px; display:block;">
+           
             </div>
-
+            </a>
             <!-- Right Column (Text) -->
             <br>
             <div style="overflow:hidden;">
@@ -159,34 +166,20 @@ const sendVerificationEmail = async (email, link) => {
         <div class="footer">
             <p>Follow VOYCELL social media on:</p>
             <div class="social-icons">
-                <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/facebookIcon.png"
+                <a href="https://www.facebook.com/voycellcallcenter"><img
+                        src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/facebookIcon.png"
                         alt="Facebook"></a>
-                <a href="#"><img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/instagramIcon.png"
+                <a href="https://www.instagram.com/voycellcallcenter/">
+                <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/instagramIcon.png"
                         alt="Instagram"></a>
-                <a href="#"><img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/linkedinIcon.png"
+                <a href="https://www.linkedin.com/company/voycell/">
+                <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/linkedinIcon.png"
                         alt="linkedin"></a>
-                <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/twitterIcon.png"
-                        alt="Twitter"></a>
-                <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/youtubeIcon.png"
-                        alt="YouTube"></a>
             </div>
             <br><br>
-            <div class="app-buttons">
-                <p>Download the VOYCELL App:</p>
-                <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/appStoreIcon.png"
-                        alt="App Store"></a>
-                <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/playStoreIcon.png"
-                        alt="Google Play"></a>
-            </div>
-
-            <p>Need help? Visit <a href="#">support@voycell.com</a> </p>
+            <p>Need help? Visit <a href="https://voycell.com/voycell-contact-us/">noreply@voycell.com</a> </p>
             <p>Sent with ❤️ from VOYCELL</p>
-            <p><a href="#" target="_blank">Privacy Policy</a></p>
+            <p><a href="https://voycell.com/privacy-policy/" target="_blank">Privacy Policy</a></p>
         </div>
     </div>
 </body>
@@ -236,7 +229,7 @@ const sendPostVerificationDemoEmail = async (user) => {
           <!-- Logo -->
           <tr>
             <td align="center">
-              <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
+              <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
                    width="180" style="margin-bottom:20px;" />
             </td>
           </tr>
@@ -508,7 +501,7 @@ const sendHelpSupportReplyNotification = async (
 <body>
     <div class="container">
         <center>
-            <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logoWithName.png"
+            <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
                 alt="VOYCELL Logo" style="width:200px; display:block;">
         </center>
 
@@ -534,7 +527,7 @@ const sendHelpSupportReplyNotification = async (
 
         <div style="width:100%; overflow:hidden; margin-top: 30px;">
             <div style="float:left; width:110px; margin-right:10px;">
-                <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logo.png"
+                <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
                     alt="VOYCELL Logo" style="width:100px; display:block;">
             </div>
             <div style="overflow:hidden;">
@@ -551,7 +544,7 @@ const sendHelpSupportReplyNotification = async (
         <div class="footer">
             <p>Need additional help? Contact us at <a href="mailto:support@voycell.com">support@voycell.com</a></p>
             <p>Sent with ❤️ from VOYCELL</p>
-            <p><a href="#" target="_blank">Privacy Policy</a></p>
+            <p><a href="https://voycell.com/privacy-policy" target="_blank">Privacy Policy</a></p>
         </div>
     </div>
 </body>
@@ -642,7 +635,7 @@ const sendEmailChangeVerification = async (
 <body>
     <div class="container">
 
-        <center> <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
+        <center> <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
                     alt="VOYCELL Logo" style="width:200px; display:block;"></center>
         <p><strong>Hello ${userName || "User"},</strong></p>
         
@@ -671,7 +664,7 @@ const sendEmailChangeVerification = async (
 
             <!-- Left Column (Image) -->
             <div style="float:left; width:110px; margin-right:10px;">
-                <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
+                <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
                     alt="VOYCELL logo" style="width:100px; display:block;">
             </div>
 
@@ -696,33 +689,18 @@ const sendEmailChangeVerification = async (
             <p>Follow VOYCELL social media on:</p>
             <div class="social-icons">
                 <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/facebookIcon.png"
+                        src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/facebookIcon.png"
                         alt="Facebook"></a>
-                <a href="#"><img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/instagramIcon.png"
+                <a href="#"><img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/instagramIcon.png"
                         alt="Instagram"></a>
-                <a href="#"><img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/linkedinIcon.png"
+                <a href="#"><img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/linkedinIcon.png"
                         alt="linkedin"></a>
-                <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/twitterIcon.png"
-                        alt="Twitter"></a>
-                <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/youtubeIcon.png"
-                        alt="YouTube"></a>
             </div>
             <br><br>
-            <div class="app-buttons">
-                <p>Download the VOYCELL App:</p>
-                <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/appStoreIcon.png"
-                        alt="App Store"></a>
-                <a href="#"><img
-                        src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/playStoreIcon.png"
-                        alt="Google Play"></a>
-            </div>
 
-            <p>Need help? Visit <a href="#">support@voycell.com</a> </p>
+            <p>Need help? Visit <a href="https://voycell.com/voycell-contact-us/">noreply@voycell.com</a> </p>
             <p>Sent with ❤️ from VOYCELL</p>
-            <p><a href="#" target="_blank">Privacy Policy</a></p>
+            <p><a href="https://voycell.com/privacy-policy/" target="_blank">Privacy Policy</a></p>
         </div>
     </div>
 </body>
@@ -777,7 +755,7 @@ const sendMagicLinkEmail = async (email, link) => {
       <div class="container">
 
         <center>
-          <img src="${FRONTEND_URL}/assets/img/voycell-logo.png" style="width:180px;" />
+          <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png" style="width:180px;" />
         </center>
 
         <h2>Login to VOYCELL using Magic Link</h2>
