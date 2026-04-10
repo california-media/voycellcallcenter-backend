@@ -65,7 +65,7 @@ exports.forgotPassword = async (req, res) => {
 <body>
   <div class="container">
     <div class="header">
-      <img src="${FRONTEND_URL}/assets/img/voycell-logo.png" alt="Company Logo">
+      <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png" alt="Company Logo">
     </div>
     <h2>Password Reset Request</h2>
     <p>Hello,</p>
