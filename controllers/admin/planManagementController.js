@@ -382,6 +382,20 @@ const cancelUserSubscription = async (req, res) => {
 };
 
 // ─── Update Global Trial Period ───────────────────────────────────────────────
+const getGlobalConfig = async (req, res) => {
+  try {
+    const admin = await User.findById(req.user._id).select("trialDurationDays emailReminderDays").lean();
+    res.json({
+      success: true,
+      defaultTrialDays: admin?.trialDurationDays ?? 7,
+      defaultEmailReminderDays: admin?.emailReminderDays ?? [7, 3, 1],
+    });
+  } catch (err) {
+    console.error("getGlobalConfig error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch config" });
+  }
+};
+
 const updateGlobalTrialPeriod = async (req, res) => {
   try {
     const { durationDays } = req.body;
@@ -389,13 +403,11 @@ const updateGlobalTrialPeriod = async (req, res) => {
       return res.status(400).json({ success: false, message: "durationDays must be >= 1" });
     }
 
-    // Update all companyAdmins still in trial that haven't started premium
-    await User.updateMany(
-      { role: "companyAdmin", planStatus: { $in: ["none", "trial"] } },
-      { $set: { trialDurationDays: durationDays } }
-    );
+    // Save as the global default on the superAdmin's own doc only
+    // New company registrations will inherit this value; existing customers are not affected
+    await User.findByIdAndUpdate(req.user._id, { trialDurationDays: durationDays });
 
-    res.json({ success: true, message: `Global trial period updated to ${durationDays} days` });
+    res.json({ success: true, message: `Global trial period set to ${durationDays} days` });
   } catch (err) {
     console.error("updateGlobalTrialPeriod error:", err);
     res.status(500).json({ success: false, message: "Failed to update global trial period" });
@@ -442,6 +454,8 @@ const updateEmailReminderSchedule = async (req, res) => {
     }
 
     if (isGlobal) {
+      // Save as global default on the superAdmin's own doc
+      await User.findByIdAndUpdate(req.user._id, { emailReminderDays: reminderDays });
       await User.updateMany({ role: "companyAdmin" }, { $set: { emailReminderDays: reminderDays, reminderEmailsSent: [] } });
       res.json({ success: true, message: "Global email reminder schedule updated" });
     } else {
@@ -478,6 +492,7 @@ module.exports = {
   pauseUserSubscription,
   resumeUserSubscription,
   cancelUserSubscription,
+  getGlobalConfig,
   updateGlobalTrialPeriod,
   updateUserTrialPeriod,
   updateEmailReminderSchedule,

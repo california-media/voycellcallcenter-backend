@@ -11,11 +11,15 @@ const {
   pauseUserSubscription,
   resumeUserSubscription,
   cancelUserSubscription,
+  getGlobalConfig,
   updateGlobalTrialPeriod,
   updateUserTrialPeriod,
   updateEmailReminderSchedule,
   triggerReminderEmails,
 } = require("../../controllers/admin/planManagementController");
+
+// Global config
+router.get("/config", getGlobalConfig);
 
 // Plans CRUD
 router.get("/", getAllPlans);
