@@ -65,7 +65,7 @@ exports.forgotPassword = async (req, res) => {
 <body>
   <div class="container">
     <div class="header">
-      <img src="${FRONTEND_URL}/assets/img/voycell-logo.png" alt="Company Logo">
+      <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png" alt="Company Logo">
     </div>
     <h2>Password Reset Request</h2>
     <p>Hello,</p>
@@ -109,6 +109,43 @@ exports.resetPassword = async (req, res) => {
   if (password !== confirmPassword) {
     return res.status(400).json({ message: "Passwords do not match" });
   }
+
+  // 🔐 Detailed Password Validation
+  const passwordErrors = [];
+
+  if (password.length < 8) {
+    passwordErrors.push("Password must be at least 8 characters long.");
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    passwordErrors.push(
+      "Password must contain at least one uppercase letter.",
+    );
+  }
+
+  if (!/[a-z]/.test(password)) {
+    passwordErrors.push(
+      "Password must contain at least one lowercase letter.",
+    );
+  }
+
+  if (!/[0-9]/.test(password)) {
+    passwordErrors.push("Password must contain at least one number.");
+  }
+
+  if (!/[!@#$%^&*(),.?\":{}|<>_\-+=]/.test(password)) {
+    passwordErrors.push(
+      "Password must contain at least one special character.",
+    );
+  }
+
+  if (passwordErrors.length > 0) {
+    return res.status(400).json({
+      status: "error",
+      message: passwordErrors,
+    });
+  }
+
 
   try {
     const user = await User.findOne({
