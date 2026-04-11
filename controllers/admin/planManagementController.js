@@ -449,8 +449,8 @@ const updateEmailReminderSchedule = async (req, res) => {
     const { userId, reminderDays, global: isGlobal } = req.body;
     // reminderDays: e.g. [7, 3, 1]
 
-    if (!Array.isArray(reminderDays) || reminderDays.some((d) => typeof d !== "number" || d < 1)) {
-      return res.status(400).json({ success: false, message: "reminderDays must be an array of positive numbers" });
+    if (!Array.isArray(reminderDays) || reminderDays.length === 0 || reminderDays.some((d) => typeof d !== "number" || isNaN(d) || d < 1)) {
+      return res.status(400).json({ success: false, message: "reminderDays must be a non-empty array of positive numbers" });
     }
 
     if (isGlobal) {
@@ -481,6 +481,45 @@ const triggerReminderEmails = async (req, res) => {
   }
 };
 
+// ─── Pause / Resume User Access (works for trial AND paid plans) ───────────────
+const pauseUserAccess = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: "userId required" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    user.accessPausedByAdmin = true;
+    user.accessPausedAt = new Date();
+    await user.save();
+
+    res.json({ success: true, message: "User access paused" });
+  } catch (err) {
+    console.error("pauseUserAccess error:", err);
+    res.status(500).json({ success: false, message: "Failed to pause user access" });
+  }
+};
+
+const resumeUserAccess = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: "userId required" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    user.accessPausedByAdmin = false;
+    user.accessPausedAt = null;
+    await user.save();
+
+    res.json({ success: true, message: "User access resumed" });
+  } catch (err) {
+    console.error("resumeUserAccess error:", err);
+    res.status(500).json({ success: false, message: "Failed to resume user access" });
+  }
+};
+
 module.exports = {
   getAllPlans,
   createPlan,
@@ -497,4 +536,6 @@ module.exports = {
   updateUserTrialPeriod,
   updateEmailReminderSchedule,
   triggerReminderEmails,
+  pauseUserAccess,
+  resumeUserAccess,
 };

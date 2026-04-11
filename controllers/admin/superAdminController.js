@@ -33,7 +33,7 @@ exports.getAllCompanyAdmins = async (req, res) => {
     const [companyAdmins, totalAdmins] = await Promise.all([
       User.find({ role: "companyAdmin", ...searchQuery })
         .select(
-          "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialStartedAt trialEndsAt trialDurationDays"
+          "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialStartedAt trialEndsAt trialDurationDays accessPausedByAdmin accessPausedAt"
         )
         .skip(skip)
         .limit(limit)

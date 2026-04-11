@@ -54,7 +54,6 @@ const invoiceSchema = new Schema(
 );
 
 invoiceSchema.index({ userId: 1, createdAt: -1 });
-invoiceSchema.index({ stripeInvoiceId: 1 });
 
 const Invoice = model("Invoice", invoiceSchema);
 module.exports = Invoice;

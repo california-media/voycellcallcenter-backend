@@ -252,6 +252,11 @@ const getUserData = async (req, res) => {
           contactStatuses: user.contactStatuses || [],
           leadStatuses: user.leadStatuses || [],
           accountStatus: user.accountStatus === "active",
+          planStatus: user.planStatus || "none",
+          trialStartedAt: user.trialStartedAt || null,
+          trialEndsAt: user.trialEndsAt || null,
+          trialDurationDays: user.trialDurationDays || 7,
+          accessPausedByAdmin: user.accessPausedByAdmin || false,
           PBXDetails: user.PBXDetails || {},
           templates: {
             whatsappTemplates: {
@@ -427,6 +432,11 @@ const getUserData = async (req, res) => {
           contactStatuses: user.contactStatuses || [],
           leadStatuses: user.leadStatuses || [],
           accountStatus: user.accountStatus === "active",
+          planStatus: user.planStatus || "none",
+          trialStartedAt: user.trialStartedAt || null,
+          trialEndsAt: user.trialEndsAt || null,
+          trialDurationDays: user.trialDurationDays || 7,
+          accessPausedByAdmin: user.accessPausedByAdmin || false,
           PBXDetails: user.PBXDetails || {},
           templates: {
             emailTemplates: {
@@ -574,6 +584,11 @@ const getUserData = async (req, res) => {
       contactStatuses: user.contactStatuses || [],
       leadStatuses: user.leadStatuses || [],
       accountStatus: user.accountStatus === "active",
+      planStatus: user.planStatus || "none",
+      trialStartedAt: user.trialStartedAt || null,
+      trialEndsAt: user.trialEndsAt || null,
+      trialDurationDays: user.trialDurationDays || 7,
+      accessPausedByAdmin: user.accessPausedByAdmin || false,
       templates: {},
       // yeastarSignature: yeastarSignature,
       // pbxURL: pbxURL,

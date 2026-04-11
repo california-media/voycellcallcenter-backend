@@ -272,6 +272,10 @@ const userSchema = new Schema(
     emailReminderDays: { type: [Number], default: [7, 3, 1] },
     reminderEmailsSent: { type: [String], default: [] }, // e.g. ["trial_3", "premium_7"]
 
+    // Admin-controlled access pause (works for both trial and paid plans)
+    accessPausedByAdmin: { type: Boolean, default: false },
+    accessPausedAt: { type: Date, default: null },
+
     isActive: {
       type: Boolean,
       default: false, // user is inactive until login
@@ -841,26 +845,6 @@ const userSchema = new Schema(
     trialDurationDays: { type: Number, default: 7 }, // admin-overrideable per user
     trialStartedAt: { type: Date, default: null },
     trialEndsAt: { type: Date, default: null },
-
-    // Plan status (denormalized for quick access)
-    planStatus: {
-      type: String,
-      enum: ["none", "trial", "active", "paused", "expired", "cancelled"],
-      default: "none",
-    },
-
-    // Email reminder days before expiry (trial: 3 days; premium: 7 days default)
-    emailReminderDays: {
-      type: [Number],
-      default: [7, 3, 1],
-    },
-
-    // Which reminder emails have already been sent (to avoid duplicates)
-    reminderEmailsSent: {
-      type: [Number],
-      default: [],
-    },
-    // ─────────────────────────────────────────────────────────────────────
 
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date },

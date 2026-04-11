@@ -1956,6 +1956,7 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
     const { phoneNumbers, firstname, lastname, status, note, meeting } =
       req.body;
     const userId = req.user._id;
+    console.log(phoneNumbers, firstname, lastname, status, note, meeting, "phoneNumbers, firstname, lastname, status, note, meeting ");
 
     // -----------------------------------------------
     // ⭐ NEW: Determine company admin and agent group
@@ -2225,16 +2226,25 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
             : "Offline meeting scheduled",
       });
     }
+    console.log(loggedInUser.zoho?.accessToken, "loggedInUser.zoho?.accessToken1");
+    console.log(loggedInUser.zoho?.refreshToken, "loggedInUser.zoho?.refreshToken1");
 
     // ✅ 7. SAVE FINAL DOCUMENT
     await targetDoc.save();
-
+    console.log(loggedInUser.zoho?.accessToken, "loggedInUser.zoho?.accessToken2");
+    console.log(loggedInUser.zoho?.refreshToken, "loggedInUser.zoho?.refreshToken2");
     if (loggedInUser.zoho?.accessToken && loggedInUser.zoho?.refreshToken) {
       console.log("Zoho sync block entered — triggering zohoAfterCallSync");
       console.log("Zoho credentials:", {
         hasAccessToken: !!loggedInUser.zoho?.accessToken,
         hasRefreshToken: !!loggedInUser.zoho?.refreshToken,
         isConnected: loggedInUser.zoho?.isConnected,
+      });
+      console.log("[Zoho] Calling zohoAfterCallSync with:", {
+        phone: `+${rawCountry}${rawNumber}`,
+        status,
+        note,
+        meeting,
       });
       zohoAfterCallSync({
         user: loggedInUser,
@@ -2245,7 +2255,7 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
         note,
         meeting,
       }).catch((err) => {
-        console.error("Zoho After Call Sync Failed:", err.message);
+        console.error("[Zoho] After Call Sync Failed:", err.message, err.stack);
       });
     }
 

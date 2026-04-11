@@ -202,15 +202,7 @@ const signupWithEmail = async (req, res) => {
         user.signupMethod = "email";
       }
 
-      // ── Start trial period on email verification (companyAdmin only) ──────────
-      if (user.role === "companyAdmin" && !user.trialStartedAt) {
-        const trialDays = user.trialDurationDays || 7;
-        const trialStart = new Date();
-        const trialEnd = new Date(trialStart.getTime() + trialDays * 24 * 60 * 60 * 1000);
-        user.planStatus = "trial";
-        user.trialStartedAt = trialStart;
-        user.trialEndsAt = trialEnd;
-      }
+      // Trial starts on phone verification (ProfileCompletionModal), not on email verification
 
       // Setup initial plan after email verification (skip for superadmin)
       if (user.role !== "superadmin") {
@@ -411,11 +403,7 @@ const signupWithEmail = async (req, res) => {
       // }
     }
 
-    // Create new user with trial started immediately
-    const trialDays = 7;
-    const trialStart = new Date();
-    const trialEnd = new Date(trialStart.getTime() + trialDays * 24 * 60 * 60 * 1000);
-
+    // Trial starts only after phone verification (ProfileCompletionModal OTP)
     const newUser = await User.create({
       email: trimmedEmail,
       password,
@@ -428,10 +416,7 @@ const signupWithEmail = async (req, res) => {
       referralCode,
       isActive: true,
       referredBy,
-      planStatus: "trial",
-      trialStartedAt: trialStart,
-      trialEndsAt: trialEnd,
-      trialDurationDays: trialDays,
+      planStatus: "none",
     });
 
     if (referredBy) {
@@ -674,6 +659,17 @@ const verifyRealPhoneNumber = async (req, res) => {
     user.otp = undefined;
     user.otpExpiresAt = undefined;
 
+    // ── Start trial on first phone verification ──────────────────────────────
+    if (user.role === "companyAdmin" && !user.trialStartedAt) {
+      const superAdminCfg = await User.findOne({ role: "superadmin" }).select("trialDurationDays").lean();
+      const trialDays = superAdminCfg?.trialDurationDays || 7;
+      const trialStart = new Date();
+      user.planStatus = "trial";
+      user.trialStartedAt = trialStart;
+      user.trialEndsAt = new Date(trialStart.getTime() + trialDays * 24 * 60 * 60 * 1000);
+      user.trialDurationDays = trialDays;
+    }
+
     await user.save();
 
     return res.status(200).json({
@@ -682,6 +678,7 @@ const verifyRealPhoneNumber = async (req, res) => {
       data: {
         phoneVerified: true,
         phonenumber: `+${sanitizedCountryCode}${sanitizedNumber}`,
+        trialStarted: !!(user.trialStartedAt),
       },
     });
   } catch (error) {
@@ -1096,6 +1093,17 @@ const signupWithPhoneNumber = async (req, res) => {
       }
     }
     user.isActive = true; // mark as active
+
+    // Set trial period using global config
+    if (!user.trialStartedAt) {
+      const superAdminPhoneCfg = await User.findOne({ role: "superadmin" }).select("trialDurationDays").lean();
+      const phoneTrialDays = superAdminPhoneCfg?.trialDurationDays || 7;
+      const phoneTrialStart = new Date();
+      user.planStatus = "trial";
+      user.trialStartedAt = phoneTrialStart;
+      user.trialEndsAt = new Date(phoneTrialStart.getTime() + phoneTrialDays * 24 * 60 * 60 * 1000);
+      user.trialDurationDays = phoneTrialDays;
+    }
 
     await user.save();
 
