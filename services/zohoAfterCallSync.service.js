@@ -6,7 +6,7 @@ const {
   createMeeting,
 } = require("./zohoApi.service");
 
-const { getValidZohoAccessToken, refreshZohoToken } = require("./zohoTokenManager.service");
+const { getZohoAccessToken, refreshZohoToken } = require("./zohoTokenManager.service");
 const { mapToZohoFields } = require("../utils/zohoFieldMapper");
 
 exports.zohoAfterCallSync = async ({
@@ -17,19 +17,17 @@ exports.zohoAfterCallSync = async ({
   note,
   meeting,
 }) => {
-  let token;
-
   console.log("[Zoho] zohoAfterCallSync started");
   console.log("[Zoho] Input — phone:", phone, "| status:", status, "| note:", note);
   console.log("[Zoho] Meeting payload:", JSON.stringify(meeting, null, 2));
 
-  // ── 1. Get token ──────────────────────────────────────────────────────────
+  // ── 1. Ensure token is valid (refresh if needed) ──────────────────────────
   try {
-    token = await getValidZohoAccessToken(user);
-    console.log("[Zoho] Token obtained via getValidZohoAccessToken");
+    await getZohoAccessToken(user);
+    console.log("[Zoho] Token obtained via getZohoAccessToken");
   } catch (err) {
-    console.warn("[Zoho] getValidZohoAccessToken failed, attempting refresh:", err.message);
-    token = await refreshZohoToken(user);
+    console.warn("[Zoho] getZohoAccessToken failed, attempting refresh:", err.message);
+    await refreshZohoToken(user);
     console.log("[Zoho] Token obtained via refreshZohoToken");
   }
 

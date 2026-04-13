@@ -2246,17 +2246,18 @@ exports.addFormDataAfterCallEnd = async (req, res) => {
         note,
         meeting,
       });
-      zohoAfterCallSync({
-        user: loggedInUser,
-        targetDoc,
-        // phone: `${rawCountry}${rawNumber}`,
-        phone: `+${rawCountry}${rawNumber}`,
-        status,
-        note,
-        meeting,
-      }).catch((err) => {
+      try {
+        await zohoAfterCallSync({
+          user: loggedInUser,
+          targetDoc,
+          phone: `+${rawCountry}${rawNumber}`,
+          status,
+          note,
+          meeting,
+        });
+      } catch (err) {
         console.error("[Zoho] After Call Sync Failed:", err.message, err.stack);
-      });
+      }
     }
 
     if (
