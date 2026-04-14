@@ -30,38 +30,344 @@ const uploadImageToS3 = async (file) => {
 };
 
 // === Delete Image from S3 ===
+// const deleteImageFromS3 = async (imageUrl) => {
+//   // const { AWS_BUCKET_NAME } = getConfig(); 
+//   try {
+//     if (!imageUrl) return;
+
+//     // const bucket = process.env.AWS_BUCKET_NAME;
+//     const bucket = process.env.AWS_BUCKET_NAME;
+//     let fileKey;
+
+//     // Try robust URL parsing first (handles virtual-hosted and path-style URLs)
+//     try {
+//       const parsed = new URL(imageUrl);
+//       // pathname might be "/profileImages/..." or "/<bucket>/profileImages/..."
+//       fileKey = parsed.pathname.startsWith("/") ? parsed.pathname.slice(1) : parsed.pathname;
+
+//       // If the pathname includes the bucket name at the front, remove it.
+//       if (fileKey.startsWith(`${bucket}/`)) {
+//         fileKey = fileKey.slice(bucket.length + 1);
+//       }
+//     } catch (err) {
+//       // Fallback for other URL formats (e.g. older code that used ".amazonaws.com/")
+//       const urlParts = imageUrl.split(".amazonaws.com/");
+//       if (urlParts.length >= 2) {
+//         fileKey = urlParts[1];
+//       } else {
+//         return;
+//       }
+//     }
+
+//     if (!fileKey) {
+//       return;
+//     }
+
+//     const params = {
+//       Bucket: bucket,
+//       Key: fileKey,
+//     };
+
+//     const command = new DeleteObjectCommand(params);
+//     await s3.send(command);
+//   } catch (err) {
+//     console.error("Failed to delete from S3:", err);
+//   }
+// };
+
+
+// // === Edit Profile ===
+// const editProfile = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const {
+//       firstname,
+//       lastname,
+//       email,
+//       linkedin,
+//       instagram,
+//       telegram,
+//       twitter,
+//       facebook,
+//       designation,
+//       telephone,
+//       phonenumbers = [],
+//       companyName,
+//     } = req.body;
+
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res
+//         .status(404)
+//         .json({ status: "error", message: "User not found" });
+//     }
+
+//     const keys = Object.keys(req.body);
+
+//     if (keys.includes("firstname")) user.firstname = firstname;
+//     if (keys.includes("lastname")) user.lastname = lastname;
+//     if (keys.includes("linkedin")) user.linkedin = linkedin;
+//     if (keys.includes("instagram")) user.instagram = instagram;
+//     if (keys.includes("telegram")) user.telegram = telegram;
+//     if (keys.includes("twitter")) user.twitter = twitter;
+//     if (keys.includes("facebook")) user.facebook = facebook;
+//     if (keys.includes("designation")) user.designation = designation;
+//     if (keys.includes("telephone")) {
+//       // normalize: trim and remove extra spaces
+//       user.telephone =
+//         typeof telephone === "string" ? telephone.trim() : telephone;
+//     }
+
+//     // Update companyName for companyAdmin role
+//     if (user.role === "companyAdmin" && keys.includes("companyName")) {
+//       if (!user.userInfo) user.userInfo = {};
+//       user.userInfo.companyName = companyName || "";
+//       user.markModified("userInfo");
+//     }
+
+//     // === Email Validation ===
+//     if (keys.includes("email") && email) {
+//       const trimmedEmail = email.trim().toLowerCase();
+
+//       if (["email", "google", "linkedin"].includes(user.signupMethod)) {
+//         if (trimmedEmail !== user.email) {
+//           return res.status(400).json({
+//             status: "error",
+//             message: "You cannot change email for this account.",
+//           });
+//         }
+//       } else {
+//         const existingUser = await User.findOne({
+//           email: trimmedEmail,
+//           _id: { $ne: user._id },
+//         });
+//         if (existingUser) {
+//           return res.status(400).json({
+//             status: "error",
+//             message: "This email is already used.",
+//           });
+//         }
+//         user.email = trimmedEmail;
+//       }
+//     }
+
+//     // === Phone Number Validation ===
+//     let parsedPhones = phonenumbers;
+
+//     // 🧠 Handle form-data case: parse stringified JSON
+//     if (typeof phonenumbers === "string") {
+//       try {
+//         parsedPhones = JSON.parse(phonenumbers);
+//       } catch (err) {
+//         parsedPhones = [];
+//       }
+//     }
+
+//     // if (Array.isArray(parsedPhones) && parsedPhones.length > 0) {
+//     //   const normalizedPhones = parsedPhones.map((p) => ({
+//     //     countryCode: String(p.countryCode || "").replace(/\D/g, ""),
+//     //     number: String(p.number || "").replace(/\D/g, ""),
+//     //   }));
+
+//     //   // Prevent change if user signed up by phone
+//     //   if (user.signupMethod === "phoneNumber") {
+//     //     const currentPhones = user.phonenumbers || [];
+//     //     const sameNumbers =
+//     //       currentPhones.length === normalizedPhones.length &&
+//     //       currentPhones.every((cur, i) => {
+//     //         const newP = normalizedPhones[i];
+//     //         return (
+//     //           cur.countryCode === newP.countryCode && cur.number === newP.number
+//     //         );
+//     //       });
+
+//     //     if (!sameNumbers) {
+//     //       return res.status(400).json({
+//     //         status: "error",
+//     //         message: "You cannot change phone number for this account.",
+//     //       });
+//     //     }
+//     //   } else {
+//     //     // Check duplicates
+//     //     // for (const p of normalizedPhones) {
+//     //     //   const exists = await User.findOne({
+//     //     //     phonenumbers: { $elemMatch: p },
+//     //     //     _id: { $ne: user._id },
+//     //     //   });
+//     //     //   if (exists) {
+//     //     //     return res.status(400).json({
+//     //     //       status: "error",
+//     //     //       message: `Phone number +${p.countryCode}${p.number} is already used.`,
+//     //     //     });
+//     //     //   }
+//     //     // }
+
+//     //     for (const p of normalizedPhones) {
+//     //       const exists = await User.findOne({
+//     //         _id: { $ne: user._id }, // 👈 exclude current logged-in user
+//     //         phonenumbers: {
+//     //           $elemMatch: {
+//     //             countryCode: p.countryCode,
+//     //             number: p.number,
+//     //           },
+//     //         },
+//     //       });
+
+//     //       if (exists) {
+//     //         return res.status(400).json({
+//     //           status: "error",
+//     //           message: `Phone number +${p.countryCode}${p.number} is already used.`,
+//     //         });
+//     //       }
+//     //     }
+
+//     //     // ✅ Important: markModified ensures mongoose saves the array
+//     //     user.phonenumbers = normalizedPhones;
+//     //     user.markModified("phonenumbers");
+//     //   }
+//     // }
+
+//     // === Profile Image Removal (Works for Postman + Frontend) ===
+
+//     // === Phone Number Validation ===
+//     // let parsedPhones = phonenumbers;
+
+//     // // 🧠 Handle form-data case: parse stringified JSON
+//     // if (typeof phonenumbers === "string") {
+//     //   try {
+//     //     parsedPhones = JSON.parse(phonenumbers);
+//     //   } catch (err) {
+//     //     parsedPhones = [];
+//     //   }
+//     // }
+
+//     if (Array.isArray(parsedPhones) && parsedPhones.length > 0) {
+//       const normalizedPhones = parsedPhones.map((p) => ({
+//         countryCode: String(p.countryCode || "").replace(/\D/g, ""),
+//         number: String(p.number || "").replace(/\D/g, ""),
+//       }));
+
+//       const currentPhones = user.phonenumbers || [];
+
+//       const isSameNumber =
+//         currentPhones.length === normalizedPhones.length &&
+//         currentPhones.every((cur, i) => {
+//           return (
+//             cur.countryCode === normalizedPhones[i]?.countryCode &&
+//             cur.number === normalizedPhones[i]?.number
+//           );
+//         });
+
+//       if (!isSameNumber) {
+//         for (const p of normalizedPhones) {
+//           const exists = await User.findOne({
+//             _id: { $ne: user._id },
+//             phonenumbers: {
+//               $elemMatch: {
+//                 countryCode: p.countryCode,
+//                 number: p.number,
+//               },
+//             },
+//           });
+
+//           if (exists) {
+//             return res.status(400).json({
+//               status: "error",
+//               message: `Phone number +${p.countryCode}${p.number} is already used.`,
+//             });
+//           }
+//         }
+
+//         // 🔥 If changed → mark unverified
+//         user.phonenumbers = normalizedPhones.map((p) => ({
+//           countryCode: p.countryCode,
+//           number: p.number,
+//           isVerified: false,
+//         }));
+
+//         user.markModified("phonenumbers");
+//       }
+//     }
+
+//     const rawProfileImageField = req.body.profileImage;
+
+//     // ✅ Remove if explicitly sent as empty
+//     const shouldRemove =
+//       rawProfileImageField === "" ||
+//       rawProfileImageField === null ||
+//       rawProfileImageField === "null" ||
+//       rawProfileImageField === "undefined";
+
+//     // ✅ ALSO remove if frontend wants to remove but didn't send file
+//     if (shouldRemove && !req.file) {
+//       if (user.profileImageURL) {
+//         await deleteImageFromS3(user.profileImageURL);
+//         user.profileImageURL = "";
+//       }
+//     }
+
+
+//     if (req.file) {
+//       if (user.profileImageURL) {
+//         try {
+//           await deleteImageFromS3(user.profileImageURL);
+//         } catch (err) {
+//           console.warn("Failed to delete previous profile image before upload:", err);
+//         }
+//       }
+
+//       const profileImage = await uploadImageToS3(req.file);
+//       user.profileImageURL = profileImage;
+//     }
+
+
+
+//     await user.save();
+
+//     return res.status(200).json({
+//       status: "success",
+//       message: "Profile updated",
+//       data: {
+//         id: user._id,
+//         firstname: user.firstname,
+//         lastname: user.lastname,
+//         email: user.email,
+//         phonenumbers: user.phonenumbers,
+//         telephone: user.telephone,
+//         profileImageURL: user.profileImageURL,
+//         linkedin: user.linkedin,
+//         instagram: user.instagram,
+//         telegram: user.telegram,
+//         twitter: user.twitter,
+//         facebook: user.facebook,
+//         designation: user.designation,
+//         provider: user.provider,
+//         userInfo: user.userInfo,
+//       },
+//     });
+//   } catch (error) {
+//     return res.status(500).json({ status: "error", message: "Server error" });
+//   }
+// };
+
 const deleteImageFromS3 = async (imageUrl) => {
-  // const { AWS_BUCKET_NAME } = getConfig(); 
   try {
     if (!imageUrl) return;
 
-    // const bucket = process.env.AWS_BUCKET_NAME;
     const bucket = process.env.AWS_BUCKET_NAME;
-    let fileKey;
 
-    // Try robust URL parsing first (handles virtual-hosted and path-style URLs)
-    try {
-      const parsed = new URL(imageUrl);
-      // pathname might be "/profileImages/..." or "/<bucket>/profileImages/..."
-      fileKey = parsed.pathname.startsWith("/") ? parsed.pathname.slice(1) : parsed.pathname;
+    const parsed = new URL(imageUrl);
 
-      // If the pathname includes the bucket name at the front, remove it.
-      if (fileKey.startsWith(`${bucket}/`)) {
-        fileKey = fileKey.slice(bucket.length + 1);
-      }
-    } catch (err) {
-      // Fallback for other URL formats (e.g. older code that used ".amazonaws.com/")
-      const urlParts = imageUrl.split(".amazonaws.com/");
-      if (urlParts.length >= 2) {
-        fileKey = urlParts[1];
-      } else {
-        return;
-      }
+    let fileKey = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+
+    // 🔥 remove bucket name if present
+    if (fileKey.startsWith(bucket + "/")) {
+      fileKey = fileKey.replace(bucket + "/", "");
     }
 
-    if (!fileKey) {
-      return;
-    }
+    console.log("S3 Delete Key:", fileKey); // 🔥 DEBUG
+
+    if (!fileKey) return;
 
     const params = {
       Bucket: bucket,
@@ -70,8 +376,10 @@ const deleteImageFromS3 = async (imageUrl) => {
 
     const command = new DeleteObjectCommand(params);
     await s3.send(command);
+
+    console.log("✅ Deleted from S3:", fileKey);
   } catch (err) {
-    console.error("Failed to delete from S3:", err);
+    console.error("❌ Failed to delete from S3:", err.message);
   }
 };
 
@@ -292,31 +600,89 @@ const editProfile = async (req, res) => {
     const rawProfileImageField = req.body.profileImage;
 
     // ✅ Remove if explicitly sent as empty
+    // const shouldRemove =
+    //   rawProfileImageField === "" ||
+    //   rawProfileImageField === null ||
+    //   rawProfileImageField === "null" ||
+    //   rawProfileImageField === "undefined";
+
+    // // ✅ ALSO remove if frontend wants to remove but didn't send file
+    // if (shouldRemove && !req.file) {
+    //   if (user.profileImageURL) {
+    //     await deleteImageFromS3(user.profileImageURL);
+    //     user.profileImageURL = "";
+    //   }
+    // }
+
+    console.log("Incoming profileImage:", rawProfileImageField);
+    console.log("Current DB image:", user.profileImageURL);
+
     const shouldRemove =
       rawProfileImageField === "" ||
       rawProfileImageField === null ||
       rawProfileImageField === "null" ||
       rawProfileImageField === "undefined";
 
-    // ✅ ALSO remove if frontend wants to remove but didn't send file
-    if (shouldRemove && !req.file) {
-      if (user.profileImageURL) {
-        await deleteImageFromS3(user.profileImageURL);
-        user.profileImageURL = "";
+    // 🔥 ALWAYS remove if explicitly asked (ignore req.file)
+    // if (shouldRemove) {
+    //   if (user.profileImageURL) {
+    //     await deleteImageFromS3(user.profileImageURL);
+    //     user.profileImageURL = "";
+    //   }
+    // }
+
+    if (shouldRemove) {
+      const oldImage = user.profileImageURL; // 🔥 STORE FIRST
+
+      if (oldImage) {
+        console.log("Deleting image (remove case):", oldImage);
+        await deleteImageFromS3(oldImage);
       }
+
+      user.profileImageURL = "";
     }
 
 
+    // if (req.file) {
+    //   if (user.profileImageURL) {
+    //     try {
+    //       await deleteImageFromS3(user.profileImageURL);
+    //     } catch (err) {
+    //       console.warn("Failed to delete previous profile image before upload:", err);
+    //     }
+    //   }
+
+    //   const profileImage = await uploadImageToS3(req.file);
+    //   user.profileImageURL = profileImage;
+    // }
+
+    // if (req.file) {
+    //   // 🔥 Delete old image FIRST
+    //   if (user.profileImageURL) {
+    //     console.log("Deleting old image:", user.profileImageURL);
+    //     await deleteImageFromS3(user.profileImageURL);
+    //   }
+
+    //   // 🔥 Upload new image
+    //   const profileImage = await uploadImageToS3(req.file);
+
+    //   console.log("New image uploaded:", profileImage);
+
+    //   user.profileImageURL = profileImage;
+    // }
+
     if (req.file) {
-      if (user.profileImageURL) {
-        try {
-          await deleteImageFromS3(user.profileImageURL);
-        } catch (err) {
-          console.warn("Failed to delete previous profile image before upload:", err);
-        }
+      const oldImage = user.profileImageURL; // 🔥 STORE FIRST
+
+      if (oldImage) {
+        console.log("Deleting old image (update case):", oldImage);
+        await deleteImageFromS3(oldImage);
       }
 
       const profileImage = await uploadImageToS3(req.file);
+
+      console.log("Uploaded new image:", profileImage);
+
       user.profileImageURL = profileImage;
     }
 

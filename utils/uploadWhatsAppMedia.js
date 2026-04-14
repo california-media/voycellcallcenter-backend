@@ -1,5 +1,5 @@
 const path = require("path");
-const { PutObjectCommand } = require("@aws-sdk/client-s3");
+const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const s3 = require("./s3");
 // const { getConfig } = require("./getConfig");
 

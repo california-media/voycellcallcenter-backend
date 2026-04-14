@@ -906,11 +906,27 @@ exports.getApprovedTemplates = async (req, res) => {
   try {
     const userId = req.user._id; // from auth middleware
 
+    // const templates = await WabaTemplate.find({
+    //   user: userId,
+    //   status: "APPROVED",
+    // }) .sort({ createdAt: -1 }) // latest first
+    // .lean();
+    // Step 1: Get user WABA info
+    const user = await User.findById(userId);
+
+    if (!user?.whatsappWaba) {
+      return res.status(400).json({ message: "WhatsApp WABA not connected" });
+    }
+
+    const { wabaId } = user.whatsappWaba;
+
+    // Step 2: Filter by BOTH user + wabaId
     const templates = await WabaTemplate.find({
       user: userId,
+      wabaId: wabaId, // ✅ ADD THIS LINE
       status: "APPROVED",
     })
-      .sort({ createdAt: -1 }) // latest first
+      .sort({ createdAt: -1 })
       .lean();
 
     return res.status(200).json({

@@ -11,7 +11,9 @@ const FormData = require("form-data");
 const Lead = require("../models/leadModel");
 const { downloadMetaMedia } = require("../services/metaMedia");
 const { uploadWhatsAppMediaToS3, uploadWhatsAppMediaProfileToS3 } = require("../utils/uploadWhatsAppMedia");
-const { createCampaignSchedule } = require("../services/awsScheduler");
+const { createCampaignSchedule, deleteCampaignSchedule } = require("../services/awsScheduler");
+const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const s3 = require("../utils/s3"); // adjust path if needed
 const dotenv = require("dotenv");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 dotenv.config();
@@ -2568,6 +2570,18 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         /* ───────── SCHEDULE MODE ───────── */
         if (schedule) {
 
+            const now = new Date();
+            const scheduleDate = new Date(schedule);
+            console.log("now", now);
+            console.log("scheduleDate", scheduleDate);
+
+            if (scheduleDate <= now) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Schedule time must be in the future"
+                });
+            }
+
             // 1️⃣ Save campaign
             await User.updateOne(
                 { _id: companyAdminId },
@@ -2575,8 +2589,30 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             );
 
             // 2️⃣ Remove milliseconds
+            // const isoTime =
+            //     schedule.replace(/\.\d{3}Z$/, "Z");
+
+            // const isoTime = new Date(schedule).toISOString().replace(/\.\d{3}Z$/, "Z");
+
+            // const dateObj = new Date(schedule);
+
+            // const isoTime =
+            //     dateObj.toISOString()
+            //         .replace(/\.\d{3}Z$/, "Z")   // remove milliseconds
+            //         .replace(/:\d{2}Z$/, "Z");   // 🔥 REMOVE SECONDS
+
+            const dateObj = new Date(schedule);
+
             const isoTime =
-                schedule.replace(/\.\d{3}Z$/, "Z");
+                dateObj
+                    .toISOString()
+                    .replace(/\.\d{3}Z$/, ""); // ✅ remove milliseconds AND Z
+
+            console.log("Final AWS Time:", isoTime);
+
+            console.log("Final AWS Time:", isoTime);
+
+            console.log("AWS FINAL EXPRESSION:", `at(${isoTime})`);
 
             // 3️⃣ Create AWS schedule
             await createCampaignSchedule({
@@ -3429,11 +3465,13 @@ exports.getWhatsappConversations = async (req, res) => {
                                 $cond: [
                                     { $and: [{ $ne: [{ $arrayElemAt: ["$contactData", 0] }, null] }, { $ne: [{ $ifNull: [{ $arrayElemAt: ["$contactData.company", 0] }, ""] }, ""] }] },
                                     { $arrayElemAt: ["$contactData.company", 0] },
-                                    { $cond: [
-                                        { $and: [{ $ne: [{ $arrayElemAt: ["$leadData", 0] }, null] }, { $ne: [{ $ifNull: [{ $arrayElemAt: ["$leadData.company", 0] }, ""] }, ""] }] },
-                                        { $arrayElemAt: ["$leadData.company", 0] },
-                                        null
-                                    ]}
+                                    {
+                                        $cond: [
+                                            { $and: [{ $ne: [{ $arrayElemAt: ["$leadData", 0] }, null] }, { $ne: [{ $ifNull: [{ $arrayElemAt: ["$leadData.company", 0] }, ""] }, ""] }] },
+                                            { $arrayElemAt: ["$leadData.company", 0] },
+                                            null
+                                        ]
+                                    }
                                 ]
                             }
                         }
@@ -3759,25 +3797,141 @@ exports.getWhatsappMessages = async (req, res) => {
     }
 };
 
+function getKeyFromS3Url(url) {
+    try {
+        const urlObj = new URL(url);
+        return decodeURIComponent(urlObj.pathname.substring(1));
+        // remove starting "/"
+    } catch (err) {
+        return null;
+    }
+}
+
 exports.deleteChats = async (req, res) => {
     try {
         const userId = req.user._id;
         const { conversationIds } = req.body;
+
+        // ✅ 1. Fetch messages FIRST
+        const messages = await WhatsAppMessage.find({
+            userId,
+            conversationId: { $in: conversationIds },
+        });
+
+        let s3Urls = [];
+
+        // ✅ 2. Extract ALL possible S3 URLs
+        messages.forEach(msg => {
+
+            // 🔹 NORMAL MEDIA (incoming/outgoing)
+            if (msg.content?.mediaUrl) {
+                s3Urls.push(msg.content.mediaUrl);
+            }
+
+            if (msg.content?.thumbnailUrl) {
+                s3Urls.push(msg.content.thumbnailUrl);
+            }
+
+            // 🔹 YOUR CUSTOM FIELD
+            if (msg.s3dataurl) {
+                s3Urls.push(msg.s3dataurl);
+            }
+
+            // 🔥🔥🔥 TEMPLATE MEDIA (IMPORTANT)
+            if (msg.content?.template?.components?.length) {
+
+                msg.content.template.components.forEach(comp => {
+
+                    // Case 1: media.s3Url (your DB structure)
+                    if (comp.media?.s3Url) {
+                        s3Urls.push(comp.media.s3Url);
+                    }
+
+                    // Case 2: HEADER IMAGE/VIDEO/DOCUMENT
+                    if (comp.parameters?.length) {
+                        comp.parameters.forEach(param => {
+
+                            if (param.image?.link) {
+                                s3Urls.push(param.image.link);
+                            }
+
+                            if (param.video?.link) {
+                                s3Urls.push(param.video.link);
+                            }
+
+                            if (param.document?.link) {
+                                s3Urls.push(param.document.link);
+                            }
+
+                        });
+                    }
+
+                });
+            }
+
+        });
+
+        // ✅ 3. REMOVE DUPLICATES (VERY IMPORTANT)
+        s3Urls = [...new Set(s3Urls)];
+
+        // ✅ 4. DELETE FROM S3
+        await Promise.all(
+            s3Urls.map(async (url) => {
+                const key = getKeyFromS3Url(url);
+                if (!key) return;
+
+                try {
+                    await s3.send(
+                        new DeleteObjectCommand({
+                            Bucket: process.env.AWS_BUCKET_NAME_WABA,
+                            Key: key,
+                        })
+                    );
+                } catch (err) {
+                    console.error("S3 delete failed:", key);
+                }
+            })
+        );
+
+        // ✅ 5. DELETE MONGODB DATA
         await WhatsAppMessage.deleteMany({
             userId,
             conversationId: { $in: conversationIds },
         });
-        res.json({
-            status: "success",
-            message: "Chats deleted successfully",
+
+        return res.json({
+            success: true,
+            message: "Chats + all media deleted successfully",
         });
+
     } catch (error) {
-        res.status(500).json({
+        console.error(error);
+        return res.status(500).json({
             success: false,
             message: "Failed to delete conversations",
         });
     }
 };
+
+// exports.deleteChats = async (req, res) => {
+//     try {
+//         const userId = req.user._id;
+//         const { conversationIds } = req.body;
+//         await WhatsAppMessage.deleteMany({
+//             userId,
+//             conversationId: { $in: conversationIds },
+//         });
+//         res.json({
+//             status: "success",
+//             message: "Chats deleted successfully",
+//         });
+//     } catch (error) {
+//         res.status(500).json({
+//             success: false,
+//             message: "Failed to delete conversations",
+//         });
+//     }
+// };
 
 exports.manageWabaAssignment = async (req, res) => {
     try {
