@@ -82,6 +82,13 @@ const superadmin = require("./routes/admin/superAdminRoutes");
 const planAdminRoutes = require("./routes/admin/planAdminRoutes");
 const couponAdminRoutes = require("./routes/admin/couponAdminRoutes");
 const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
+const apiLogsRoutes = require("./routes/admin/apiLogsRoutes");
+const userSessionsRoutes = require("./routes/admin/userSessionsRoutes");
+const { saveUserSession } = require("./controllers/admin/userSessionsController");
+const userActivityRoutes = require("./routes/admin/userActivityRoutes");
+const { savePageView } = require("./controllers/admin/userActivityController");
+const { downloadBackup, listCollections, downloadCollection, downloadMongodump } = require("./controllers/admin/backupController");
+const apiLoggerMiddleware = require("./middlewares/apiLogger");
 // const chatAgentRoutes = require("./routes/chatAgentRoutes");
 // const initGraphQL = require("./graphql");
 
@@ -96,6 +103,7 @@ app.post(
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(apiLoggerMiddleware);
 
 app.use(express.static(path.resolve("./public")));
 app.use("/user", userRoutes);
@@ -276,6 +284,34 @@ app.use(
   checkRole(["superadmin"]),
   couponAdminRoutes
 );
+app.use(
+  "/superAdmin/api-logs",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  apiLogsRoutes
+);
+app.use(
+  "/superAdmin/user-sessions",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  userSessionsRoutes
+);
+// Any logged-in user records their own session on login
+app.post("/user-session/save", checkForAuthentication(), saveUserSession);
+// Any logged-in user records page views
+app.post("/user-activity/pageview", checkForAuthentication(), savePageView);
+app.use(
+  "/superAdmin/user-activity",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  userActivityRoutes
+);
+
+// Database backup (superAdmin only)
+app.get("/superAdmin/backup/download",           checkForAuthentication(), checkRole(["superadmin"]), downloadBackup);
+app.get("/superAdmin/backup/mongodump",          checkForAuthentication(), checkRole(["superadmin"]), downloadMongodump);
+app.get("/superAdmin/backup/collections",        checkForAuthentication(), checkRole(["superadmin"]), listCollections);
+app.get("/superAdmin/backup/collection/:name",   checkForAuthentication(), checkRole(["superadmin"]), downloadCollection);
 
 // Billing & subscription (companyAdmin only)
 app.use(

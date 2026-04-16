@@ -51,7 +51,7 @@ const checkForAuthentication = () => {
     try {
       const payload = validateToken(token);
 
-      const user = await User.findById(payload._id).select("activeSessions activeSessionId firstname lastname role createdByWhichCompanyAdmin");
+      const user = await User.findById(payload._id).select("activeSessions activeSessionId firstname lastname email role createdByWhichCompanyAdmin");
 
       if (!user) {
         return res.status(401).json({ message: "Unauthorized: User not found" });

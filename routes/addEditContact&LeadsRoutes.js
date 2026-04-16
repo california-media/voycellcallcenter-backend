@@ -19,9 +19,9 @@ const router = Router();
 
 // Use .single("contactImage") to handle multipart/form-data uploads
 router.post("/", upload.single("contactImage"), checkAccountStatus, addEditContactisLeads);
-router.post("/delete", checkAccountStatus, deleteContactOrLead);
+router.delete("/delete", checkAccountStatus, deleteContactOrLead);
 router.put("/toggle-favorite", checkAccountStatus, toggleContactFavorite);
-router.post("/batch-delete", checkAccountStatus, batchDeleteContacts);
+router.delete("/batch-delete", checkAccountStatus, batchDeleteContacts);
 router.put("/update-first-contact", checkAccountStatus, updateFirstPhoneOrEmail);
 router.post("/assignedContactLeadToAgent", checkAccountStatus, assignContactOrLead);
 router.put(
