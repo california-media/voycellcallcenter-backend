@@ -5,7 +5,10 @@ const WabaTemplate = require("../models/wabaTemplateModel");
 const Contact = require("../models/contactModel");
 const Lead = require("../models/leadModel");
 const whatsappMessage = require("../models/whatsappMessage");
-const { createCampaignSchedule } = require("../services/awsScheduler");
+const {
+    createCampaignSchedule,
+    deleteCampaignSchedule // ✅ ADD
+} = require("../services/awsScheduler");
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -120,7 +123,7 @@ const buildTemplateComponents = (
         });
     }
 
-    if(header?.format === "TEXT" && header.text){
+    if (header?.format === "TEXT" && header.text) {
 
         components.push({
             type: "header",
@@ -131,7 +134,7 @@ const buildTemplateComponents = (
         });
     }
 
-    if(header?.format === "VIDEO" && header.media?.s3Url){
+    if (header?.format === "VIDEO" && header.media?.s3Url) {
 
         components.push({
             type: "header",
@@ -144,7 +147,7 @@ const buildTemplateComponents = (
         });
     }
 
-    if(header?.format === "DOCUMENT" && header.media?.s3Url) {
+    if (header?.format === "DOCUMENT" && header.media?.s3Url) {
 
         components.push({
             type: "header",
@@ -414,6 +417,13 @@ exports.sendScheduledCampaignService =
                     chatName: r.chatName || r.to
                 }));
             await user.save();
+            // ✅ DELETE AWS SCHEDULE AFTER SUCCESS
+            // await deleteCampaignSchedule(campaignId.toString());
+            const successCount = results.filter(r => r.success).length;
+
+            if (successCount > 0) {
+                await deleteCampaignSchedule(campaignId.toString());
+            }
         }
 
         return {
