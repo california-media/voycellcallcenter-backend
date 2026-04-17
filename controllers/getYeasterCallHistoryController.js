@@ -1680,32 +1680,42 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     }
 
     // ------------------------------
-    // DATE RANGE: TODAY → LAST 30 DAYS
+    // DATE RANGE: DYNAMIC (from query) OR LAST 30 DAYS
     // ------------------------------
 
     const today = new Date();
 
-    const endDate = new Date(
-      Date.UTC(
-        today.getUTCFullYear(),
-        today.getUTCMonth(),
-        today.getUTCDate() + 1, // next day at 00:00
-        0,
-        0,
-        0,
-      ),
-    );
+    let startDate, endDate;
 
-    const startDate = new Date(
-      Date.UTC(
-        today.getUTCFullYear(),
-        today.getUTCMonth(),
-        today.getUTCDate() - 29,
-        0,
-        0,
-        0,
-      ),
-    );
+    if (req.query.startDate && req.query.endDate) {
+      const [sy, sm, sd] = req.query.startDate.split("-").map(Number);
+      const [ey, em, ed] = req.query.endDate.split("-").map(Number);
+      startDate = new Date(Date.UTC(sy, sm - 1, sd, 0, 0, 0));
+      endDate = new Date(Date.UTC(ey, em - 1, ed + 1, 0, 0, 0));
+    } else {
+      endDate = new Date(
+        Date.UTC(
+          today.getUTCFullYear(),
+          today.getUTCMonth(),
+          today.getUTCDate() + 1, // next day at 00:00
+          0,
+          0,
+          0,
+        ),
+      );
+      startDate = new Date(
+        Date.UTC(
+          today.getUTCFullYear(),
+          today.getUTCMonth(),
+          today.getUTCDate() - 29,
+          0,
+          0,
+          0,
+        ),
+      );
+    }
+
+    const numDays = Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)));
 
     // ------------------------------
     // FETCH CALLS
@@ -1769,19 +1779,12 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     };
 
     // ------------------------------
-    // BUILD EMPTY LAST-30-DAYS ARRAY
+    // BUILD EMPTY DAY ARRAY (forward order: earliest first)
     // ------------------------------
     const daysArray = [];
 
-    for (let i = 0; i < 30; i++) {
-      const d = new Date(
-        Date.UTC(
-          today.getUTCFullYear(),
-          today.getUTCMonth(),
-          today.getUTCDate() - i,
-        ),
-      );
-
+    for (let i = 0; i < numDays; i++) {
+      const d = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
       daysArray.push({
         date: formatDate(d),
         inbound: 0,
@@ -1797,9 +1800,9 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
         call.start_time.replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$1-$2"),
       );
 
-      const diffDays = Math.floor((endDate - d) / (1000 * 60 * 60 * 24));
+      const diffDays = Math.floor((d - startDate) / (1000 * 60 * 60 * 24));
 
-      if (diffDays >= 0 && diffDays < 30) {
+      if (diffDays >= 0 && diffDays < numDays) {
         if (call.direction === "Inbound") {
           daysArray[diffDays].inbound++;
         } else if (call.direction === "Outbound") {
@@ -1811,13 +1814,14 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     // ------------------------------
     // SEND FINAL RESULT
     // ------------------------------
+    const rangeEnd = new Date(endDate.getTime() - 24 * 60 * 60 * 1000); // subtract 1 day added for exclusive upper bound
     return res.json({
       status: "success",
       range: {
         start: formatDate(startDate),
-        end: formatDate(today),
+        end: formatDate(rangeEnd),
       },
-      days: daysArray.reverse(), // earliest → latest
+      days: daysArray, // already earliest → latest
     });
   } catch (error) {
     return res.status(500).json({

@@ -312,7 +312,6 @@ const subscribeToPlan = async (req, res) => {
       couponCode: appliedCouponCode,
       stripeCouponId: couponId,
     });
-
     // Only mark user as active once payment is confirmed (webhook or confirmCardPayment)
     // For now set to "active" optimistically — webhook will correct if needed
     await User.findByIdAndUpdate(user._id, {
