@@ -47,11 +47,12 @@ const createPlan = async (req, res) => {
     // Enterprise plans have no pricing — skip Stripe product/price creation
     const pricingResult = {};
     if (!isEnterprise) {
-      const periods = ["monthly", "quarterly", "yearly"];
+      const periods = ["monthly", "quarterly", "semiannual", "yearly"];
       const intervalConfig = {
-        monthly:   { interval: "month", intervalCount: 1 },
-        quarterly: { interval: "month", intervalCount: 3 },
-        yearly:    { interval: "year",  intervalCount: 1 },
+        monthly:    { interval: "month", intervalCount: 1 },
+        quarterly:  { interval: "month", intervalCount: 3 },
+        semiannual: { interval: "month", intervalCount: 6 },
+        yearly:     { interval: "year",  intervalCount: 1 },
       };
 
       for (const period of periods) {
@@ -85,7 +86,7 @@ const createPlan = async (req, res) => {
       }
     } else {
       // Enterprise: no pricing stored
-      ["monthly", "quarterly", "yearly"].forEach((period) => {
+      ["monthly", "quarterly", "semiannual", "yearly"].forEach((period) => {
         pricingResult[period] = { price: 0, discountPercent: 0, stripeProductId: null, stripePriceId: null };
       });
     }
@@ -124,11 +125,12 @@ const updatePlan = async (req, res) => {
     const plan = await Plan.findOne({ _id: planId, isDeleted: false });
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
 
-    const periods = ["monthly", "quarterly", "yearly"];
+    const periods = ["monthly", "quarterly", "semiannual", "yearly"];
     const intervalConfig = {
-      monthly:   { interval: "month", intervalCount: 1 },
-      quarterly: { interval: "month", intervalCount: 3 },
-      yearly:    { interval: "year",  intervalCount: 1 },
+      monthly:    { interval: "month", intervalCount: 1 },
+      quarterly:  { interval: "month", intervalCount: 3 },
+      semiannual: { interval: "month", intervalCount: 6 },
+      yearly:     { interval: "year",  intervalCount: 1 },
     };
 
     if (pricing) {
@@ -384,15 +386,38 @@ const cancelUserSubscription = async (req, res) => {
 // ─── Update Global Trial Period ───────────────────────────────────────────────
 const getGlobalConfig = async (req, res) => {
   try {
-    const admin = await User.findById(req.user._id).select("trialDurationDays emailReminderDays").lean();
+    const admin = await User.findById(req.user._id).select("trialDurationDays emailReminderDays activeBillingPeriods").lean();
     res.json({
       success: true,
       defaultTrialDays: admin?.trialDurationDays ?? 7,
       defaultEmailReminderDays: admin?.emailReminderDays ?? [7, 3, 1],
+      activePeriods: admin?.activeBillingPeriods?.length
+        ? admin.activeBillingPeriods
+        : ["monthly", "quarterly", "semiannual", "yearly"],
     });
   } catch (err) {
     console.error("getGlobalConfig error:", err);
     res.status(500).json({ success: false, message: "Failed to fetch config" });
+  }
+};
+
+// ─── Update Active Billing Periods ────────────────────────────────────────────
+const updateActivePeriods = async (req, res) => {
+  try {
+    const { periods } = req.body;
+    if (!Array.isArray(periods) || periods.length === 0) {
+      return res.status(400).json({ success: false, message: "At least one billing period is required" });
+    }
+    const valid = ["monthly", "quarterly", "semiannual", "yearly"];
+    const filtered = periods.filter((p) => valid.includes(p));
+    if (filtered.length === 0) {
+      return res.status(400).json({ success: false, message: "No valid periods provided" });
+    }
+    await User.findByIdAndUpdate(req.user._id, { activeBillingPeriods: filtered });
+    res.json({ success: true, message: "Billing periods updated", activePeriods: filtered });
+  } catch (err) {
+    console.error("updateActivePeriods error:", err);
+    res.status(500).json({ success: false, message: "Failed to update billing periods" });
   }
 };
 
@@ -538,4 +563,5 @@ module.exports = {
   triggerReminderEmails,
   pauseUserAccess,
   resumeUserAccess,
+  updateActivePeriods,
 };

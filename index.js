@@ -72,6 +72,7 @@ const hubspotAuthRoutes = require("./routes/hubspot.routes");
 const pipedriveAuthRoutes = require("./routes/pipedrive.routes");
 const billingRoutes = require("./routes/billingRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const dashboardStatsRoutes = require("./routes/dashboardStatsRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -170,6 +171,7 @@ app.use("/task", checkForAuthentication(), addeditTaskRoutes);
 app.use("/tag", checkForAuthentication(), addedittagRoutes);
 app.use("/meeting", checkForAuthentication(), meetingRoutes);
 app.use("/getProfileEvent", checkForAuthentication(), getProfileEventRoutes);
+app.use("/dashboard", checkForAuthentication(), dashboardStatsRoutes);
 app.use("/addEditTemplete", checkForAuthentication(), addEditTempleteRoutes);
 app.use("/faq", checkForAuthentication(), faqRoutes);
 // app.use("/chatAgent", checkForAuthentication(), chatAgentRoutes);

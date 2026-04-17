@@ -270,7 +270,11 @@ const userSchema = new Schema(
     trialEndsAt: { type: Date, default: null },
     trialDurationDays: { type: Number, default: 7 },
     emailReminderDays: { type: [Number], default: [7, 3, 1] },
+    activeBillingPeriods: { type: [String], default: ["monthly", "quarterly", "semiannual", "yearly"] },
     reminderEmailsSent: { type: [String], default: [] }, // e.g. ["trial_3", "premium_7"]
+
+    // Setup guide dismissed (persisted so it survives cross-device logins)
+    setupGuideDismissed: { type: Boolean, default: false },
 
     // Admin-controlled access pause (works for both trial and paid plans)
     accessPausedByAdmin: { type: Boolean, default: false },

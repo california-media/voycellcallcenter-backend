@@ -39,9 +39,10 @@ const planSchema = new Schema(
     },
 
     pricing: {
-      monthly: { type: pricingTierSchema, default: () => ({ price: 0, discountPercent: 0 }) },
-      quarterly: { type: pricingTierSchema, default: () => ({ price: 0, discountPercent: 0 }) },
-      yearly: { type: pricingTierSchema, default: () => ({ price: 0, discountPercent: 0 }) },
+      monthly:    { type: pricingTierSchema, default: () => ({ price: 0, discountPercent: 0 }) },
+      quarterly:  { type: pricingTierSchema, default: () => ({ price: 0, discountPercent: 0 }) },
+      semiannual: { type: pricingTierSchema, default: () => ({ price: 0, discountPercent: 0 }) },
+      yearly:     { type: pricingTierSchema, default: () => ({ price: 0, discountPercent: 0 }) },
     },
 
     // Per-agent monthly price (set by superAdmin). Total = base + agentCount * agentPrice

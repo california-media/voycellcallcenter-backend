@@ -18,6 +18,7 @@ const {
   triggerReminderEmails,
   pauseUserAccess,
   resumeUserAccess,
+  updateActivePeriods,
 } = require("../../controllers/admin/planManagementController");
 
 // Global config
@@ -35,6 +36,9 @@ router.post("/subscription/resume", resumeUserSubscription);
 router.put("/subscription/pause/:userId", pauseUserSubscription);
 router.put("/subscription/resume/:userId", resumeUserSubscription);
 router.post("/subscription/cancel", cancelUserSubscription);
+
+// Billing period management
+router.put("/billing-periods", updateActivePeriods);
 
 // Trial period management
 router.put("/trial/global", updateGlobalTrialPeriod);

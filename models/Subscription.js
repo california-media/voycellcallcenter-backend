@@ -15,7 +15,7 @@ const subscriptionSchema = new Schema(
     },
     billingPeriod: {
       type: String,
-      enum: ["monthly", "quarterly", "yearly"],
+      enum: ["monthly", "quarterly", "semiannual", "yearly"],
       required: true,
     },
     status: {

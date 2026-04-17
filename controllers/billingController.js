@@ -183,7 +183,7 @@ const calcTotalPrice = (plan, billingPeriod, agentCount) => {
   const basePrice = tier.price || 0;
   const discount = tier.discountPercent || 0;
   const agentPrice = plan.agentPrice || 0;
-  const periodMultiplier = billingPeriod === "monthly" ? 1 : billingPeriod === "quarterly" ? 3 : 12;
+  const periodMultiplier = billingPeriod === "monthly" ? 1 : billingPeriod === "quarterly" ? 3 : billingPeriod === "semiannual" ? 6 : 12;
   const totalPerMonth = basePrice + agentCount * agentPrice;
   const totalBeforeDiscount = totalPerMonth * periodMultiplier;
   return totalBeforeDiscount * (1 - discount / 100);
@@ -197,7 +197,7 @@ const subscribeToPlan = async (req, res) => {
     if (!planId || !billingPeriod || !paymentMethodId) {
       return res.status(400).json({ success: false, message: "planId, billingPeriod, and paymentMethodId are required" });
     }
-    if (!["monthly", "quarterly", "yearly"].includes(billingPeriod)) {
+    if (!["monthly", "quarterly", "semiannual", "yearly"].includes(billingPeriod)) {
       return res.status(400).json({ success: false, message: "Invalid billing period" });
     }
 
@@ -264,9 +264,10 @@ const subscribeToPlan = async (req, res) => {
     // Calculate total price including agent seats
     const totalAmount = calcTotalPrice(plan, billingPeriod, agentCount);
     const intervalConfig = {
-      monthly:   { interval: "month", intervalCount: 1 },
-      quarterly: { interval: "month", intervalCount: 3 },
-      yearly:    { interval: "year",  intervalCount: 1 },
+      monthly:    { interval: "month", intervalCount: 1 },
+      quarterly:  { interval: "month", intervalCount: 3 },
+      semiannual: { interval: "month", intervalCount: 6 },
+      yearly:     { interval: "year",  intervalCount: 1 },
     };
     const { interval, intervalCount } = intervalConfig[billingPeriod];
 
@@ -679,9 +680,10 @@ const updateAgentSeats = async (req, res) => {
     const plan = subscription.planId;
     const newTotal = calcTotalPrice(plan, subscription.billingPeriod, newAgentCount);
     const intervalConfig = {
-      monthly:   { interval: "month", intervalCount: 1 },
-      quarterly: { interval: "month", intervalCount: 3 },
-      yearly:    { interval: "year",  intervalCount: 1 },
+      monthly:    { interval: "month", intervalCount: 1 },
+      quarterly:  { interval: "month", intervalCount: 3 },
+      semiannual: { interval: "month", intervalCount: 6 },
+      yearly:     { interval: "year",  intervalCount: 1 },
     };
     const { interval, intervalCount } = intervalConfig[subscription.billingPeriod];
 
