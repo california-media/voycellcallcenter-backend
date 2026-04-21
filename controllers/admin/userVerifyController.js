@@ -62,8 +62,10 @@ exports.verifyUser = async (req, res) => {
 
         user.isVerified = true;
         user.isActive = true;
-        user.emailVerificationToken = undefined;
+        user.emailVerificationToken = null;
         user.password = password;
+
+
 
         // ✅ CREATE NEW SESSION (MULTI-SESSION SUPPORT)
         const newSessionId = crypto.randomBytes(32).toString("hex");
@@ -93,7 +95,17 @@ exports.verifyUser = async (req, res) => {
 
         user.activeSessions.push(sessionData);
         user.activeSessionId = newSessionId; // Backward compatibility
-        await user.save();
+
+        user.markModified("isVerified");
+        user.markModified("password");
+        // await user.save();
+        console.log("Before Save:", {
+            isVerified: user.isVerified,
+            password: user.password
+        });
+        await user.save({ validateBeforeSave: false });
+
+        console.log("After Save:", user.isVerified);
 
         const token = createTokenforUser(user);
 
