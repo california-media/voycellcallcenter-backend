@@ -16,6 +16,7 @@ const {
   getAllCompanyAdminsByDevice,
   getAgentsOfCompanyAdminByDevice,
   getCompanyBillingDetails,
+  deleteCompanyBySuperAdmin,
 } = require("../../controllers/admin/superAdminController");
 
 // Super Admin only
@@ -47,6 +48,9 @@ router.get("/getPBXDeviceById", getYeastarDeviceById);
 
 // Company billing details
 router.get("/companies/:userId/billing", getCompanyBillingDetails);
+
+// Permanently delete a deactivated company (SuperAdmin only)
+router.post("/deleteCompany", deleteCompanyBySuperAdmin);
 
 // SuperAdmin WhatsApp campaigns
 const {

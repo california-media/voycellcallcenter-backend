@@ -224,6 +224,7 @@ const updateSubscriptionPlan = async (stripeSubscriptionId, newPriceId) => {
       },
     ],
     proration_behavior: "create_prorations",
+    expand: ["latest_invoice.lines"],  // expand so we can save the upgrade invoice immediately
   });
 };
 

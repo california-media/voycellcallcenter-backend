@@ -28,10 +28,22 @@ const getCurrentSubscription = async (req, res) => {
       status: { $in: ["trialing", "active", "paused"] },
     }).populate("planId");
 
+    // Derive effective planStatus from the live subscription rather than relying on
+    // the User.planStatus field, which may be stale (e.g. "cancelled" written before
+    // we stopped doing that, or out-of-sync after an admin action).
+    // Rule:
+    //   • Active subscription (even with cancelAtPeriodEnd) → "active"
+    //   • No subscription but user is on trial (and trial still valid) → "trial"
+    //   • Everything else → whatever is stored in User.planStatus
+    let effectivePlanStatus = user.planStatus;
+    if (subscription && ["active", "trialing", "paused"].includes(subscription.status)) {
+      effectivePlanStatus = "active";
+    }
+
     res.json({
       success: true,
       subscription: subscription || null,
-      planStatus: user.planStatus,
+      planStatus: effectivePlanStatus,
       trialEndsAt: user.trialEndsAt,
       trialStartedAt: user.trialStartedAt,
       trialDurationDays: user.trialDurationDays,
@@ -184,7 +196,10 @@ const calcTotalPrice = (plan, billingPeriod, agentCount) => {
   const discount = tier.discountPercent || 0;
   const agentPrice = plan.agentPrice || 0;
   const periodMultiplier = billingPeriod === "monthly" ? 1 : billingPeriod === "quarterly" ? 3 : billingPeriod === "semiannual" ? 6 : 12;
-  const totalPerMonth = basePrice + agentCount * agentPrice;
+  // agentCount is the TOTAL seats (1 is always included in basePrice).
+  // Only charge for seats beyond the first included one.
+  const extraAgents = Math.max(0, agentCount - 1);
+  const totalPerMonth = basePrice + extraAgents * agentPrice;
   const totalBeforeDiscount = totalPerMonth * periodMultiplier;
   return totalBeforeDiscount * (1 - discount / 100);
 };
@@ -211,14 +226,14 @@ const subscribeToPlan = async (req, res) => {
 
     const user = await User.findById(req.user._id);
 
-    // Check for existing subscription — cancel any stale incomplete ones, block truly active ones
+    // Check for existing subscription
     const existingSub = await Subscription.findOne({
       userId: user._id,
       status: { $in: ["active", "trialing", "paused", "incomplete"] },
     });
     if (existingSub) {
-      if (existingSub.status === "incomplete") {
-        // Previous payment was never confirmed — cancel it and allow fresh subscribe
+      if (existingSub.status === "incomplete" || existingSub.cancelAtPeriodEnd) {
+        // Incomplete (unpaid) or already scheduled to cancel — cancel it on Stripe immediately and clear from DB
         if (existingSub.stripeSubscriptionId) {
           try { await stripeService.cancelSubscription(existingSub.stripeSubscriptionId, false); } catch (_) {}
         }
@@ -419,14 +434,15 @@ const cancelSubscription = async (req, res) => {
     if (!subscription) return res.status(404).json({ success: false, message: "No active subscription found" });
 
     if (subscription.stripeSubscriptionId) {
-      await stripeService.cancelSubscription(subscription.stripeSubscriptionId, true); // cancel at period end
+      await stripeService.cancelSubscription(subscription.stripeSubscriptionId, true); // cancel at period end, NOT immediately
     }
 
+    // Mark as scheduled-for-cancellation but keep status "active" — user retains access until period end.
+    // planStatus stays "active" here; the Stripe webhook (customer.subscription.deleted) will
+    // flip it to "cancelled" when the billing period actually ends.
     subscription.cancelAtPeriodEnd = true;
     subscription.cancelledAt = new Date();
     await subscription.save();
-
-    await User.findByIdAndUpdate(userId, { planStatus: "cancelled" });
 
     res.json({ success: true, message: "Subscription will be cancelled at the end of the billing period" });
   } catch (err) {
@@ -447,9 +463,6 @@ const upgradePlan = async (req, res) => {
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
 
     const pricingTier = plan.pricing[billingPeriod];
-    if (!pricingTier?.stripePriceId) {
-      return res.status(400).json({ success: false, message: "Plan does not support the selected billing period" });
-    }
 
     const subscription = await Subscription.findOne({
       userId: req.user._id,
@@ -457,15 +470,59 @@ const upgradePlan = async (req, res) => {
     });
     if (!subscription) return res.status(404).json({ success: false, message: "No active subscription found to upgrade" });
 
-    if (subscription.stripeSubscriptionId) {
-      await stripeService.updateSubscriptionPlan(subscription.stripeSubscriptionId, pricingTier.stripePriceId);
+    // Only call Stripe if this subscription was created via Stripe AND the plan has a Stripe price
+    if (subscription.stripeSubscriptionId && pricingTier?.stripePriceId) {
+      const updatedStripeSub = await stripeService.updateSubscriptionPlan(
+        subscription.stripeSubscriptionId,
+        pricingTier.stripePriceId
+      );
+
+      // Save the proration/upgrade invoice immediately so it gets the NEW plan's ID,
+      // not the old one. Without this, syncStripeInvoices would stamp it with whatever
+      // plan is current at next getInvoices call — which is correct after this save,
+      // but we also want the old invoices untouched (handled by $setOnInsert in sync).
+      const latestInvoice = updatedStripeSub?.latest_invoice;
+      if (latestInvoice && typeof latestInvoice === "object" && latestInvoice.id) {
+        const lines = latestInvoice.lines?.data || [];
+        const mainLineItem =
+          lines.find((li) => !li.proration && (li.amount || 0) >= 0) ||
+          lines.find((li) => (li.amount || 0) >= 0) ||
+          lines[0];
+        const periodStart = mainLineItem?.period?.start ? new Date(mainLineItem.period.start * 1000) : null;
+        const periodEnd = mainLineItem?.period?.end ? new Date(mainLineItem.period.end * 1000) : null;
+
+        await Invoice.findOneAndUpdate(
+          { stripeInvoiceId: latestInvoice.id },
+          {
+            $set: {
+              userId: req.user._id,
+              subscriptionId: subscription._id,
+              planId: plan._id,              // ← NEW plan, written immediately
+              stripeInvoiceId: latestInvoice.id,
+              stripeCustomerId: subscription.stripeCustomerId,
+              stripeChargeId: latestInvoice.charge || null,
+              invoiceNumber: latestInvoice.number || null,
+              amount: latestInvoice.amount_due,
+              amountPaid: latestInvoice.amount_paid,
+              currency: latestInvoice.currency || "usd",
+              status: latestInvoice.status,
+              invoicePdf: latestInvoice.invoice_pdf || null,
+              hostedInvoiceUrl: latestInvoice.hosted_invoice_url || null,
+              billingPeriodStart: periodStart,
+              billingPeriodEnd: periodEnd,
+              stripeCreatedAt: latestInvoice.created ? new Date(latestInvoice.created * 1000) : new Date(),
+            },
+          },
+          { upsert: true, new: true }
+        );
+      }
     }
 
     subscription.planId = plan._id;
     subscription.billingPeriod = billingPeriod;
     await subscription.save();
 
-    res.json({ success: true, message: "Subscription upgraded successfully", subscription });
+    res.json({ success: true, message: "Plan changed successfully", subscription });
   } catch (err) {
     console.error("upgradePlan error:", err);
     res.status(500).json({ success: false, message: err.message || "Failed to upgrade subscription" });
@@ -491,34 +548,51 @@ const syncStripeInvoices = async (userId, stripeCustomerId) => {
     }
     for (const si of allInvoices) {
       if (si.status === "draft") continue;
-      // Use line item period for accurate subscription start/end dates
-      const lineItem = si.lines?.data?.[0];
-      const periodStart = lineItem?.period?.start
-        ? new Date(lineItem.period.start * 1000)
+
+      // Pick the main (non-proration, positive) line item for the billing period.
+      // Proration invoices have multiple line items: the positive one is the new plan charge
+      // and the negative one is the credit for unused time on the old plan.
+      // We want the new plan's period, not the credit period.
+      const lines = si.lines?.data || [];
+      const mainLineItem =
+        lines.find((li) => !li.proration && (li.amount || 0) >= 0) ||
+        lines.find((li) => (li.amount || 0) >= 0) ||
+        lines[0];
+
+      const periodStart = mainLineItem?.period?.start
+        ? new Date(mainLineItem.period.start * 1000)
         : (si.period_start ? new Date(si.period_start * 1000) : null);
-      const periodEnd = lineItem?.period?.end
-        ? new Date(lineItem.period.end * 1000)
+      const periodEnd = mainLineItem?.period?.end
+        ? new Date(mainLineItem.period.end * 1000)
         : (si.period_end ? new Date(si.period_end * 1000) : null);
 
       await Invoice.findOneAndUpdate(
         { stripeInvoiceId: si.id },
         {
-          userId,
-          subscriptionId: subscription?._id || null,
-          planId: subscription?.planId || null,
-          stripeInvoiceId: si.id,
-          stripeCustomerId,
-          stripeChargeId: si.charge || null,
-          invoiceNumber: si.number || null,
-          amount: si.amount_due,
-          amountPaid: si.amount_paid,
-          currency: si.currency,
-          status: si.status,
-          invoicePdf: si.invoice_pdf || null,
-          hostedInvoiceUrl: si.hosted_invoice_url || null,
-          billingPeriodStart: periodStart,
-          billingPeriodEnd: periodEnd,
-          stripeCreatedAt: si.created ? new Date(si.created * 1000) : null,
+          // Always update these — they can change (payment status, PDF link, etc.)
+          $set: {
+            userId,
+            subscriptionId: subscription?._id || null,
+            stripeInvoiceId: si.id,
+            stripeCustomerId,
+            stripeChargeId: si.charge || null,
+            invoiceNumber: si.number || null,
+            amount: si.amount_due,
+            amountPaid: si.amount_paid,
+            currency: si.currency,
+            status: si.status,
+            invoicePdf: si.invoice_pdf || null,
+            hostedInvoiceUrl: si.hosted_invoice_url || null,
+            billingPeriodStart: periodStart,
+            billingPeriodEnd: periodEnd,
+            stripeCreatedAt: si.created ? new Date(si.created * 1000) : null,
+          },
+          // planId is written ONLY when creating a new invoice document.
+          // Never overwrite it on existing records — that would stamp the CURRENT
+          // plan onto historical invoices after an upgrade.
+          $setOnInsert: {
+            planId: subscription?.planId || null,
+          },
         },
         { upsert: true, new: true }
       );

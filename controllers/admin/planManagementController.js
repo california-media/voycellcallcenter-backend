@@ -58,22 +58,30 @@ const createPlan = async (req, res) => {
       for (const period of periods) {
         const tier = pricing?.[period];
         if (tier && tier.price > 0) {
-          const product = await stripeService.createStripeProduct(
-            `${name} - ${period.charAt(0).toUpperCase() + period.slice(1)}`,
-            description
-          );
-          const cfg = intervalConfig[period];
-          const price = await stripeService.createStripePrice(
-            product.id,
-            tier.price,
-            cfg.interval,
-            cfg.intervalCount
-          );
+          let stripeProductId = null;
+          let stripePriceId = null;
+          try {
+            const product = await stripeService.createStripeProduct(
+              `${name} - ${period.charAt(0).toUpperCase() + period.slice(1)}`,
+              description
+            );
+            const cfg = intervalConfig[period];
+            const price = await stripeService.createStripePrice(
+              product.id,
+              tier.price,
+              cfg.interval,
+              cfg.intervalCount
+            );
+            stripeProductId = product.id;
+            stripePriceId = price.id;
+          } catch (stripeErr) {
+            console.error(`Stripe setup failed for ${period} (plan will save without Stripe IDs):`, stripeErr.message);
+          }
           pricingResult[period] = {
             price: tier.price,
             discountPercent: tier.discountPercent || 0,
-            stripeProductId: product.id,
-            stripePriceId: price.id,
+            stripeProductId,
+            stripePriceId,
           };
         } else {
           pricingResult[period] = {
@@ -139,30 +147,41 @@ const updatePlan = async (req, res) => {
         if (!newTier) continue;
         const existingTier = plan.pricing[period];
 
-        // If price changed, create a new Stripe price (old one stays active for existing subs)
-        if (newTier.price > 0 && newTier.price !== existingTier?.price) {
+        // If price set to 0 — disable this period
+        if (newTier.price === 0) {
+          plan.pricing[period].price = 0;
+          plan.pricing[period].discountPercent = newTier.discountPercent ?? 0;
+        // If price changed to a new non-zero value — create a new Stripe price
+        } else if (newTier.price !== existingTier?.price) {
           let productId = existingTier?.stripeProductId;
-          if (!productId) {
-            const product = await stripeService.createStripeProduct(
-              `${name || plan.name} - ${period.charAt(0).toUpperCase() + period.slice(1)}`,
-              description || plan.description
-            );
-            productId = product.id;
+          let stripePriceId = null;
+          try {
+            if (!productId) {
+              const product = await stripeService.createStripeProduct(
+                `${name || plan.name} - ${period.charAt(0).toUpperCase() + period.slice(1)}`,
+                description || plan.description
+              );
+              productId = product.id;
+            }
+            if (existingTier?.stripePriceId) {
+              await stripeService.deactivateStripePrice(existingTier.stripePriceId);
+            }
+            const cfg = intervalConfig[period];
+            const newPrice = await stripeService.createStripePrice(productId, newTier.price, cfg.interval, cfg.intervalCount);
+            stripePriceId = newPrice.id;
+          } catch (stripeErr) {
+            console.error(`Stripe update failed for ${period} (saving price without Stripe IDs):`, stripeErr.message);
+            productId = existingTier?.stripeProductId || null;
           }
-          // Deactivate old price
-          if (existingTier?.stripePriceId) {
-            await stripeService.deactivateStripePrice(existingTier.stripePriceId);
-          }
-          const cfg = intervalConfig[period];
-          const newPrice = await stripeService.createStripePrice(productId, newTier.price, cfg.interval, cfg.intervalCount);
           plan.pricing[period] = {
             price: newTier.price,
-            discountPercent: newTier.discountPercent || 0,
+            discountPercent: newTier.discountPercent ?? 0,
             stripeProductId: productId,
-            stripePriceId: newPrice.id,
+            stripePriceId,
           };
         } else {
-          plan.pricing[period].discountPercent = newTier.discountPercent || plan.pricing[period].discountPercent;
+          // Same price — only update discountPercent
+          plan.pricing[period].discountPercent = newTier.discountPercent ?? plan.pricing[period].discountPercent;
         }
       }
     }
@@ -545,6 +564,73 @@ const resumeUserAccess = async (req, res) => {
   }
 };
 
+// ─── Search Users (for assign plan modal) ────────────────────────────────────
+const searchUsers = async (req, res) => {
+  try {
+    const { q = "" } = req.query;
+    const regex = new RegExp(q.trim(), "i");
+    const users = await User.find({
+      role: "companyAdmin",
+      isDeleted: { $ne: true },
+      $or: [{ email: regex }, { firstname: regex }, { lastname: regex }],
+    })
+      .select("_id firstname lastname email planStatus")
+      .limit(20)
+      .lean();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Search failed" });
+  }
+};
+
+// ─── Assign Plan to User (admin override, no Stripe) ─────────────────────────
+const assignPlanToUser = async (req, res) => {
+  try {
+    const { userId, planId, billingPeriod } = req.body;
+    if (!userId || !planId || !billingPeriod) {
+      return res.status(400).json({ success: false, message: "userId, planId and billingPeriod are required" });
+    }
+
+    const [user, plan] = await Promise.all([
+      User.findById(userId),
+      Plan.findById(planId),
+    ]);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
+
+    const now = new Date();
+    const months = { monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 }[billingPeriod] || 1;
+    const periodEnd = new Date(now);
+    periodEnd.setMonth(periodEnd.getMonth() + months);
+
+    // Cancel any existing active subscription
+    await Subscription.updateMany(
+      { userId, status: { $in: ["active", "trialing", "paused"] } },
+      { $set: { status: "cancelled", cancelledAt: now } }
+    );
+
+    // Create new admin-assigned subscription (no Stripe IDs)
+    const sub = await Subscription.create({
+      userId,
+      planId,
+      billingPeriod,
+      status: "active",
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+    });
+
+    // Update user's plan status
+    user.planStatus = "active";
+    user.currentSubscriptionId = sub._id;
+    await user.save();
+
+    res.json({ success: true, message: `Plan assigned to ${user.email}`, subscription: sub });
+  } catch (err) {
+    console.error("assignPlanToUser error:", err);
+    res.status(500).json({ success: false, message: "Failed to assign plan" });
+  }
+};
+
 module.exports = {
   getAllPlans,
   createPlan,
@@ -552,6 +638,8 @@ module.exports = {
   deletePlan,
   togglePlanStatus,
   reorderPlans,
+  assignPlanToUser,
+  searchUsers,
   updateCommonFeatures,
   pauseUserSubscription,
   resumeUserSubscription,
@@ -564,4 +652,6 @@ module.exports = {
   pauseUserAccess,
   resumeUserAccess,
   updateActivePeriods,
+  assignPlanToUser,
+  searchUsers,
 };

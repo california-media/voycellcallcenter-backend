@@ -60,7 +60,8 @@ exports.verifyUser = async (req, res) => {
             });
         }
 
-        user.isVerified = true;
+        // Only mark emailVerified here — isVerified is set separately once mobile is also verified
+        user.emailVerified = true;
         user.isActive = true;
         user.emailVerificationToken = undefined;
         user.password = password;

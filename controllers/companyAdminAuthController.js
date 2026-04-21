@@ -196,7 +196,8 @@ const signupWithEmail = async (req, res) => {
         });
       }
 
-      user.isVerified = true;
+      // Only mark emailVerified here — isVerified is set separately once mobile is also verified
+      user.emailVerified = true;
       user.emailVerificationToken = undefined;
 
       if (!user.signupMethod) {
@@ -655,6 +656,8 @@ const verifyRealPhoneNumber = async (req, res) => {
         isVerified: true,
       });
     }
+
+    user.isVerified = true;
 
     // clear otp
     user.otp = undefined;

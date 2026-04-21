@@ -19,6 +19,8 @@ const {
   pauseUserAccess,
   resumeUserAccess,
   updateActivePeriods,
+  assignPlanToUser,
+  searchUsers,
 } = require("../../controllers/admin/planManagementController");
 
 // Global config
@@ -51,6 +53,10 @@ router.post("/email-reminders/trigger", triggerReminderEmails);
 // Admin-controlled access pause (works for trial and paid plans)
 router.post("/access/pause", pauseUserAccess);
 router.post("/access/resume", resumeUserAccess);
+
+// Assign plan to user (admin override)
+router.get("/users/search", searchUsers);
+router.post("/assign-user", assignPlanToUser);
 
 // Wildcard plan routes — must come AFTER all specific PUT routes
 router.put("/:planId", updatePlan);

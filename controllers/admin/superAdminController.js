@@ -123,11 +123,39 @@ exports.getAllCompanyAdmins = async (req, res) => {
       ];
     }
 
+    // 🔍 STEP 2b: Apply additional filters from request body
+    const { accountStatus, extensionStatus, deviceId, planStatus, accessPaused, startDate, endDate } = req.body;
+
+    if (accountStatus && accountStatus !== "all") {
+      companyAdminQuery.accountStatus = accountStatus;
+    }
+    if (extensionStatus !== undefined && extensionStatus !== null) {
+      companyAdminQuery.extensionStatus = extensionStatus === true || extensionStatus === "true";
+    }
+    if (deviceId && deviceId !== "all") {
+      companyAdminQuery["PBXDetails.assignedDeviceId"] = deviceId;
+    }
+    if (planStatus && planStatus !== "all") {
+      companyAdminQuery.planStatus = planStatus;
+    }
+    if (accessPaused !== undefined && accessPaused !== null) {
+      companyAdminQuery.accessPausedByAdmin = accessPaused === true || accessPaused === "true";
+    }
+    if (startDate || endDate) {
+      companyAdminQuery.createdAt = {};
+      if (startDate) companyAdminQuery.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        companyAdminQuery.createdAt.$lte = end;
+      }
+    }
+
     // 🔍 STEP 3: Fetch company admins
     const [companyAdmins, totalAdmins] = await Promise.all([
       User.find(companyAdminQuery)
         .select(
-          "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialStartedAt trialEndsAt trialDurationDays accessPausedByAdmin accessPausedAt"
+          "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialStartedAt trialEndsAt trialDurationDays accessPausedByAdmin accessPausedAt isVerified emailVerified"
         )
         .skip(skip)
         .limit(limit)
@@ -429,6 +457,7 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
       assignedDeviceId,
       PBX_EXTENSION_ID,
       PBX_SIP_SECRET,
+      companyName,
     } = req.body;
 
     const PBX_EXTENSION_NUMBER = extensionNumber;
@@ -666,8 +695,13 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     }
 
     if (status !== undefined)
-      updateData.extensionStatus = status === true || status === "active" || status === "Active"
+      updateData.extensionStatus = status === true || status === "active" || status === "Active";
     // isActivating ? true : false;
+
+    // ✏️ COMPANY NAME UPDATE
+    if (companyName !== undefined && companyName !== null && companyName.trim() !== "") {
+      updateData["userInfo.companyName"] = companyName.trim();
+    }
 
     if (user.pendingEmailChange) {
       updateData.pendingEmailChange =
@@ -1410,5 +1444,43 @@ exports.getCompanyBillingDetails = async (req, res) => {
   } catch (err) {
     console.error("getCompanyBillingDetails error:", err);
     res.status(500).json({ success: false, message: "Failed to fetch billing details" });
+  }
+};
+
+// ─── Permanently Delete a Deactivated Company (SuperAdmin only) ───────────────
+exports.deleteCompanyBySuperAdmin = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+
+    const company = await User.findById(userId);
+    if (!company) {
+      return res.status(404).json({ error: "Company not found" });
+    }
+
+    if (company.role !== "companyAdmin") {
+      return res.status(400).json({ error: "Only company admins can be deleted this way" });
+    }
+
+    if (company.accountStatus === "active") {
+      return res.status(400).json({ error: "Cannot delete an active company. Suspend it first." });
+    }
+
+    // Hard delete all agents of this company admin
+    await User.deleteMany({ createdByWhichCompanyAdmin: userId });
+
+    // Hard delete the company admin
+    await User.findByIdAndDelete(userId);
+
+    return res.status(200).json({
+      status: "success",
+      message: "Company and all associated agents permanently deleted",
+    });
+  } catch (error) {
+    console.error("deleteCompanyBySuperAdmin error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };

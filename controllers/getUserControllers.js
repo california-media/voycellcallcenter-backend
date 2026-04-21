@@ -1,7 +1,20 @@
 const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
 const Contact = require("../models/contactModel");
+const Subscription = require("../models/Subscription");
 const mongoose = require("mongoose");
+
+// Derive effective planStatus — if the stored value is "cancelled" but the user still
+// has a running subscription (even one scheduled to cancel at period end), return "active".
+// This prevents users being locked out during their remaining paid period.
+const getEffectivePlanStatus = async (userId, storedPlanStatus) => {
+  if (storedPlanStatus !== "cancelled") return storedPlanStatus || "none";
+  const activeSub = await Subscription.findOne({
+    userId,
+    status: { $in: ["active", "trialing", "paused"] },
+  }).select("_id").lean();
+  return activeSub ? "active" : storedPlanStatus;
+};
 
 const getUserData = async (req, res) => {
   try {
@@ -253,7 +266,7 @@ const getUserData = async (req, res) => {
           leadStatuses: user.leadStatuses || [],
           setupGuideDismissed: user.setupGuideDismissed || false,
           accountStatus: user.accountStatus === "active",
-          planStatus: user.planStatus || "none",
+          planStatus: await getEffectivePlanStatus(user._id, user.planStatus),
           trialStartedAt: user.trialStartedAt || null,
           trialEndsAt: user.trialEndsAt || null,
           trialDurationDays: user.trialDurationDays || 7,
@@ -434,7 +447,7 @@ const getUserData = async (req, res) => {
           leadStatuses: user.leadStatuses || [],
           setupGuideDismissed: user.setupGuideDismissed || false,
           accountStatus: user.accountStatus === "active",
-          planStatus: user.planStatus || "none",
+          planStatus: await getEffectivePlanStatus(user._id, user.planStatus),
           trialStartedAt: user.trialStartedAt || null,
           trialEndsAt: user.trialEndsAt || null,
           trialDurationDays: user.trialDurationDays || 7,
@@ -586,7 +599,7 @@ const getUserData = async (req, res) => {
       contactStatuses: user.contactStatuses || [],
       leadStatuses: user.leadStatuses || [],
       accountStatus: user.accountStatus === "active",
-      planStatus: user.planStatus || "none",
+      planStatus: await getEffectivePlanStatus(user._id, user.planStatus),
       trialStartedAt: user.trialStartedAt || null,
       trialEndsAt: user.trialEndsAt || null,
       trialDurationDays: user.trialDurationDays || 7,
