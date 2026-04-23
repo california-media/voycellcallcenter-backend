@@ -13,10 +13,15 @@ const {
   activateSubscription,
   cancelSubscription,
   upgradePlan,
+  previewUpgrade,
   getAgentQuota,
   previewAgentSeats,
   updateAgentSeats,
   getInvoices,
+  getRetentionSettings,
+  generateRetentionCoupon,
+  getMyRetentionCoupon,
+  toggleAutoRenewal,
 } = require("../controllers/billingController");
 
 // Plans
@@ -28,6 +33,7 @@ router.post("/subscribe", subscribeToPlan);
 router.post("/subscription/activate", activateSubscription);
 router.post("/cancel", cancelSubscription);
 router.post("/upgrade", upgradePlan);
+router.post("/upgrade/preview", previewUpgrade);
 
 // Agent seats
 router.get("/agents/quota", getAgentQuota);
@@ -46,5 +52,13 @@ router.put("/payment-methods/set-default", setDefaultPaymentMethod);
 
 // Invoices
 router.get("/invoices", getInvoices);
+
+// Retention coupon (cancel flow)
+router.get("/retention-settings", getRetentionSettings);
+router.get("/retention-coupon/mine", getMyRetentionCoupon);
+router.post("/retention-coupon/generate", generateRetentionCoupon);
+
+// Auto-renewal toggle
+router.post("/toggle-auto-renewal", toggleAutoRenewal);
 
 module.exports = router;

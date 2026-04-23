@@ -1,6 +1,7 @@
 const Plan = require("../../models/Plan");
 const User = require("../../models/userModel");
 const Subscription = require("../../models/Subscription");
+const Invoice = require("../../models/Invoice");
 const stripeService = require("../../services/stripeService");
 
 // ─── Get All Plans (with subscriber counts) ───────────────────────────────────
@@ -586,7 +587,16 @@ const searchUsers = async (req, res) => {
 // ─── Assign Plan to User (admin override, no Stripe) ─────────────────────────
 const assignPlanToUser = async (req, res) => {
   try {
-    const { userId, planId, billingPeriod } = req.body;
+    const {
+      userId,
+      planId,
+      billingPeriod,
+      // payment fields (all optional)
+      paymentStatus,   // "full" | "partial" | "pending"
+      totalAmountCents, // plan price in cents (sent from frontend)
+      amountPaidCents,  // how much was actually paid
+    } = req.body;
+
     if (!userId || !planId || !billingPeriod) {
       return res.status(400).json({ success: false, message: "userId, planId and billingPeriod are required" });
     }
@@ -623,6 +633,36 @@ const assignPlanToUser = async (req, res) => {
     user.planStatus = "active";
     user.currentSubscriptionId = sub._id;
     await user.save();
+
+    // ── Create a manual Invoice record to track the payment ─────────────────
+    if (paymentStatus && totalAmountCents != null) {
+      const paid = paymentStatus === "full"
+        ? totalAmountCents
+        : paymentStatus === "partial"
+          ? (amountPaidCents || 0)
+          : 0;
+
+      const invoiceStatus = paymentStatus === "full"
+        ? "paid"
+        : paymentStatus === "pending"
+          ? "open"
+          : "open"; // partial also stays "open" until fully paid
+
+      await Invoice.create({
+        userId,
+        subscriptionId: sub._id,
+        planId,
+        stripeInvoiceId: `manual_${Date.now()}_${userId}`, // synthetic unique ID
+        amount: totalAmountCents,
+        amountPaid: paid,
+        planAmount: totalAmountCents,
+        currency: "usd",
+        status: invoiceStatus,
+        billingPeriodStart: now,
+        billingPeriodEnd: periodEnd,
+        stripeCreatedAt: now,
+      });
+    }
 
     res.json({ success: true, message: `Plan assigned to ${user.email}`, subscription: sub });
   } catch (err) {

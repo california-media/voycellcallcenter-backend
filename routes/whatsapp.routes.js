@@ -7,6 +7,7 @@ const multer = require("multer");
 const {
     connectWhatsApp,
     disconnectWhatsApp,
+    resubscribeWabaWebhook,
     // whatsappCallback,
     webhookVerify,
     webhookReceive,
@@ -30,6 +31,7 @@ const upload = multer();
 
 router.post("/connect", checkForAuthentication(), connectWhatsApp);
 router.post("/disconnect", checkForAuthentication(), disconnectWhatsApp);
+router.post("/resubscribe-webhook", checkForAuthentication(), resubscribeWabaWebhook);
 router.post("/assignedUnassignedToAgent", checkForAuthentication(), manageWabaAssignment);
 
 // router.get("/callback", whatsappCallback);

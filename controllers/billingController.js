@@ -4,7 +4,17 @@ const Subscription = require("../models/Subscription");
 const Invoice = require("../models/Invoice");
 const Coupon = require("../models/Coupon");
 const User = require("../models/userModel");
+const GlobalSettings = require("../models/GlobalSettings");
 const stripeService = require("../services/stripeService");
+
+// Sum of positive line items on a Stripe invoice (the actual plan charge before proration credits).
+// Proration invoices have e.g. +$29 (new plan) and -$28.70 (credit), so amount_due = $0.30
+// and amount_paid = $0 (balance covered). planAmount = $29 so billing UI shows the real cost.
+const calcPlanAmount = (stripeInvoice) => {
+  const lines = stripeInvoice?.lines?.data || [];
+  const positive = lines.filter((li) => (li.amount || 0) > 0).reduce((s, li) => s + li.amount, 0);
+  return positive || stripeInvoice?.amount_due || 0;
+};
 
 // ─── Get Active Plans (for company admin to browse) ───────────────────────────
 const getActivePlans = async (req, res) => {
@@ -204,6 +214,16 @@ const calcTotalPrice = (plan, billingPeriod, agentCount) => {
   return totalBeforeDiscount * (1 - discount / 100);
 };
 
+// Period discounts are for first-time purchases only — upgrades always use the base price.
+const calcUpgradePrice = (plan, billingPeriod, agentCount) => {
+  const tier = plan.pricing[billingPeriod];
+  const basePrice = tier.price || 0;
+  const agentPrice = plan.agentPrice || 0;
+  const periodMultiplier = billingPeriod === "monthly" ? 1 : billingPeriod === "quarterly" ? 3 : billingPeriod === "semiannual" ? 6 : 12;
+  const extraAgents = Math.max(0, agentCount - 1);
+  return (basePrice + extraAgents * agentPrice) * periodMultiplier;
+};
+
 const subscribeToPlan = async (req, res) => {
   try {
     const { planId, billingPeriod, paymentMethodId, couponCode, agentCount: rawAgentCount } = req.body;
@@ -355,6 +375,7 @@ const subscribeToPlan = async (req, res) => {
             invoiceNumber: stripeInvoice.number || null,
             amount: stripeInvoice.amount_due,
             amountPaid: stripeInvoice.amount_paid,
+            planAmount: calcPlanAmount(stripeInvoice),
             currency: stripeInvoice.currency || "usd",
             status: stripeInvoice.status,
             invoicePdf: stripeInvoice.invoice_pdf || null,
@@ -452,9 +473,16 @@ const cancelSubscription = async (req, res) => {
 };
 
 // ─── Upgrade / Change Plan ────────────────────────────────────────────────────
+const INTERVAL_CONFIG = {
+  monthly:    { interval: "month", intervalCount: 1 },
+  quarterly:  { interval: "month", intervalCount: 3 },
+  semiannual: { interval: "month", intervalCount: 6 },
+  yearly:     { interval: "year",  intervalCount: 1 },
+};
+
 const upgradePlan = async (req, res) => {
   try {
-    const { planId, billingPeriod } = req.body;
+    const { planId, billingPeriod, couponCode } = req.body;
     if (!planId || !billingPeriod) {
       return res.status(400).json({ success: false, message: "planId and billingPeriod are required" });
     }
@@ -462,25 +490,164 @@ const upgradePlan = async (req, res) => {
     const plan = await Plan.findOne({ _id: planId, isActive: true, isDeleted: false });
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
 
-    const pricingTier = plan.pricing[billingPeriod];
-
     const subscription = await Subscription.findOne({
       userId: req.user._id,
       status: { $in: ["active", "trialing"] },
     });
     if (!subscription) return res.status(404).json({ success: false, message: "No active subscription found to upgrade" });
 
-    // Only call Stripe if this subscription was created via Stripe AND the plan has a Stripe price
-    if (subscription.stripeSubscriptionId && pricingTier?.stripePriceId) {
-      const updatedStripeSub = await stripeService.updateSubscriptionPlan(
+    let updatedStripeSub = null;
+    if (subscription.stripeSubscriptionId) {
+      const agentCount = subscription.agentCount || 1;
+      const { interval, intervalCount } = INTERVAL_CONFIG[billingPeriod];
+
+      // Step 1: Correct the current Stripe subscription price to the undiscounted value
+      // (proration_behavior "none" = no charge). This ensures Stripe's proration credit
+      // is based on the undiscounted plan price, not a stale discounted price from before
+      // the no-discount-on-upgrades fix.
+      const currentPlanDoc = await Plan.findById(subscription.planId).lean();
+      if (currentPlanDoc) {
+        const currentBillingPeriod = subscription.billingPeriod;
+        // Use calcTotalPrice (discounted) so Stripe's proration credit = what the user actually paid.
+        const currentUndiscountedAmount = calcTotalPrice(currentPlanDoc, currentBillingPeriod, agentCount);
+        const currentInterval = INTERVAL_CONFIG[currentBillingPeriod];
+        const corrProduct = await stripeService.stripe.products.create({
+          name: `[Correction] ${currentPlanDoc.name} (${currentBillingPeriod})`,
+        });
+        const corrPrice = await stripeService.stripe.prices.create({
+          product: corrProduct.id,
+          unit_amount: Math.round(currentUndiscountedAmount * 100),
+          currency: "usd",
+          recurring: { interval: currentInterval.interval, interval_count: currentInterval.intervalCount },
+        });
+        const currentStripeSub = await stripeService.retrieveSubscription(subscription.stripeSubscriptionId);
+        const currentItemId = currentStripeSub.items?.data?.[0]?.id;
+        await stripeService.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+          items: [{ id: currentItemId, price: corrPrice.id }],
+          proration_behavior: "none",
+        });
+        // Deactivate correction price/product (not needed after this)
+        try {
+          await stripeService.stripe.prices.update(corrPrice.id, { active: false });
+          await stripeService.stripe.products.update(corrProduct.id, { active: false });
+        } catch (_) {}
+      }
+
+      // Step 2: Upgrade to the new plan at undiscounted price — Stripe proration now
+      // credits the correct undiscounted amount from Step 1.
+      const totalAmount = calcUpgradePrice(plan, billingPeriod, agentCount); // USD, no discount
+      const product = await stripeService.stripe.products.create({
+        name: `${plan.name} - ${agentCount} agent${agentCount !== 1 ? "s" : ""} (${billingPeriod})`,
+      });
+      const newStripePrice = await stripeService.stripe.prices.create({
+        product: product.id,
+        unit_amount: Math.round(totalAmount * 100),
+        currency: "usd",
+        recurring: { interval, interval_count: intervalCount },
+      });
+
+      // ── Calculate proration credit (same formula as previewUpgrade) ───────────
+      // We need this BEFORE resolving the coupon so we can size a fixed-amount coupon correctly.
+      const planTotalCents = Math.round(totalAmount * 100);
+      let proratedCredit = 0;
+      if (subscription.currentPeriodStart && subscription.currentPeriodEnd && currentPlanDoc) {
+        const now = Date.now();
+        const periodStart = new Date(subscription.currentPeriodStart).getTime();
+        const periodEnd = new Date(subscription.currentPeriodEnd).getTime();
+        const totalMs = Math.max(1, periodEnd - periodStart);
+        const remainingMs = Math.max(0, periodEnd - now);
+        const remainingFraction = remainingMs / totalMs;
+        if (remainingFraction > 0) {
+          const currentPaidPrice = calcTotalPrice(currentPlanDoc, subscription.billingPeriod, agentCount);
+          proratedCredit = Math.round(currentPaidPrice * 100 * remainingFraction);
+        }
+      }
+      // Net balance the user owes before any coupon discount
+      const netBeforeCoupon = Math.max(0, planTotalCents - proratedCredit);
+
+      // ── Resolve coupon and create a precisely-sized Stripe coupon ────────────
+      // Problem: Stripe applies a % coupon to the SUBSCRIPTION price, then subtracts the
+      // proration credit separately. This means a 50% coupon on a $174 plan gives $87 off
+      // even when the user only owes $95.70 after credit — producing $8.70 instead of $47.85.
+      //
+      // Fix: Convert percentage coupons into a one-time FIXED-AMOUNT Stripe coupon sized to
+      // exactly (netBalance × discountPct). Stripe then computes:
+      //   planTotal − fixedDiscount − credit = (planTotal − credit) × (1 − pct)  ✓
+      let upgradeCouponDoc = null;
+      let upgradeCouponId = null;        // the Stripe coupon ID to pass in step 2
+      let dynamicCouponId = null;        // track if we created a temporary coupon to clean up
+      if (couponCode) {
+        try {
+          upgradeCouponDoc = await Coupon.findOne({
+            code: couponCode.toUpperCase(),
+            isActive: true,
+            isDeleted: false,
+            $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+          });
+          if (upgradeCouponDoc) {
+            if (upgradeCouponDoc.discountType === "percentage" && netBeforeCoupon > 0) {
+              // Create a one-time fixed-amount coupon equal to pct% of the net balance
+              const fixedDiscountCents = Math.round(netBeforeCoupon * upgradeCouponDoc.discountValue / 100);
+              if (fixedDiscountCents > 0) {
+                const dynCoupon = await stripeService.stripe.coupons.create({
+                  amount_off: fixedDiscountCents,
+                  currency: "usd",
+                  duration: "once",
+                  name: `${upgradeCouponDoc.discountValue}% off upgrade (${upgradeCouponDoc.code})`,
+                });
+                upgradeCouponId = dynCoupon.id;
+                dynamicCouponId = dynCoupon.id;
+              }
+            } else if (upgradeCouponDoc.discountType === "fixed" && upgradeCouponDoc.stripeCouponId) {
+              // Fixed-amount coupons: order doesn't matter (a+b+c = a+c+b), use directly
+              upgradeCouponId = upgradeCouponDoc.stripeCouponId;
+            }
+          }
+        } catch (couponErr) {
+          console.warn("Could not resolve upgrade coupon:", couponErr.message);
+        }
+      }
+
+      // Re-fetch after Step 1 to get the updated item ID
+      const refreshedSub = await stripeService.retrieveSubscription(subscription.stripeSubscriptionId);
+      const updatedItemId = refreshedSub.items?.data?.[0]?.id;
+
+      const step2Params = {
+        items: [{ id: updatedItemId, price: newStripePrice.id }],
+        proration_behavior: "always_invoice",
+        expand: ["latest_invoice.lines"],
+      };
+      // Always pass the coupon in step 2 (replaces any existing % coupon on the subscription).
+      // For % coupons this is the dynamically-sized fixed-amount coupon; for fixed coupons it's
+      // the original. Not passing it means Stripe may auto-fire the old % coupon from the sub.
+      if (upgradeCouponId) step2Params.coupon = upgradeCouponId;
+
+      updatedStripeSub = await stripeService.stripe.subscriptions.update(
         subscription.stripeSubscriptionId,
-        pricingTier.stripePriceId
+        step2Params
       );
 
-      // Save the proration/upgrade invoice immediately so it gets the NEW plan's ID,
-      // not the old one. Without this, syncStripeInvoices would stamp it with whatever
-      // plan is current at next getInvoices call — which is correct after this save,
-      // but we also want the old invoices untouched (handled by $setOnInsert in sync).
+      // Track coupon usage now that the invoice is created
+      if (upgradeCouponDoc) {
+        try {
+          const invoiceId = updatedStripeSub?.latest_invoice?.id || null;
+          upgradeCouponDoc.timesUsed = (upgradeCouponDoc.timesUsed || 0) + 1;
+          upgradeCouponDoc.usageHistory.push({ userId: req.user._id, usedAt: new Date(), invoiceId });
+          if (upgradeCouponDoc.maxUses && upgradeCouponDoc.timesUsed >= upgradeCouponDoc.maxUses) {
+            upgradeCouponDoc.isActive = false;
+          }
+          await upgradeCouponDoc.save();
+        } catch (trackErr) {
+          console.warn("Coupon usage tracking failed:", trackErr.message);
+        }
+      }
+
+      // Clean up the dynamic fixed-amount coupon we created (it was one-time use only)
+      if (dynamicCouponId) {
+        try { await stripeService.stripe.coupons.del(dynamicCouponId); } catch (_) {}
+      }
+
+      // Save the upgrade invoice immediately so it carries the NEW plan's ID.
       const latestInvoice = updatedStripeSub?.latest_invoice;
       if (latestInvoice && typeof latestInvoice === "object" && latestInvoice.id) {
         const lines = latestInvoice.lines?.data || [];
@@ -497,13 +664,14 @@ const upgradePlan = async (req, res) => {
             $set: {
               userId: req.user._id,
               subscriptionId: subscription._id,
-              planId: plan._id,              // ← NEW plan, written immediately
+              planId: plan._id,
               stripeInvoiceId: latestInvoice.id,
               stripeCustomerId: subscription.stripeCustomerId,
               stripeChargeId: latestInvoice.charge || null,
               invoiceNumber: latestInvoice.number || null,
               amount: latestInvoice.amount_due,
               amountPaid: latestInvoice.amount_paid,
+              planAmount: calcPlanAmount(latestInvoice),
               currency: latestInvoice.currency || "usd",
               status: latestInvoice.status,
               invoicePdf: latestInvoice.invoice_pdf || null,
@@ -520,12 +688,128 @@ const upgradePlan = async (req, res) => {
 
     subscription.planId = plan._id;
     subscription.billingPeriod = billingPeriod;
+    // Update period dates from Stripe so the UI shows the correct renewal date
+    if (updatedStripeSub?.current_period_start) {
+      subscription.currentPeriodStart = new Date(updatedStripeSub.current_period_start * 1000);
+    }
+    if (updatedStripeSub?.current_period_end) {
+      subscription.currentPeriodEnd = new Date(updatedStripeSub.current_period_end * 1000);
+    }
     await subscription.save();
+
+    // Populate planId so the response mirrors getCurrentSubscription
+    await subscription.populate("planId");
 
     res.json({ success: true, message: "Plan changed successfully", subscription });
   } catch (err) {
     console.error("upgradePlan error:", err);
     res.status(500).json({ success: false, message: err.message || "Failed to upgrade subscription" });
+  }
+};
+
+// ─── Preview Plan Change (show prorated charge before upgrading) ──────────────
+const previewUpgrade = async (req, res) => {
+  try {
+    const { planId, billingPeriod, couponCode } = req.body;
+    if (!planId || !billingPeriod) {
+      return res.status(400).json({ success: false, message: "planId and billingPeriod are required" });
+    }
+
+    const plan = await Plan.findOne({ _id: planId, isActive: true, isDeleted: false });
+    if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
+
+    const pricingTier = plan.pricing?.[billingPeriod];
+    if (!pricingTier?.price) {
+      return res.status(400).json({ success: false, message: "Plan does not support this billing period" });
+    }
+
+    const subscription = await Subscription.findOne({
+      userId: req.user._id,
+      status: { $in: ["active", "trialing"] },
+    });
+    if (!subscription) {
+      return res.status(404).json({ success: false, message: "No active subscription found" });
+    }
+
+    // Use calcUpgradePrice — no period discount for upgrades (first-purchase only).
+    const agentCount = subscription.agentCount || 1;
+    const totalAmount = calcUpgradePrice(plan, billingPeriod, agentCount); // USD, no discount
+    const planTotalCents = Math.round(totalAmount * 100);
+
+    // Manual proration: credit = remaining fraction × undiscounted current-plan price.
+    let negativeAmount = 0;
+    let isProrated = false;
+
+    if (subscription.stripeSubscriptionId && subscription.currentPeriodStart && subscription.currentPeriodEnd) {
+      const now = Date.now();
+      const periodStart = new Date(subscription.currentPeriodStart).getTime();
+      const periodEnd = new Date(subscription.currentPeriodEnd).getTime();
+      const totalMs = Math.max(1, periodEnd - periodStart);
+      const remainingMs = Math.max(0, periodEnd - now);
+      const remainingFraction = remainingMs / totalMs;
+
+      const currentPlan = await Plan.findById(subscription.planId).lean();
+      if (currentPlan && remainingFraction > 0) {
+        const currentPaidPrice = calcTotalPrice(currentPlan, subscription.billingPeriod, agentCount);
+        negativeAmount = Math.round(currentPaidPrice * 100 * remainingFraction);
+        isProrated = true;
+      }
+    }
+
+    // ── Apply coupon to the REMAINING balance (after proration credit) ──────────
+    // The coupon discounts what the subscriber actually owes after their unused-time
+    // credit has been deducted — not the gross plan price.
+    // Order: remainingBalance = planTotal - proratedCredit
+    //        couponDiscount   = remainingBalance × discountPct  (or fixed amt)
+    //        charged          = remainingBalance - couponDiscount
+    let couponDiscount = 0;
+    let appliedCouponData = null;
+
+    // Compute net balance before coupon (may be 0 if credit covers full plan)
+    const netBeforeCoupon = Math.max(0, planTotalCents - negativeAmount);
+
+    if (couponCode) {
+      const coupon = await Coupon.findOne({
+        code: couponCode.toUpperCase(),
+        isActive: true,
+        isDeleted: false,
+        $and: [
+          { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
+          { $or: [{ maxUses: null }, { $expr: { $lt: ["$timesUsed", "$maxUses"] } }] },
+        ],
+      });
+      if (coupon) {
+        if (coupon.discountType === "percentage") {
+          // Apply to remaining balance after proration credit
+          couponDiscount = Math.round(netBeforeCoupon * (coupon.discountValue / 100));
+        } else {
+          couponDiscount = Math.min(netBeforeCoupon, Math.round(coupon.discountValue * 100));
+        }
+        appliedCouponData = {
+          code: coupon.code,
+          discountType: coupon.discountType,
+          discountValue: coupon.discountValue,
+          isRetentionCoupon: coupon.isRetentionCoupon,
+        };
+      }
+    }
+
+    const amountDueNow = Math.max(0, netBeforeCoupon - couponDiscount);
+
+    return res.json({
+      success: true,
+      planTotal: planTotalCents,             // cents — full new plan charge
+      proratedCredit: negativeAmount,        // cents — credit for unused time
+      couponDiscount,                        // cents — coupon discount applied
+      appliedCoupon: appliedCouponData,      // coupon metadata (or null)
+      amountDueNow,                          // cents — final charge after proration + coupon
+      billingPeriod,
+      isProrated,
+      periodEnd: subscription.currentPeriodEnd,
+    });
+  } catch (err) {
+    console.error("previewUpgrade error:", err);
+    res.status(500).json({ success: false, message: "Failed to preview upgrade" });
   }
 };
 
@@ -546,6 +830,19 @@ const syncStripeInvoices = async (userId, stripeCustomerId) => {
         hasMore = false;
       }
     }
+    // Pre-load all active plans once for period-based planId correction.
+    const allPlans = await Plan.find({ isDeleted: false }).lean();
+
+    // Derive billing period from invoice period date range.
+    const detectBillingPeriod = (start, end) => {
+      if (!start || !end) return null;
+      const days = (end - start) / (1000 * 60 * 60 * 24);
+      if (days <= 35) return "monthly";
+      if (days <= 100) return "quarterly";
+      if (days <= 200) return "semiannual";
+      return "yearly";
+    };
+
     for (const si of allInvoices) {
       if (si.status === "draft") continue;
 
@@ -566,19 +863,37 @@ const syncStripeInvoices = async (userId, stripeCustomerId) => {
         ? new Date(mainLineItem.period.end * 1000)
         : (si.period_end ? new Date(si.period_end * 1000) : null);
 
+      // Determine correct planId for this invoice based on its billing period length.
+      // This corrects historical invoices whose planId was overwritten by a late webhook
+      // after the user had already upgraded to a newer plan.
+      const invoicePeriod = detectBillingPeriod(periodStart, periodEnd);
+      let correctPlanId = subscription?.planId || null;
+      if (invoicePeriod && allPlans.length > 0) {
+        // If the current subscription's plan supports this billing period, use it.
+        // Otherwise find a plan that does (handles cases where each period is a separate plan doc).
+        const currentPlan = allPlans.find((p) => String(p._id) === String(subscription?.planId));
+        const currentPlanSupports = currentPlan?.pricing?.[invoicePeriod]?.price > 0;
+        if (!currentPlanSupports) {
+          const matchingPlan = allPlans.find((p) => (p.pricing?.[invoicePeriod]?.price || 0) > 0);
+          if (matchingPlan) correctPlanId = matchingPlan._id;
+        }
+      }
+
       await Invoice.findOneAndUpdate(
         { stripeInvoiceId: si.id },
         {
-          // Always update these — they can change (payment status, PDF link, etc.)
+          // Always update mutable fields (status, amounts, PDF links, etc.)
           $set: {
             userId,
             subscriptionId: subscription?._id || null,
+            planId: correctPlanId,   // always correct planId based on period detection
             stripeInvoiceId: si.id,
             stripeCustomerId,
             stripeChargeId: si.charge || null,
             invoiceNumber: si.number || null,
             amount: si.amount_due,
             amountPaid: si.amount_paid,
+            planAmount: calcPlanAmount(si),
             currency: si.currency,
             status: si.status,
             invoicePdf: si.invoice_pdf || null,
@@ -586,12 +901,6 @@ const syncStripeInvoices = async (userId, stripeCustomerId) => {
             billingPeriodStart: periodStart,
             billingPeriodEnd: periodEnd,
             stripeCreatedAt: si.created ? new Date(si.created * 1000) : null,
-          },
-          // planId is written ONLY when creating a new invoice document.
-          // Never overwrite it on existing records — that would stamp the CURRENT
-          // plan onto historical invoices after an upgrade.
-          $setOnInsert: {
-            planId: subscription?.planId || null,
           },
         },
         { upsert: true, new: true }
@@ -839,6 +1148,7 @@ const updateAgentSeats = async (req, res) => {
             invoiceNumber: finalInvoice.number || null,
             amount: finalInvoice.amount_due,
             amountPaid: finalInvoice.amount_paid,
+            planAmount: calcPlanAmount(finalInvoice),
             currency: finalInvoice.currency || "usd",
             status: finalInvoice.status,
             invoicePdf: finalInvoice.invoice_pdf || null,
@@ -940,26 +1250,32 @@ const handleStripeWebhook = async (req, res) => {
           ? new Date(wLineItem.period.end * 1000)
           : (stripeInvoice.period_end ? new Date(stripeInvoice.period_end * 1000) : null);
 
-        // Upsert invoice
+        // Upsert invoice — planId only on INSERT to avoid overwriting historical invoices
+        // when a delayed webhook fires after the user has already upgraded to a new plan.
         await Invoice.findOneAndUpdate(
           { stripeInvoiceId: stripeInvoice.id },
           {
-            userId: user._id,
-            subscriptionId: sub?._id || null,
-            planId: sub?.planId || null,
-            stripeInvoiceId: stripeInvoice.id,
-            stripeCustomerId: customerId,
-            stripeChargeId: stripeInvoice.charge || null,
-            invoiceNumber: stripeInvoice.number || null,
-            amount: stripeInvoice.amount_due,
-            amountPaid: stripeInvoice.amount_paid,
-            currency: stripeInvoice.currency,
-            status: stripeInvoice.status,
-            invoicePdf: stripeInvoice.invoice_pdf || null,
-            hostedInvoiceUrl: stripeInvoice.hosted_invoice_url || null,
-            billingPeriodStart: wPeriodStart,
-            billingPeriodEnd: wPeriodEnd,
-            stripeCreatedAt: stripeInvoice.created ? new Date(stripeInvoice.created * 1000) : null,
+            $set: {
+              userId: user._id,
+              subscriptionId: sub?._id || null,
+              stripeInvoiceId: stripeInvoice.id,
+              stripeCustomerId: customerId,
+              stripeChargeId: stripeInvoice.charge || null,
+              invoiceNumber: stripeInvoice.number || null,
+              amount: stripeInvoice.amount_due,
+              amountPaid: stripeInvoice.amount_paid,
+              planAmount: calcPlanAmount(stripeInvoice),
+              currency: stripeInvoice.currency,
+              status: stripeInvoice.status,
+              invoicePdf: stripeInvoice.invoice_pdf || null,
+              hostedInvoiceUrl: stripeInvoice.hosted_invoice_url || null,
+              billingPeriodStart: wPeriodStart,
+              billingPeriodEnd: wPeriodEnd,
+              stripeCreatedAt: stripeInvoice.created ? new Date(stripeInvoice.created * 1000) : null,
+            },
+            $setOnInsert: {
+              planId: sub?.planId || null,
+            },
           },
           { upsert: true, new: true }
         );
@@ -972,6 +1288,37 @@ const handleStripeWebhook = async (req, res) => {
           }
           await sub.save();
           await User.findByIdAndUpdate(user._id, { planStatus: "active" });
+        }
+
+        // ── Track retention coupon usage ─────────────────────────────────────
+        // Stripe may return discount on invoice.discount (legacy) or invoice.discounts[] (newer API).
+        const discountCouponId =
+          stripeInvoice?.discount?.coupon?.id ||
+          stripeInvoice?.discounts?.[0]?.coupon?.id ||
+          stripeInvoice?.discounts?.[0]?.id; // sometimes just the coupon id string
+        if (discountCouponId) {
+          try {
+            const retentionCoupon = await Coupon.findOne({
+              stripeCouponId: discountCouponId,
+              isRetentionCoupon: true,
+              isDeleted: false,
+            });
+            if (retentionCoupon) {
+              retentionCoupon.timesUsed = (retentionCoupon.timesUsed || 0) + 1;
+              retentionCoupon.usageHistory.push({
+                userId: user._id,
+                usedAt: new Date(),
+                invoiceId: stripeInvoice.id,
+              });
+              // Deactivate after 1 use
+              if (retentionCoupon.maxUses && retentionCoupon.timesUsed >= retentionCoupon.maxUses) {
+                retentionCoupon.isActive = false;
+              }
+              await retentionCoupon.save();
+            }
+          } catch (couponTrackErr) {
+            console.warn("Retention coupon usage tracking failed:", couponTrackErr.message);
+          }
         }
         break;
       }
@@ -1027,6 +1374,228 @@ const handleStripeWebhook = async (req, res) => {
   res.json({ received: true });
 };
 
+// ─── Get My Retention Coupon ──────────────────────────────────────────────────
+// Returns the caller's active, unused retention coupon (if any).
+const getMyRetentionCoupon = async (req, res) => {
+  try {
+    const coupon = await Coupon.findOne({
+      generatedForUserId: req.user._id,
+      isRetentionCoupon: true,
+      isDeleted: false,
+      isActive: true,
+    });
+    res.json({ success: true, coupon: coupon || null });
+  } catch (err) {
+    console.error("getMyRetentionCoupon error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch retention coupon" });
+  }
+};
+
+// ─── Get Retention Settings (public — billing route) ──────────────────────────
+const getRetentionSettings = async (req, res) => {
+  try {
+    let settings = await GlobalSettings.findOne({ key: "global" });
+    if (!settings) settings = await GlobalSettings.create({ key: "global" });
+
+    // Also return the user's existing retention coupon (if any) so the
+    // frontend knows on page load whether to skip the offer screen.
+    const existingCoupon = await Coupon.findOne({
+      generatedForUserId: req.user._id,
+      isRetentionCoupon: true,
+    }).lean();
+
+    res.json({
+      success: true,
+      retentionDiscountPercent: settings.retentionDiscountPercent,
+      existingRetentionCoupon: existingCoupon
+        ? {
+            _id: existingCoupon._id,
+            code: existingCoupon.code,
+            discountValue: existingCoupon.discountValue,
+            discountType: existingCoupon.discountType,
+            timesUsed: existingCoupon.timesUsed || 0,
+            maxUses: existingCoupon.maxUses || 1,
+            isActive: existingCoupon.isActive,
+          }
+        : null,
+    });
+  } catch (err) {
+    console.error("getRetentionSettings error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch retention settings" });
+  }
+};
+
+// ─── Generate Retention Coupon ─────────────────────────────────────────────────
+// Called when an existing subscriber clicks "Avail Offer" in the cancel flow.
+// Rules:
+//   • 1 retention coupon per user lifetime
+//   • 1-time use only (maxUses = 1)
+//   • Code = first 4 chars of firstname (uppercase) + discount% (e.g. WAQA40)
+//   • Auto-applied to user's Stripe subscription so it fires on the next renewal
+const generateRetentionCoupon = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // 1. Enforce lifetime limit — one retention coupon per user
+    // Return 200 (not 400) so the frontend treats it as a normal success and shows the coupon.
+    // Do NOT filter by isDeleted — a soft-deleted coupon still counts as "already availed".
+    const existing = await Coupon.findOne({
+      generatedForUserId: userId,
+      isRetentionCoupon: true,
+    });
+    if (existing) {
+      return res.json({
+        success: true,
+        alreadyExisted: true,
+        message: "You have already availed the retention offer.",
+        coupon: {
+          _id: existing._id,
+          code: existing.code,
+          discountValue: existing.discountValue,
+          discountType: existing.discountType,
+        },
+      });
+    }
+
+    // 2. Load global discount %
+    let settings = await GlobalSettings.findOne({ key: "global" });
+    if (!settings) settings = await GlobalSettings.create({ key: "global" });
+    const discountPercent = settings.retentionDiscountPercent;
+
+    // 3. Build coupon code (first 4 chars of firstname + discount%, e.g. WAQA40)
+    const user = await User.findById(userId).select("firstname");
+    const namePrefix = ((user?.firstname || "USER").replace(/\s+/g, "").toUpperCase() + "XXXX").slice(0, 4);
+    let code = `${namePrefix}${discountPercent}`;
+
+    // Handle collisions — check ALL documents (including soft-deleted) because the unique
+    // index on `code` covers every document regardless of isDeleted status.
+    let collision = await Coupon.findOne({ code });
+    let attempt = 0;
+    while (collision && attempt < 10) {
+      const suffix = Math.random().toString(36).slice(2, 4).toUpperCase();
+      code = `${namePrefix}${discountPercent}${suffix}`;
+      collision = await Coupon.findOne({ code });
+      attempt++;
+    }
+
+    // 4. Create Stripe coupon (percentage, once — DB enforces 1-use via maxUses)
+    // Do NOT set max_redemptions on the Stripe coupon: we apply it to the subscription in step 7,
+    // which Stripe counts as a redemption. If max_redemptions were 1 it would be exhausted before
+    // the user even uses it for an upgrade, causing "Coupon is used up" errors.
+    const stripeCoupon = await stripeService.stripe.coupons.create({
+      name: `${discountPercent}% Retention Offer`,
+      percent_off: discountPercent,
+      duration: "once",
+    });
+
+    // 5. Create Stripe promotion code (optional — non-fatal if the code already exists in Stripe)
+    let stripePromoCode = null;
+    try {
+      stripePromoCode = await stripeService.stripe.promotionCodes.create({
+        coupon: stripeCoupon.id,
+        code,
+        max_redemptions: 1,
+      });
+    } catch (promoErr) {
+      // A promo code with this exact code may already exist in Stripe from a previous test.
+      // This is non-fatal — the stripeCouponId is what we actually use for subscription upgrades.
+      console.warn("Could not create Stripe promo code (may already exist):", promoErr.message);
+    }
+
+    // 6. Save to DB
+    const coupon = await Coupon.create({
+      name: `${discountPercent}% Retention Offer for ${user?.firstname || userId}`,
+      code,
+      discountType: "percentage",
+      discountValue: discountPercent,
+      isActive: true,
+      isRetentionCoupon: true,
+      generatedForUserId: userId,
+      maxUses: 1,
+      timesUsed: 0,
+      stripeCouponId: stripeCoupon.id,
+      stripePromotionCodeId: stripePromoCode?.id || null,
+    });
+
+    // 7. Apply to user's current Stripe subscription so it auto-fires on next renewal
+    const subscription = await Subscription.findOne({
+      userId,
+      status: { $in: ["active", "trialing"] },
+    });
+    if (subscription?.stripeSubscriptionId) {
+      try {
+        await stripeService.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+          coupon: stripeCoupon.id,
+        });
+      } catch (stripeErr) {
+        console.warn("Could not apply retention coupon to Stripe subscription:", stripeErr.message);
+        // Non-fatal — coupon is still saved, user can apply manually
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Your ${discountPercent}% discount has been applied to your next billing cycle!`,
+      coupon: {
+        _id: coupon._id,
+        code: coupon.code,
+        discountValue: coupon.discountValue,
+        discountType: coupon.discountType,
+      },
+    });
+  } catch (err) {
+    console.error("generateRetentionCoupon error:", err);
+    res.status(500).json({ success: false, message: err.message || "Failed to generate retention coupon" });
+  }
+};
+
+// ─── Toggle Auto-Renewal ────────────────────────────────────────────────────────
+// POST /billing/toggle-auto-renewal  { autoRenew: true | false }
+const toggleAutoRenewal = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { autoRenew } = req.body;
+    if (typeof autoRenew !== "boolean") {
+      return res.status(400).json({ success: false, message: "autoRenew (boolean) is required" });
+    }
+
+    const subscription = await Subscription.findOne({
+      userId,
+      status: { $in: ["active", "trialing"] },
+    });
+    if (!subscription) {
+      return res.status(404).json({ success: false, message: "No active subscription found" });
+    }
+
+    // cancelAtPeriodEnd = true means auto-renewal is OFF (will cancel at end of period)
+    const cancelAtPeriodEnd = !autoRenew;
+
+    // Update Stripe if a real Stripe subscription exists
+    if (subscription.stripeSubscriptionId) {
+      await stripeService.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+        cancel_at_period_end: cancelAtPeriodEnd,
+      });
+    }
+
+    subscription.cancelAtPeriodEnd = cancelAtPeriodEnd;
+    if (!cancelAtPeriodEnd) {
+      subscription.cancelledAt = null; // un-cancel
+    }
+    await subscription.save();
+
+    res.json({
+      success: true,
+      autoRenew,
+      message: autoRenew
+        ? "Auto-renewal enabled. Your plan will renew automatically."
+        : "Auto-renewal disabled. Your plan will cancel at the end of the current period.",
+    });
+  } catch (err) {
+    console.error("toggleAutoRenewal error:", err);
+    res.status(500).json({ success: false, message: err.message || "Failed to toggle auto-renewal" });
+  }
+};
+
 module.exports = {
   getActivePlans,
   getCurrentSubscription,
@@ -1040,9 +1609,14 @@ module.exports = {
   activateSubscription,
   cancelSubscription,
   upgradePlan,
+  previewUpgrade,
   getAgentQuota,
   previewAgentSeats,
   updateAgentSeats,
   getInvoices,
   handleStripeWebhook,
+  getRetentionSettings,
+  generateRetentionCoupon,
+  getMyRetentionCoupon,
+  toggleAutoRenewal,
 };

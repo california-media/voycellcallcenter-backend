@@ -32,9 +32,19 @@ const getAllCoupons = async (req, res) => {
       ];
     }
 
+    // Optional: filter by retention coupons only
+    const { isRetentionCoupon } = req.query;
+    if (isRetentionCoupon === "true") query.isRetentionCoupon = true;
+    else if (isRetentionCoupon === "false") query.isRetentionCoupon = { $ne: true };
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [coupons, total] = await Promise.all([
-      Coupon.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Coupon.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate("generatedForUserId", "firstname lastname email")
+        .populate("usageHistory.userId", "firstname lastname email"),
       Coupon.countDocuments(query),
     ]);
 

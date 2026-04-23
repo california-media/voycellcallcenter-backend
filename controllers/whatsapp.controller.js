@@ -315,14 +315,36 @@ exports.connectWhatsApp = async (req, res) => {
             });
         }
 
-        await User.findOne({ "whatsappWaba.phoneNumberId": phoneNumberId }).lean().then(existing => {
-            if (existing) {
-                return res.status(400).json({
-                    status: "error",
-                    message: "This WABA Account Already Connected"
+        // Check if another account already has this WABA connected
+        const existingWabaUser = await User.findOne({
+            "whatsappWaba.phoneNumberId": phoneNumberId,
+            _id: { $ne: req.user._id }
+        }).select("email whatsappWaba.isConnected").lean();
+
+        if (existingWabaUser && existingWabaUser.whatsappWaba?.isConnected) {
+            // If caller didn't confirm force-disconnect, ask for confirmation
+            if (!req.body.forceDisconnect) {
+                return res.status(409).json({
+                    status: "already_connected",
+                    connectedEmail: existingWabaUser.email,
+                    message: `This WABA is currently connected to ${existingWabaUser.email}. Proceeding will disconnect it from that account.`
                 });
             }
-        });
+            // force=true: disconnect the other account
+            await User.updateMany(
+                { "whatsappWaba.phoneNumberId": phoneNumberId, _id: { $ne: req.user._id } },
+                {
+                    $set: {
+                        "whatsappWaba.isConnected": false,
+                        "whatsappWaba.businessAccountId": null,
+                        "whatsappWaba.wabaId": null,
+                        "whatsappWaba.phoneNumberId": null,
+                        "whatsappWaba.phoneNumber": null,
+                        "whatsappWaba.accessToken": null,
+                    }
+                }
+            );
+        }
 
         /* ================================
            4️⃣ SAVE CONNECTION
@@ -337,6 +359,23 @@ exports.connectWhatsApp = async (req, res) => {
                 accessToken
             }
         });
+
+        /* ================================
+           5️⃣ SUBSCRIBE WABA TO APP WEBHOOK
+           Must use app access token (APP_ID|APP_SECRET), not the user token.
+           Without this Meta does not send incoming messages to our webhook URL.
+        =================================*/
+        try {
+            const appAccessToken = `${META_APP_ID}|${META_APP_SECRET}`;
+            const subscribeRes = await axios.post(
+                `${META_GRAPH_URL}/${wabaId}/subscribed_apps`,
+                {},
+                { headers: { Authorization: `Bearer ${appAccessToken}` } }
+            );
+            console.log("WABA webhook subscription result:", subscribeRes.data);
+        } catch (subErr) {
+            console.warn("WABA webhook subscription failed (non-fatal):", subErr?.response?.data || subErr.message);
+        }
 
         return res.json({
             status: "success",
@@ -353,16 +392,41 @@ exports.connectWhatsApp = async (req, res) => {
     }
 };
 
+exports.resubscribeWabaWebhook = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id).lean();
+        const { wabaId } = user?.whatsappWaba || {};
+
+        if (!wabaId) {
+            return res.status(400).json({ success: false, message: "No WABA connected for this account" });
+        }
+
+        // Use app access token — required to subscribe WABA to a specific Meta App's webhook
+        const appAccessToken = `${META_APP_ID}|${META_APP_SECRET}`;
+        const subscribeRes = await axios.post(
+            `${META_GRAPH_URL}/${wabaId}/subscribed_apps`,
+            {},
+            { headers: { Authorization: `Bearer ${appAccessToken}` } }
+        );
+
+        console.log("WABA resubscribe result:", subscribeRes.data);
+        return res.json({ success: true, message: "WABA webhook resubscribed successfully", data: subscribeRes.data });
+    } catch (err) {
+        console.error("WABA resubscribe error:", err?.response?.data || err.message);
+        return res.status(500).json({ success: false, message: err?.response?.data?.error?.message || err.message });
+    }
+};
+
 exports.disconnectWhatsApp = async (req, res) => {
     try {
         await User.findByIdAndUpdate(req.user._id, {
-            whatsappWaba: {
-                isConnected: false,
-                businessAccountId: null,
-                wabaId: null,
-                phoneNumberId: null,
-                phoneNumber: null,
-                accessToken: null,
+            $set: {
+                "whatsappWaba.isConnected": false,
+                "whatsappWaba.businessAccountId": null,
+                "whatsappWaba.wabaId": null,
+                "whatsappWaba.phoneNumberId": null,
+                "whatsappWaba.phoneNumber": null,
+                "whatsappWaba.accessToken": null,
             },
         });
         res.json({
@@ -936,6 +1000,72 @@ function normalizeWhatsAppNumber(waId) {
 
 /** Helper: Find name from CRM (Contact/Lead) based on WhatsApp ID
  */
+// async function findNameFromCRM({ userId, role, waId }) {
+//     const { countryCode, number } = normalizeWhatsAppNumber(waId);
+
+//     // 🔹 Query helper
+//     const phoneQuery = {
+//         phoneNumbers: {
+//             $elemMatch: {
+//                 countryCode,
+//                 number
+//             }
+//         }
+//     };
+
+//     // ==============================
+//     // 👤 AGENT FLOW
+//     // ==============================
+//     if (role === "user") {
+//         const contact =
+//             await Contact.findOne({ ...phoneQuery, createdBy: userId }) ||
+//             await Lead.findOne({ ...phoneQuery, createdBy: userId });
+
+//         if (contact) {
+//             return `${contact.firstname || ""} ${contact.lastname || ""}`.trim();
+//         }
+
+//         return null;
+//     }
+
+//     // ==============================
+//     // 👑 COMPANY ADMIN FLOW
+//     // ==============================
+//     if (role === "companyAdmin") {
+//         // 1️⃣ Check admin’s own contacts/leads
+//         let record =
+//             await Contact.findOne({ ...phoneQuery, createdBy: userId }) ||
+//             await Lead.findOne({ ...phoneQuery, createdBy: userId });
+
+//         if (record) {
+//             return `${record.firstname || ""} ${record.lastname || ""}`.trim();
+//         }
+
+//         // 2️⃣ Check agents under this admin
+//         const agentIds = await User.find(
+//             { createdByWhichCompanyAdmin: userId },
+//             { _id: 1 }
+//         ).lean();
+
+//         const agentIdList = agentIds.map(a => a._id);
+
+//         record =
+//             await Contact.findOne({
+//                 ...phoneQuery,
+//                 createdBy: { $in: agentIdList }
+//             }) ||
+//             await Lead.findOne({
+//                 ...phoneQuery,
+//                 createdBy: { $in: agentIdList }
+//             });
+//         if (record) {
+//             return `${record.firstname || ""} ${record.lastname || ""}`.trim();
+//         }
+//     }
+
+//     return null;
+// }
+
 async function findNameFromCRM({ userId, role, waId }) {
     const { countryCode, number } = normalizeWhatsAppNumber(waId);
 
@@ -999,9 +1129,18 @@ async function findNameFromCRM({ userId, role, waId }) {
         }
     }
 
+    if (role === "superadmin") {
+        let record =
+            await Contact.findOne({ ...phoneQuery, createdBy: userId }) ||
+            await Lead.findOne({ ...phoneQuery, createdBy: userId });
+
+        if (record) {
+            return `${record.firstname || ""} ${record.lastname || ""}`.trim();
+        }
+    }
+
     return null;
 }
-
 /** Helper: Parse WhatsApp message content
  */
 function parseWhatsAppMessage(msg) {
@@ -1103,6 +1242,275 @@ function getAttachmentName(msg, mimeType) {
             return `file_${Date.now()}.${ext}`;
     }
 }
+
+// exports.webhookReceive = async (req, res) => {
+
+//     try {
+//         const entry = req.body.entry?.[0];
+//         const change = entry?.changes?.[0];
+//         const value = change?.value;
+
+//         /* ─────────────────────────────────────────────
+// 📌 MESSAGE STATUS UPDATES (sent/delivered/read)
+// ───────────────────────────────────────────── */
+//         if (Array.isArray(value.statuses) && value.statuses.length > 0) {
+//             for (const statusObj of value.statuses) {
+
+//                 const {
+//                     id: metaMessageId,
+//                     status,
+//                     timestamp,
+//                     recipient_id,
+//                     conversation,
+//                     pricing,
+//                     errors
+//                 } = statusObj;
+
+//                 const statusDate = new Date(timestamp * 1000);
+
+//                 // Dynamic timestamp fields
+//                 const statusTimestampUpdate = {
+//                     messageStatusTimestamp: statusDate
+//                 };
+
+//                 if (status === "sent") {
+//                     statusTimestampUpdate.messageSentTimestamp = statusDate;
+//                 }
+
+//                 if (status === "delivered") {
+//                     statusTimestampUpdate.messageDeliveredTimestamp = statusDate;
+//                 }
+
+//                 if (status === "read") {
+//                     statusTimestampUpdate.messageReadTimestamp = statusDate;
+//                 }
+
+//                 if (status === "failed") {
+//                     statusTimestampUpdate.messageFailedTimestamp = statusDate;
+//                 }
+
+//                 const updated = await WhatsAppMessage.findOneAndUpdate(
+//                     { metaMessageId },
+//                     {
+//                         status,
+//                         ...statusTimestampUpdate,
+
+//                         ...(errors && {
+//                             error: {
+//                                 code: errors?.[0]?.code,
+//                                 message: errors?.[0]?.title
+//                             }
+//                         })
+//                     },
+//                     { new: true }
+//                 ).lean();
+
+
+//                 if (!updated) {
+//                     continue;
+//                 }
+
+//                 const fullMessage = updated;
+
+//                 /* 🔹 REAL-TIME PUSH (Socket/Lambda) */
+
+//                 // 1️⃣ Find all users having same phoneNumberId
+//                 const allUsers = await User.find({
+//                     "whatsappWaba.phoneNumberId": updated.phoneNumberId
+//                 }).select("_id");
+
+//                 // 2️⃣ Extract all userIds
+//                 const allUserIds = allUsers.map(u => u._id);
+
+//                 // 3️⃣ Find all websocket connections
+//                 const connections = await WsConnection.find({
+//                     userId: { $in: allUserIds }
+//                 });
+
+//                 if (connections.length > 0) {
+
+//                     const eventPayload = {
+//                         type: "message_status_update",
+//                         metaMessageId,
+//                         status,
+//                         recipient_id,
+//                         conversationId: updated.conversationId,
+//                         timestamp,
+//                         message: fullMessage,
+//                         connections: connections.map(c => ({
+//                             connectionId: c.connectionId
+//                         }))
+//                     };
+
+//                     await lambdaClient.send(new InvokeCommand({
+//                         FunctionName: "waba-webhook",
+//                         InvocationType: "RequestResponse",
+//                         Payload: JSON.stringify(eventPayload)
+//                     }));
+//                 }
+//             }
+
+//             return res.status(200).send("STATUS_UPDATED");
+//         }
+
+//         const contact = value.contacts?.[0];
+//         let senderName = "";
+//         let originalName = "";
+//         let senderWabaID = "";
+
+//         if (contact) {
+//             senderName = contact.profile?.name || "";
+//             originalName = contact.profile?.name || "";
+//             senderWabaID = contact.wa_id || "";
+//         }
+
+//         if (!value) {
+//             return { statusCode: 200 };
+//         }
+
+//         const phoneNumberId = value?.metadata?.phone_number_id?.toString();
+//         console.log(`[webhookReceive] incoming message for phoneNumberId: ${phoneNumberId}`);
+
+//         if (!Array.isArray(value.messages) || value.messages.length === 0) {
+//             return { statusCode: 200 };
+//         }
+
+//         // 1️⃣ Find ALL users (admin + agents)
+//         const users = await User.find({
+//             "whatsappWaba.phoneNumberId": phoneNumberId
+//         }).select("_id role whatsappWaba accessToken");
+
+//         console.log(`[webhookReceive] users found: ${users.map(u => `${u.role}:${u._id}`).join(", ") || "NONE"}`);
+
+//         if (!users.length) {
+//             return { statusCode: 200 };
+//         }
+
+//         // 2️⃣ Find company admin (message owner) — also support superadmin owning the WhatsApp
+//         const companyAdmin = users.find(u => u.role === "companyAdmin") || users.find(u => u.role === "superadmin");
+
+//         console.log(`[webhookReceive] companyAdmin resolved: role=${companyAdmin?.role}, id=${companyAdmin?._id}`);
+
+//         if (!companyAdmin) {
+//             return { statusCode: 200 };
+//         }
+
+//         // 3️⃣ Extract all userIds
+//         const allUserIds = users.map(u => u._id);
+
+//         const crmName = await findNameFromCRM({
+//             userId: companyAdmin._id,
+//             role: companyAdmin.role,
+//             waId: senderWabaID
+//         });
+
+//         // ✅ Final senderName decision
+//         const finalSenderName = crmName || senderName;
+
+//         // const connections = await WsConnection.find({ userId: user._id });
+
+//         const baseConnections = await WsConnection.find({
+//             userId: { $in: allUserIds }
+//         });
+
+//         // Also notify all superadmin users so they receive live messages
+//         // regardless of which WABA the phone number belongs to
+//         const superAdminUsers = await User.find({ role: "superadmin" }).select("_id");
+//         const superAdminIds = superAdminUsers.map(u => u._id);
+//         const existingConnIds = new Set(baseConnections.map(c => c.connectionId));
+//         const superAdminConns = await WsConnection.find({ userId: { $in: superAdminIds } });
+//         const extraConns = superAdminConns.filter(c => !existingConnIds.has(c.connectionId));
+//         const connections = [...baseConnections, ...extraConns];
+
+//         for (const msg of value.messages || []) {
+//             const { messageType, content } = parseWhatsAppMessage(msg);
+//             let s3dataurl = "";
+//             let attachmentName = "";
+//             let mimeType = "";
+//             let fileSize = 0;
+
+//             if (content.mediaId) {
+//                 const downloaded = await downloadMetaMedia({
+//                     mediaId: content.mediaId,
+//                     accessToken: companyAdmin.whatsappWaba.accessToken
+//                 });
+
+//                 mimeType = downloaded.mimeType;
+//                 fileSize = downloaded.buffer.length;
+
+//                 attachmentName = getAttachmentName(msg, mimeType);
+
+//                 const s3Url = await uploadWhatsAppMediaToS3({
+//                     userId: companyAdmin._id,
+//                     messageType,
+//                     buffer: downloaded.buffer,
+//                     mimeType,
+//                     originalName: attachmentName
+//                 });
+
+//                 s3dataurl = s3Url;
+//                 content.mimeType = mimeType;
+//                 content.fileName = attachmentName;
+//                 content.fileSize = fileSize;
+//                 content.mediaUrl = s3Url;
+//                 content.sha256 = msg[messageType]?.sha256;
+//                 content.isVoice = msg.type === "voice";
+//             }
+
+//             // Always save to DB regardless of WebSocket connections
+//             await WhatsAppMessage.create({
+//                 userId: companyAdmin._id,
+//                 phoneNumberId,
+//                 conversationId: msg.from,
+//                 senderName: finalSenderName,
+//                 originalName: originalName,
+//                 senderWabaId: senderWabaID,
+//                 direction: "incoming",
+//                 from: msg.from,
+//                 to: phoneNumberId,
+//                 messageType,
+//                 content,
+//                 s3dataurl,
+//                 attachmentName: attachmentName,
+//                 metaMessageId: msg.id,
+//                 status: "received",
+//                 messageTimestamp: new Date(msg.timestamp * 1000),
+//                 raw: msg
+//             });
+
+//             await updateChatLastMessage({
+//                 userId: companyAdmin._id,
+//                 chatNumber: msg.from,
+//                 direction: "incoming",
+//                 timestamp: new Date(msg.timestamp * 1000)
+//             });
+
+//             // Only push real-time event if users are connected via WebSocket
+//             if (connections.length > 0) {
+//                 const eventPayload = {
+//                     whatsappEvent: req.body,
+//                     userId: companyAdmin._id.toString(),
+//                     finalSenderName: finalSenderName,
+//                     s3dataurl,
+//                     attachmentName,
+//                     connections: connections.map(c => ({
+//                         connectionId: c.connectionId
+//                     }))
+//                 };
+
+//                 await lambdaClient.send(new InvokeCommand({
+//                     FunctionName: "waba-webhook",
+//                     InvocationType: "RequestResponse",
+//                     Payload: JSON.stringify(eventPayload)
+//                 }));
+//             }
+//         }
+//         res.status(200).send("EVENT_RECEIVED");
+//     } catch (err) {
+//         res.sendStatus(200);
+//     }
+// };
+
 
 exports.webhookReceive = async (req, res) => {
 
@@ -1229,6 +1637,8 @@ exports.webhookReceive = async (req, res) => {
             return { statusCode: 200 };
         }
 
+        console.log("valueasdfgh", value);
+
         const phoneNumberId = value?.metadata?.phone_number_id?.toString();
 
         if (!Array.isArray(value.messages) || value.messages.length === 0) {
@@ -1240,23 +1650,36 @@ exports.webhookReceive = async (req, res) => {
             "whatsappWaba.phoneNumberId": phoneNumberId
         }).select("_id role whatsappWaba accessToken");
 
+        console.log("usersasdfgh", users);
+
         if (!users.length) {
             return { statusCode: 200 };
         }
 
         // 2️⃣ Find company admin (message owner)
-        const companyAdmin = users.find(u => u.role === "companyAdmin");
+        // const companyAdmin = users.find(u => u.role === "companyAdmin");
 
-        if (!companyAdmin) {
+        // if (!companyAdmin) {
+        //     return { statusCode: 200 };
+        // }
+
+        // 2️⃣ Find message owner (priority: companyAdmin → superadmin)
+        const messageOwner =
+            users.find(u => u.role === "companyAdmin") ||
+            users.find(u => u.role === "superadmin");
+
+        if (!messageOwner) {
             return { statusCode: 200 };
         }
+
+        console.log("messageOwner", messageOwner);
 
         // 3️⃣ Extract all userIds
         const allUserIds = users.map(u => u._id);
 
         const crmName = await findNameFromCRM({
-            userId: companyAdmin._id,
-            role: companyAdmin.role,
+            userId: messageOwner._id,
+            role: messageOwner.role,
             waId: senderWabaID
         });
 
@@ -1279,7 +1702,7 @@ exports.webhookReceive = async (req, res) => {
             if (content.mediaId) {
                 const downloaded = await downloadMetaMedia({
                     mediaId: content.mediaId,
-                    accessToken: companyAdmin.whatsappWaba.accessToken
+                    accessToken: messageOwner.whatsappWaba.accessToken
                 });
 
                 mimeType = downloaded.mimeType;
@@ -1288,7 +1711,7 @@ exports.webhookReceive = async (req, res) => {
                 attachmentName = getAttachmentName(msg, mimeType);
 
                 const s3Url = await uploadWhatsAppMediaToS3({
-                    userId: companyAdmin._id,
+                    userId: messageOwner._id,
                     messageType,
                     buffer: downloaded.buffer,
                     mimeType,
@@ -1306,7 +1729,7 @@ exports.webhookReceive = async (req, res) => {
 
             // Always save to DB regardless of WebSocket connections
             await WhatsAppMessage.create({
-                userId: companyAdmin._id,
+                userId: messageOwner._id,
                 phoneNumberId,
                 conversationId: msg.from,
                 senderName: finalSenderName,
@@ -1326,7 +1749,7 @@ exports.webhookReceive = async (req, res) => {
             });
 
             await updateChatLastMessage({
-                userId: companyAdmin._id,
+                userId: messageOwner._id,
                 chatNumber: msg.from,
                 direction: "incoming",
                 timestamp: new Date(msg.timestamp * 1000)
@@ -1336,7 +1759,7 @@ exports.webhookReceive = async (req, res) => {
             if (connections.length > 0) {
                 const eventPayload = {
                     whatsappEvent: req.body,
-                    userId: companyAdmin._id.toString(),
+                    userId: messageOwner._id.toString(),
                     finalSenderName: finalSenderName,
                     s3dataurl,
                     attachmentName,
@@ -1357,7 +1780,7 @@ exports.webhookReceive = async (req, res) => {
         res.sendStatus(200);
     }
 };
-
+ 
 
 /** STEP 5: Send Text Message
  */
@@ -3228,8 +3651,15 @@ exports.getWhatsappConversations = async (req, res) => {
         const now = new Date();
         const before24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+        // For superadmin: match by phoneNumberId so history is visible regardless of
+        // which userId (company admin vs superadmin) originally saved the messages.
+        const superadminPhoneNumberId = user.role === "superadmin" ? user.whatsappWaba?.phoneNumberId : null;
+        const firstMatchStage = superadminPhoneNumberId
+            ? { $match: { phoneNumberId: superadminPhoneNumberId } }
+            : { $match: { userId: companyAdminObjectId } };
+
         const aggregationPipeline = [
-            { $match: { userId: companyAdminObjectId } },
+            firstMatchStage,
             {
                 $addFields: {
                     sortTime: {
@@ -3549,9 +3979,19 @@ exports.getWhatsappConversations = async (req, res) => {
                             ]
                         } : {},
                         type === "chats"
-                            ? { lastIncomingTime: { $gte: before24Hours } }
+                            ? {
+                                $or: [
+                                    { lastIncomingTime: { $gte: before24Hours } },
+                                    { lastMessageTime: { $gte: before24Hours } }
+                                ]
+                            }
                             : type === "history"
-                                ? { $or: [{ lastIncomingTime: { $lt: before24Hours } }, { lastIncomingTime: null }] }
+                                ? {
+                                    $or: [
+                                        { lastMessageTime: { $lt: before24Hours } },
+                                        { lastMessageTime: null }
+                                    ]
+                                }
                                 : {}
                     ]
                 }
@@ -3714,16 +4154,28 @@ exports.getWhatsappMessages = async (req, res) => {
 
         const companyAdminObjectId = new mongoose.Types.ObjectId(companyAdminId);
 
+        // For superadmin: filter by phoneNumberId so messages from any previous owner are included.
+        const superadminPhoneNumberId = user.role === "superadmin" ? user.whatsappWaba?.phoneNumberId : null;
+
         // Match messages for this chat within the company's scope
         // We look for chatNumber within conversationId, from, or to fields
-        const conversationFilter = {
-            userId: companyAdminObjectId,
-            $or: [
-                { conversationId: { $regex: chatNumber } },
-                { from: { $regex: chatNumber } },
-                { to: { $regex: chatNumber } }
-            ]
-        };
+        const conversationFilter = superadminPhoneNumberId
+            ? {
+                phoneNumberId: superadminPhoneNumberId,
+                $or: [
+                    { conversationId: { $regex: chatNumber } },
+                    { from: { $regex: chatNumber } },
+                    { to: { $regex: chatNumber } }
+                ]
+            }
+            : {
+                userId: companyAdminObjectId,
+                $or: [
+                    { conversationId: { $regex: chatNumber } },
+                    { from: { $regex: chatNumber } },
+                    { to: { $regex: chatNumber } }
+                ]
+            };
 
         const searchFilter = search ? {
             $or: [

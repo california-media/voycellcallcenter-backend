@@ -80,8 +80,10 @@ const adminUserRoutes = require("./routes/admin/adminUserRoutes");
 const adminUserVerifyRoutes = require("./routes/admin/userVerifyRoutes");
 const adminHelpSupportRoutes = require("./routes/admin/adminHelpSupportRoutes");
 const superadmin = require("./routes/admin/superAdminRoutes");
+const superAdminDashboardRoutes = require("./routes/admin/superAdminDashboardRoutes");
 const planAdminRoutes = require("./routes/admin/planAdminRoutes");
 const couponAdminRoutes = require("./routes/admin/couponAdminRoutes");
+const globalSettingsAdminRoutes = require("./routes/admin/globalSettingsAdminRoutes");
 const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
 const apiLogsRoutes = require("./routes/admin/apiLogsRoutes");
 const userSessionsRoutes = require("./routes/admin/userSessionsRoutes");
@@ -260,6 +262,10 @@ app.use(
   getAdminDetailsRoutes
 );
 app.use(
+  "/admin",
+  superAdminDashboardRoutes
+);
+app.use(
   "/admin/help-support",
   checkForAuthentication(),
   checkRole(["superadmin"]),
@@ -285,6 +291,12 @@ app.use(
   checkForAuthentication(),
   checkRole(["superadmin"]),
   couponAdminRoutes
+);
+app.use(
+  "/superAdmin/settings",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  globalSettingsAdminRoutes
 );
 app.use(
   "/superAdmin/api-logs",

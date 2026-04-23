@@ -26,8 +26,11 @@ const invoiceSchema = new Schema(
 
     // Invoice details
     invoiceNumber: { type: String, default: null },
-    amount: { type: Number, required: true }, // in cents
-    amountPaid: { type: Number, default: 0 }, // in cents
+    amount: { type: Number, required: true }, // in cents — Stripe amount_due (after balance/credits)
+    amountPaid: { type: Number, default: 0 }, // in cents — actually charged to card
+    // Sum of positive line items = the plan charge before proration credits.
+    // Use this for display so proration upgrades show the real plan price, not $0.
+    planAmount: { type: Number, default: null }, // in cents
     currency: { type: String, default: "usd" },
     status: {
       type: String,
