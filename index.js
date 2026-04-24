@@ -91,7 +91,8 @@ const userSessionsRoutes = require("./routes/admin/userSessionsRoutes");
 const { saveUserSession } = require("./controllers/admin/userSessionsController");
 const userActivityRoutes = require("./routes/admin/userActivityRoutes");
 const { savePageView } = require("./controllers/admin/userActivityController");
-const { downloadBackup, listCollections, downloadCollection, downloadMongodump } = require("./controllers/admin/backupController");
+const { downloadBackup, listCollections, downloadCollection, downloadMongodump, triggerS3Backup, listS3Backups } = require("./controllers/admin/backupController");
+const { startScheduler } = require("./utils/backupScheduler");
 const apiLoggerMiddleware = require("./middlewares/apiLogger");
 // const chatAgentRoutes = require("./routes/chatAgentRoutes");
 // const initGraphQL = require("./graphql");
@@ -327,6 +328,9 @@ app.get("/superAdmin/backup/download",           checkForAuthentication(), check
 app.get("/superAdmin/backup/mongodump",          checkForAuthentication(), checkRole(["superadmin"]), downloadMongodump);
 app.get("/superAdmin/backup/collections",        checkForAuthentication(), checkRole(["superadmin"]), listCollections);
 app.get("/superAdmin/backup/collection/:name",   checkForAuthentication(), checkRole(["superadmin"]), downloadCollection);
+// S3 cloud backups
+app.post("/superAdmin/backup/s3",               checkForAuthentication(), checkRole(["superadmin"]), triggerS3Backup);
+app.get("/superAdmin/backup/s3",                checkForAuthentication(), checkRole(["superadmin"]), listS3Backups);
 
 // Billing & subscription (companyAdmin only)
 app.use(
@@ -386,8 +390,6 @@ const http = require("http");
     if (!IS_AWS && process.env.NODE_ENV !== "serverless") {
 
       const PORT = process.env.PORT || 4004;
-      // const server = http.createServer(app);
-
       app.listen(PORT, () =>
         console.log(
           `🚀 Server running on http://localhost:${PORT}`,
@@ -395,6 +397,9 @@ const http = require("http");
           process.env.NODE_ENV
         )
       );
+
+      // Start automated S3 backup scheduler (every 2 hours)
+      startScheduler();
     }
   } catch (err) {
     console.error("Startup Error:", err);

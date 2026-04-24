@@ -4,10 +4,20 @@ const Invoice = require("../../models/Invoice");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { sendEmailChangeVerification } = require("../../utils/emailUtils");
-// const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const getDeviceToken = require("../../services/yeastarTokenService").getDeviceToken;
 const axios = require("axios");
 const { getConfig } = require("../../utils/getConfig");
+
+const friendlyMongoError = (err) => {
+  if (err.code === 11000 || err.code === 11001) {
+    const key = Object.keys(err.keyPattern || {})[0] || "";
+    if (key.includes("email")) return "An account with this email already exists.";
+    if (key.includes("phonenumbers") || key.includes("number")) return "This mobile number is already registered to another account.";
+    return "A duplicate value was found. Please check the entered data.";
+  }
+  return err.message || "Internal Server Error";
+};
 
 // exports.getAllCompanyAdmins = async (req, res) => {
 //   try {
@@ -292,7 +302,7 @@ exports.getAgentsOfCompanyAdmin = async (req, res) => {
       ...searchQuery,
     })
       .select(
-        "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus accountStatus"
+        "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus accountStatus isVerified emailVerified"
       )
       .skip(skip)
       .limit(limit)
@@ -394,7 +404,7 @@ exports.getCompanyAdminDetails = async (req, res) => {
       role: "companyAdmin",
     })
       .select(
-        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName PBXDetails"
+        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName PBXDetails isVerified emailVerified"
       )
       .lean();
 
@@ -458,6 +468,8 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
       PBX_EXTENSION_ID,
       PBX_SIP_SECRET,
       companyName,
+      firstname,
+      lastname,
     } = req.body;
 
     const PBX_EXTENSION_NUMBER = extensionNumber;
@@ -703,6 +715,11 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
       updateData["userInfo.companyName"] = companyName.trim();
     }
 
+    if (firstname !== undefined && firstname !== null && firstname.trim() !== "")
+      updateData.firstname = firstname.trim();
+    if (lastname !== undefined && lastname !== null)
+      updateData.lastname = (lastname || "").trim();
+
     if (user.pendingEmailChange) {
       updateData.pendingEmailChange =
         user.pendingEmailChange;
@@ -728,9 +745,7 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
       updatedUser,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Internal Server Error" });
+    res.status(500).json({ error: friendlyMongoError(error) });
   }
 };
 
@@ -1482,5 +1497,228 @@ exports.deleteCompanyBySuperAdmin = async (req, res) => {
   } catch (error) {
     console.error("deleteCompanyBySuperAdmin error:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+// ─── Create Company Admin (SuperAdmin) ────────────────────────────────────────
+exports.createCompanyAdmin = async (req, res) => {
+  try {
+    const {
+      firstname, lastname, email, password, companyName,
+      mobile, emailVerified, mobileVerified, isVerified,
+    } = req.body;
+
+    if (!firstname || !email || !password)
+      return res.status(400).json({ error: "firstname, email, and password are required" });
+
+    const existing = await User.findOne({ email: email.trim().toLowerCase() });
+    if (existing)
+      return res.status(409).json({ error: "An account with this email already exists" });
+
+    // Fetch trial duration from superadmin config
+    const superAdminCfg = await User.findOne({ role: "superadmin" }).select("trialDurationDays").lean();
+    const trialDays = superAdminCfg?.trialDurationDays || 7;
+    const trialStart = new Date();
+
+    const userData = {
+      firstname: firstname.trim(),
+      lastname: (lastname || "").trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      role: "companyAdmin",
+      isActive: true,
+      planStatus: "trial",
+      trialStartedAt: trialStart,
+      trialEndsAt: new Date(trialStart.getTime() + trialDays * 24 * 60 * 60 * 1000),
+      trialDurationDays: trialDays,
+      signupMethod: "email",
+      isVerified: !!isVerified,
+      emailVerified: !!emailVerified,
+    };
+
+    if (companyName) userData["userInfo.companyName"] = companyName.trim();
+
+    if (mobile?.number) {
+      userData.phonenumbers = [{
+        countryCode: mobile.countryCode || "",
+        number: mobile.number.trim(),
+        isVerified: !!mobileVerified,
+      }];
+    }
+
+    const user = await User.create(userData);
+    return res.status(201).json({
+      success: true,
+      message: "Company admin created successfully",
+      user: { _id: user._id, email: user.email, firstname: user.firstname, lastname: user.lastname },
+    });
+  } catch (err) {
+    console.error("createCompanyAdmin error:", err);
+    res.status(500).json({ error: friendlyMongoError(err) });
+  }
+};
+
+// ─── Create Agent (SuperAdmin) ────────────────────────────────────────────────
+exports.createAgentBySuperAdmin = async (req, res) => {
+  try {
+    const {
+      firstname, lastname, email, password, companyAdminId,
+      mobile, emailVerified, mobileVerified, isVerified,
+    } = req.body;
+
+    if (!email || !companyAdminId || !password)
+      return res.status(400).json({ error: "email, password, and companyAdminId are required" });
+
+    const companyAdmin = await User.findById(companyAdminId);
+    if (!companyAdmin || companyAdmin.role !== "companyAdmin")
+      return res.status(404).json({ error: "Company admin not found" });
+
+    const existing = await User.findOne({ email: email.trim().toLowerCase() });
+    if (existing)
+      return res.status(409).json({ error: "An account with this email already exists" });
+
+    const userData = {
+      firstname: (firstname || "").trim(),
+      lastname: (lastname || "").trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      role: "user",
+      isActive: true,
+      signupMethod: "email",
+      createdByWhichCompanyAdmin: companyAdminId,
+      isVerified: !!isVerified,
+      emailVerified: !!emailVerified,
+    };
+
+    if (mobile?.number) {
+      userData.phonenumbers = [{
+        countryCode: mobile.countryCode || "",
+        number: mobile.number.trim(),
+        isVerified: !!mobileVerified,
+      }];
+    }
+
+    const user = await User.create(userData);
+    return res.status(201).json({
+      success: true,
+      message: "Agent created successfully",
+      user: { _id: user._id, email: user.email, firstname: user.firstname },
+    });
+  } catch (err) {
+    console.error("createAgentBySuperAdmin error:", err);
+    res.status(500).json({ error: friendlyMongoError(err) });
+  }
+};
+
+// ─── Reset User Password (SuperAdmin) ─────────────────────────────────────────
+exports.resetUserPassword = async (req, res) => {
+  try {
+    const { userId, newPassword } = req.body;
+    if (!userId || !newPassword)
+      return res.status(400).json({ error: "userId and newPassword are required" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    user.password = newPassword;
+    await user.save(); // pre-save hook hashes the password
+
+    res.json({ success: true, message: "Password reset successfully" });
+  } catch (err) {
+    console.error("resetUserPassword error:", err);
+    res.status(500).json({ error: friendlyMongoError(err) });
+  }
+};
+
+// ─── Update Verification Flags (SuperAdmin) ───────────────────────────────────
+exports.updateUserVerification = async (req, res) => {
+  try {
+    const { userId, isVerified, emailVerified, mobileVerified } = req.body;
+    if (!userId) return res.status(400).json({ error: "userId is required" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (isVerified !== undefined) user.isVerified = !!isVerified;
+    if (emailVerified !== undefined) user.emailVerified = !!emailVerified;
+
+    if (mobileVerified !== undefined) {
+      if (user.phonenumbers?.length > 0) {
+        user.phonenumbers[0].isVerified = !!mobileVerified;
+        user.markModified("phonenumbers");
+      }
+    }
+
+    await user.save();
+    res.json({ success: true, message: "Verification status updated" });
+  } catch (err) {
+    console.error("updateUserVerification error:", err);
+    res.status(500).json({ error: friendlyMongoError(err) });
+  }
+};
+
+// ─── Update Email / Mobile (SuperAdmin) ───────────────────────────────────────
+exports.updateUserContact = async (req, res) => {
+  try {
+    const { userId, email, mobile, firstname, lastname, role } = req.body;
+    if (!userId) return res.status(400).json({ error: "userId is required" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (firstname !== undefined) user.firstname = firstname.trim();
+    if (lastname  !== undefined) user.lastname  = (lastname || "").trim();
+    if (role && ["companyAdmin", "user"].includes(role)) user.role = role;
+
+    if (email && email.trim().toLowerCase() !== user.email) {
+      const dup = await User.findOne({ email: email.trim().toLowerCase(), _id: { $ne: userId } });
+      if (dup) return res.status(409).json({ error: "Email already in use by another account" });
+      user.email = email.trim().toLowerCase();
+      user.emailVerified = false;
+    }
+
+    if (mobile?.number) {
+      const entry = {
+        countryCode: mobile.countryCode || "",
+        number: mobile.number.trim(),
+        isVerified: false,
+      };
+      if (user.phonenumbers?.length > 0) {
+        user.phonenumbers[0] = entry;
+      } else {
+        user.phonenumbers = [entry];
+      }
+      user.markModified("phonenumbers");
+    }
+
+    await user.save();
+    res.json({ success: true, message: "Profile updated successfully" });
+  } catch (err) {
+    console.error("updateUserContact error:", err);
+    res.status(500).json({ error: friendlyMongoError(err) });
+  }
+};
+
+exports.generateLoginLink = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: "userId is required" });
+
+    const user = await User.findById(userId).select("_id email role").lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+
+    await User.findByIdAndUpdate(userId, {
+      magicLoginToken: token,
+      magicLoginExpires: expiresAt,
+    });
+
+    const link = `${FRONTEND_URL}/link-login?token=${token}`;
+    res.json({ status: "success", link });
+  } catch (err) {
+    console.error("generateLoginLink error:", err);
+    res.status(500).json({ error: "Failed to generate login link" });
   }
 };

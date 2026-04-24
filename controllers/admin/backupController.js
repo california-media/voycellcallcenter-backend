@@ -240,4 +240,32 @@ const downloadMongodump = async (req, res) => {
   }
 };
 
-module.exports = { downloadBackup, listCollections, downloadCollection, downloadMongodump };
+// ── S3 backup endpoints ───────────────────────────────────────────────────────
+const { runBackup, listBackups } = require("../../utils/backupScheduler");
+
+// POST /superAdmin/backup/s3 — trigger manual S3 backup
+const triggerS3Backup = async (req, res) => {
+  try {
+    const result = await runBackup();
+    res.json(result);
+  } catch (err) {
+    console.error("Manual S3 backup error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET /superAdmin/backup/s3 — list S3 backups with signed download URLs
+const listS3Backups = async (req, res) => {
+  try {
+    const backups = await listBackups();
+    res.json({ success: true, backups });
+  } catch (err) {
+    console.error("List S3 backups error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = {
+  downloadBackup, listCollections, downloadCollection, downloadMongodump,
+  triggerS3Backup, listS3Backups,
+};

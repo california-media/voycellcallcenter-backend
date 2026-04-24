@@ -17,6 +17,12 @@ const {
   getAgentsOfCompanyAdminByDevice,
   getCompanyBillingDetails,
   deleteCompanyBySuperAdmin,
+  createCompanyAdmin,
+  createAgentBySuperAdmin,
+  resetUserPassword,
+  updateUserVerification,
+  updateUserContact,
+  generateLoginLink,
 } = require("../../controllers/admin/superAdminController");
 
 // Super Admin only
@@ -51,6 +57,14 @@ router.get("/companies/:userId/billing", getCompanyBillingDetails);
 
 // Permanently delete a deactivated company (SuperAdmin only)
 router.post("/deleteCompany", deleteCompanyBySuperAdmin);
+
+// User management (SuperAdmin)
+router.post("/createCompanyAdmin", createCompanyAdmin);
+router.post("/createAgent", createAgentBySuperAdmin);
+router.post("/resetUserPassword", resetUserPassword);
+router.put("/updateUserVerification", updateUserVerification);
+router.put("/updateUserContact", updateUserContact);
+router.post("/generateLoginLink", generateLoginLink);
 
 // SuperAdmin WhatsApp campaigns
 const {
