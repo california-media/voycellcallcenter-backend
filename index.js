@@ -70,7 +70,8 @@ const addEditTempleteRoutes = require("./routes/addEditTempleteRoutes");
 const whatsappRoutes = require("./routes/whatsapp.routes");
 const hubspotAuthRoutes = require("./routes/hubspot.routes");
 const pipedriveAuthRoutes = require("./routes/pipedrive.routes");
-const billingRoutes = require("./routes/billingRoutes");
+const billingRoutes  = require("./routes/billingRoutes");
+const creditsRoutes  = require("./routes/creditsRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const dashboardStatsRoutes = require("./routes/dashboardStatsRoutes");
 
@@ -334,6 +335,9 @@ app.use(
   checkRole(["companyAdmin"]),
   billingRoutes
 );
+
+// Credits — accessible by companyAdmin (and agents can view balance)
+app.use("/billing/credits", creditsRoutes);
 
 app.use(
   "/notifications",

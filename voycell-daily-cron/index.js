@@ -2,7 +2,9 @@ require("dotenv").config();
 console.log("Environment Variables Loaded");
 
 const mongoose = require("mongoose");
+const Stripe   = require("stripe");
 const HelpSupport = require("./models/helpSupportModel");
+const User        = require("./models/userModel");
 
 // ------------------- TICKET AUTO-CLOSE FUNCTION -------------------
 /**
@@ -90,6 +92,65 @@ const connectToDatabase = async () => {
   }
 };
 
+// ------------------- AUTO-RECHARGE JOB -------------------
+const runAutoRechargeJob = async () => {
+  const stripe = Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-04-10" });
+
+  const candidates = await User.find({
+    "autoRecharge.enabled": true,
+    stripeCustomerId: { $ne: null },
+  }).select("creditBalance autoRecharge stripeCustomerId email");
+
+  console.log(`Auto-recharge: found ${candidates.length} users with auto-recharge enabled`);
+
+  let recharged = 0;
+  for (const user of candidates) {
+    if ((user.creditBalance || 0) >= user.autoRecharge.threshold) continue;
+
+    try {
+      const customer = await stripe.customers.retrieve(user.stripeCustomerId, {
+        expand: ["invoice_settings.default_payment_method"],
+      });
+      const defaultPm = customer?.invoice_settings?.default_payment_method;
+      if (!defaultPm) continue;
+
+      const paymentMethodId = typeof defaultPm === "string" ? defaultPm : defaultPm.id;
+      const amount      = user.autoRecharge.amount;
+      const amountCents = Math.round(amount * 100);
+
+      const stripeInvoice = await stripe.invoices.create({
+        customer:                       customer.id,
+        auto_advance:                   false,
+        pending_invoice_items_behavior: "exclude",
+      });
+
+      await stripe.invoiceItems.create({
+        customer:    customer.id,
+        invoice:     stripeInvoice.id,
+        amount:      amountCents,
+        currency:    "usd",
+        description: `Auto-recharge — $${amount}`,
+      });
+
+      const finalized = await stripe.invoices.finalizeInvoice(stripeInvoice.id);
+      let paid = finalized;
+      if (finalized.status !== "paid") {
+        paid = await stripe.invoices.pay(finalized.id, { payment_method: paymentMethodId });
+      }
+
+      if (paid.status !== "paid") continue;
+
+      await User.findByIdAndUpdate(user._id, { $inc: { creditBalance: amount } });
+      recharged++;
+      console.log(`Auto-recharged $${amount} for user ${user.email}`);
+    } catch (err) {
+      console.error(`Auto-recharge failed for user ${user.email}:`, err.message);
+    }
+  }
+
+  return { recharged, total: candidates.length };
+};
+
 // ------------------- LAMBDA HANDLER -------------------
 /**
  * AWS Lambda handler function for EventBridge cron trigger
@@ -112,12 +173,17 @@ module.exports.handler = async (event, context) => {
     console.log("⏰ Running daily ticket auto-close job...");
     const result = await closeInactiveTickets();
 
+    // Execute auto-recharge for eligible users
+    console.log("💳 Running auto-recharge job...");
+    const rechargeResult = await runAutoRechargeJob();
+
     return {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
-        message: "Daily ticket auto-close job completed successfully",
-        ...result,
+        message: "Daily jobs completed successfully",
+        ticketsClosed: result.closedCount,
+        autoRecharged: rechargeResult.recharged,
       }),
     };
   } catch (error) {

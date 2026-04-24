@@ -30,7 +30,7 @@ const getSuperAdminDashboardStats = async (req, res) => {
     ]);
 
     // ── 3. Revenue from invoices ─────────────────────────────────────
-    const [totalRevenueAgg, periodRevenueAgg, pendingAgg, failedAgg] = await Promise.all([
+    const [totalRevenueAgg, periodRevenueAgg, pendingAgg, failedAgg, creditsAgg] = await Promise.all([
       // All-time paid revenue
       Invoice.aggregate([
         { $match: { status: "paid" } },
@@ -51,6 +51,11 @@ const getSuperAdminDashboardStats = async (req, res) => {
         { $match: { status: "uncollectible" } },
         { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
       ]),
+      // Total credits recharged (all credit top-up invoices)
+      Invoice.aggregate([
+        { $match: { couponCode: "CREDIT_TOPUP", status: "paid" } },
+        { $group: { _id: null, total: { $sum: "$amountPaid" }, count: { $sum: 1 } } },
+      ]),
     ]);
 
     const totalRevenue     = (totalRevenueAgg[0]?.total   || 0) / 100;
@@ -60,6 +65,8 @@ const getSuperAdminDashboardStats = async (req, res) => {
     const pendingCount     = pendingAgg[0]?.count         || 0;
     const failedAmount     = (failedAgg[0]?.total         || 0) / 100;
     const failedCount      = failedAgg[0]?.count          || 0;
+    const totalCredits     = (creditsAgg[0]?.total        || 0) / 100;
+    const totalCreditTxns  = creditsAgg[0]?.count         || 0;
 
     // ── 4. Revenue by day in period (for chart) ──────────────────────
     const revenueByDay = await Invoice.aggregate([
@@ -101,6 +108,7 @@ const getSuperAdminDashboardStats = async (req, res) => {
         revenue: { total: totalRevenue, period: periodRevenue, periodInvoices },
         pending: { amount: pendingAmount, count: pendingCount },
         failed: { amount: failedAmount, count: failedCount },
+        credits: { total: totalCredits, count: totalCreditTxns },
         charts: { revenueByDay, companiesByDay },
         recentInvoices,
         dateRange: { startDate: startStr, endDate: endStr },

@@ -263,6 +263,14 @@ const userSchema = new Schema(
     trialStart: { type: Date },
     trialEnd: { type: Date },
 
+    // ─── Call Credits ─────────────────────────────────────────────────────────
+    creditBalance: { type: Number, default: 0 },     // USD balance (dollars)
+    autoRecharge: {
+      enabled:   { type: Boolean, default: false },
+      threshold: { type: Number,  default: 5   },    // recharge when balance < threshold ($)
+      amount:    { type: Number,  default: 100  },   // amount to top-up ($)
+    },
+
     // ─── Stripe / Plan fields ──────────────────────────────────────────────────
     stripeCustomerId: { type: String, default: null },
     planStatus: {

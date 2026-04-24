@@ -211,18 +211,26 @@ const updatePlan = async (req, res) => {
 const deletePlan = async (req, res) => {
   try {
     const { planId } = req.params;
+
     const plan = await Plan.findOne({ _id: planId, isDeleted: false });
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
 
-    const activeSubs = await Subscription.countDocuments({
+    // Cancel any active subscriptions for this plan before deleting
+    const activeSubs = await Subscription.find({
       planId,
       status: { $in: ["active", "trialing"] },
-    });
-    if (activeSubs > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot delete plan with ${activeSubs} active subscriber(s). Deactivate it instead.`,
-      });
+    }).select("userId").lean();
+
+    if (activeSubs.length > 0) {
+      await Subscription.updateMany(
+        { planId, status: { $in: ["active", "trialing"] } },
+        { $set: { status: "cancelled", cancelledAt: new Date() } }
+      );
+      const userIds = activeSubs.map((s) => s.userId);
+      await User.updateMany(
+        { _id: { $in: userIds } },
+        { $set: { planStatus: "cancelled" } }
+      );
     }
 
     plan.isDeleted = true;

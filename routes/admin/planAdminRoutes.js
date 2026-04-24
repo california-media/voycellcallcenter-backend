@@ -4,7 +4,6 @@ const {
   getAllPlans,
   createPlan,
   updatePlan,
-  deletePlan,
   togglePlanStatus,
   reorderPlans,
   updateCommonFeatures,
@@ -22,6 +21,40 @@ const {
   assignPlanToUser,
   searchUsers,
 } = require("../../controllers/admin/planManagementController");
+
+const Plan         = require("../../models/Plan");
+const Subscription = require("../../models/Subscription");
+const User         = require("../../models/userModel");
+
+// Inline delete handler — cancels active subscriptions then soft-deletes the plan
+const deletePlan = async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const plan = await Plan.findOne({ _id: planId, isDeleted: false });
+    if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
+
+    // Cancel any active subscriptions linked to this plan
+    const subs = await Subscription.find({ planId, status: { $in: ["active", "trialing"] } }).select("userId").lean();
+    if (subs.length > 0) {
+      await Subscription.updateMany(
+        { planId, status: { $in: ["active", "trialing"] } },
+        { $set: { status: "cancelled", cancelledAt: new Date() } }
+      );
+      const userIds = subs.map((s) => s.userId);
+      await User.updateMany({ _id: { $in: userIds } }, { $set: { planStatus: "cancelled" } });
+    }
+
+    plan.isDeleted = true;
+    plan.deletedAt = new Date();
+    plan.isActive  = false;
+    await plan.save();
+
+    return res.json({ success: true, message: "Plan deleted successfully" });
+  } catch (err) {
+    console.error("deletePlan error:", err);
+    return res.status(500).json({ success: false, message: "Failed to delete plan" });
+  }
+};
 
 // Global config
 router.get("/config", getGlobalConfig);

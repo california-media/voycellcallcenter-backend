@@ -1404,9 +1404,19 @@ const getRetentionSettings = async (req, res) => {
       isRetentionCoupon: true,
     }).lean();
 
+    const couponUsed = existingCoupon && (existingCoupon.timesUsed || 0) >= 1;
+    const firstUsedAt = existingCoupon?.usageHistory?.[0]?.usedAt || null;
+
     res.json({
       success: true,
       retentionDiscountPercent: settings.retentionDiscountPercent,
+      // Retention coupon lifecycle flags — used by frontend to skip offer screen on repeat cancellations
+      retentionCoupon: {
+        hasGenerated: !!existingCoupon,             // user generated a coupon at some point
+        hasUsed: couponUsed,                        // user actually used it (applied to a payment)
+        generatedAt: existingCoupon?.createdAt || null,
+        usedAt: firstUsedAt,
+      },
       existingRetentionCoupon: existingCoupon
         ? {
             _id: existingCoupon._id,

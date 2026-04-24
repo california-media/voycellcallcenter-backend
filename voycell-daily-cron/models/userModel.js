@@ -347,6 +347,14 @@ const userSchema = new Schema(
 
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date },
+
+    stripeCustomerId: { type: String, default: null },
+    creditBalance: { type: Number, default: 0 },
+    autoRecharge: {
+      enabled:   { type: Boolean, default: false },
+      threshold: { type: Number,  default: 5   },
+      amount:    { type: Number,  default: 100  },
+    },
   },
   { timestamps: true }
 );
