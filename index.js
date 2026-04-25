@@ -92,7 +92,7 @@ const { saveUserSession } = require("./controllers/admin/userSessionsController"
 const userActivityRoutes = require("./routes/admin/userActivityRoutes");
 const { savePageView } = require("./controllers/admin/userActivityController");
 const { downloadBackup, listCollections, downloadCollection, downloadMongodump, triggerS3Backup, listS3Backups } = require("./controllers/admin/backupController");
-const { startScheduler } = require("./utils/backupScheduler");
+// backupScheduler exports runBackup and listBackups — scheduling is handled externally via cron-job.org
 const apiLoggerMiddleware = require("./middlewares/apiLogger");
 // const chatAgentRoutes = require("./routes/chatAgentRoutes");
 // const initGraphQL = require("./graphql");
@@ -328,9 +328,19 @@ app.get("/superAdmin/backup/download",           checkForAuthentication(), check
 app.get("/superAdmin/backup/mongodump",          checkForAuthentication(), checkRole(["superadmin"]), downloadMongodump);
 app.get("/superAdmin/backup/collections",        checkForAuthentication(), checkRole(["superadmin"]), listCollections);
 app.get("/superAdmin/backup/collection/:name",   checkForAuthentication(), checkRole(["superadmin"]), downloadCollection);
-// S3 cloud backups
+// S3 cloud backups (superAdmin dashboard)
 app.post("/superAdmin/backup/s3",               checkForAuthentication(), checkRole(["superadmin"]), triggerS3Backup);
 app.get("/superAdmin/backup/s3",                checkForAuthentication(), checkRole(["superadmin"]), listS3Backups);
+
+// Automated backup trigger — called by external cron (cron-job.org every 2h).
+// Protected by BACKUP_CRON_SECRET header instead of JWT.
+app.post("/cron/backup", (req, res, next) => {
+  const secret = req.headers["x-backup-secret"];
+  if (!secret || secret !== process.env.BACKUP_CRON_SECRET) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+  next();
+}, triggerS3Backup);
 
 // Billing & subscription (companyAdmin only)
 app.use(
@@ -398,8 +408,7 @@ const http = require("http");
         )
       );
 
-      // Start automated S3 backup scheduler (every 2 hours)
-      startScheduler();
+      // Backup scheduling is handled by cron-job.org calling POST /cron/backup every 2 hours
     }
   } catch (err) {
     console.error("Startup Error:", err);
@@ -502,7 +511,17 @@ module.exports.handler = async (event, context) => {
     }
 
     /* ================================
-       2️⃣ NORMAL API REQUEST
+       2️⃣ EVENTBRIDGE BACKUP
+    ================================= */
+    if (event?.type === "DB_BACKUP") {
+      const { runBackup } = require("./utils/backupScheduler");
+      const result = await runBackup();
+      console.log("[EventBridge] DB_BACKUP completed:", result);
+      return { statusCode: 200, body: JSON.stringify(result) };
+    }
+
+    /* ================================
+       3️⃣ NORMAL API REQUEST
     ================================= */
 
     return serverlessHandler(event, context);

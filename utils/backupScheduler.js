@@ -4,7 +4,6 @@
  * Backups older than 7 days are deleted automatically after each run.
  */
 
-const cron        = require("node-cron");
 const archiver    = require("archiver");
 const { PassThrough } = require("stream");
 const mongoose    = require("mongoose");
@@ -57,7 +56,8 @@ const runBackup = async () => {
   }
 
   const dateStr = new Date().toISOString().slice(0, 10);
-  archive.append(generateReadme(names, dateStr), { name: "README.txt" });
+  archive.append(generateRestoreScript(names), { name: "restore.sh" });
+  archive.append(generateReadme(names, dateStr),  { name: "README.txt" });
 
   // Start finalizing — this writes to the passthrough stream
   const finalizePromise = archive.finalize();
@@ -133,18 +133,35 @@ const listBackups = async () => {
   }));
 };
 
-// ── Schedule every 2 hours ────────────────────────────────────────────────────
-const startScheduler = () => {
-  // Runs at minute 0 of every even hour: 00:00, 02:00, 04:00 … 22:00
-  cron.schedule("0 */2 * * *", async () => {
-    try {
-      await runBackup();
-    } catch (err) {
-      console.error("[Backup] Scheduled backup failed:", err.message);
-    }
-  });
-  console.log("[Backup] Scheduler started — backups every 2 hours → S3");
-};
+// Scheduling is handled externally by cron-job.org calling POST /cron/backup every 2 hours.
+// No in-process scheduler — Lambda is ephemeral and node-cron doesn't work reliably on it.
+
+function generateRestoreScript(names) {
+  return [
+    "#!/bin/bash",
+    "# VOYCELL Database Restore Script",
+    "# Usage: bash restore.sh <mongodb_connection_string> <database_name>",
+    "# Example: bash restore.sh \"mongodb+srv://user:pass@cluster.mongodb.net\" voycell",
+    "",
+    'MONGO_URI="${1}"',
+    'DB_NAME="${2:-voycell}"',
+    "",
+    'if [ -z "$MONGO_URI" ]; then',
+    '  echo "Error: provide a MongoDB connection string as the first argument."',
+    "  exit 1",
+    "fi",
+    "",
+    'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"',
+    'echo "Restoring into database: $DB_NAME"',
+    "",
+    ...names.flatMap((name) => [
+      `echo "Importing ${name}..."`,
+      `mongoimport --uri "$MONGO_URI" --db "$DB_NAME" --collection "${name}" --file "$SCRIPT_DIR/${name}.json" --jsonArray --drop`,
+    ]),
+    "",
+    'echo "Restore complete."',
+  ].join("\n");
+}
 
 function generateReadme(names, dateStr) {
   return [
@@ -158,4 +175,4 @@ function generateReadme(names, dateStr) {
   ].join("\n");
 }
 
-module.exports = { startScheduler, runBackup, listBackups };
+module.exports = { runBackup, listBackups };
