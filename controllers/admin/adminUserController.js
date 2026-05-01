@@ -95,14 +95,19 @@ exports.adminRegisterUser = async (req, res) => {
       if (admin?.planStatus === "trial") allowedAgentCount = 1;
     }
 
-    if (currentAgentCount >= allowedAgentCount) {
+    // The company admin always occupies 1 seat themselves, so agents can only
+    // use the remaining seats: (allowedAgentCount - 1).
+    const agentSeatsForAgents = Math.max(0, allowedAgentCount - 1);
+
+    if (currentAgentCount >= agentSeatsForAgents) {
       return res.status(403).json({
         status: "error",
         message: activeSubscription
-          ? `You have used all ${allowedAgentCount} agent seat(s) included in your plan. Please upgrade your agent count from the billing page.`
+          ? `You have used all available agent seats. Your plan includes ${allowedAgentCount} seat(s) and 1 is reserved for the company admin account. Please purchase additional seats from the billing page.`
           : "You need an active subscription to add agents. Please upgrade your plan.",
         agentLimitReached: true,
         allowedAgentCount,
+        agentSeatsForAgents,
         currentAgentCount,
       });
     }

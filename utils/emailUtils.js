@@ -112,7 +112,7 @@ const sendVerificationEmail = async (email, link) => {
         <center> 
         <a href="https://voycell.com/" target="_blank">
         <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
-                    alt="VOYCELL Logo" style="width:200px; display:block;">
+                    alt="VOYCELL Logo" style="width:200px; display:block; margin:0 auto;">
                     
                     </center></a>
         <p><strong>Hello,</strong></p>
@@ -140,7 +140,7 @@ const sendVerificationEmail = async (email, link) => {
             <div style="float:left; width:110px; margin-right:10px;">
             
                 <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
-                    alt="VOYCELL logo" style="width:100px; display:block;">
+                    alt="VOYCELL logo" style="width:100px; display:block; margin:0 auto;">
            
             </div>
             </a>
@@ -222,7 +222,6 @@ const sendPostVerificationDemoEmail = async (user) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8; padding:20px;">
     <tr>
       <td align="center">
-
         <table width="600" cellpadding="0" cellspacing="0" 
           style="background:#ffffff; border-radius:10px; padding:30px;">
 
@@ -230,7 +229,7 @@ const sendPostVerificationDemoEmail = async (user) => {
           <tr>
             <td align="center">
               <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
-                   width="180" style="margin-bottom:20px;" />
+                   width="180" style="display:block; margin:0 auto 20px;" />
             </td>
           </tr>
 
@@ -370,7 +369,7 @@ const sendPostVerificationDemoEmail = async (user) => {
 //     <div class="container">
 //         <center>
 //             <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logoWithName.png"
-//                 alt="Contacts Management Logo" style="width:200px; display:block;">
+//                 alt="Contacts Management Logo" style="width:200px; display:block; margin:0 auto;">
 //         </center>
 
 //         <p><strong>Hello ${userName || "Valued Customer"},</strong></p>
@@ -394,7 +393,7 @@ const sendPostVerificationDemoEmail = async (user) => {
 //         <div style="width:100%; overflow:hidden; margin-top: 30px;">
 //             <div style="float:left; width:110px; margin-right:10px;">
 //                 <img src="https://contacts-api-bucket.s3.eu-north-1.amazonaws.com/iconsAndImages/logo.png"
-//                     alt="Contacts Management Logo" style="width:100px; display:block;">
+//                     alt="Contacts Management Logo" style="width:100px; display:block; margin:0 auto;">
 //             </div>
 //             <div style="overflow:hidden;">
 //                 <span style="color:rgb(45,49,58); font-size:14px; letter-spacing:0.25px;">Be Extraordinary,</span><br>
@@ -502,7 +501,7 @@ const sendHelpSupportReplyNotification = async (
     <div class="container">
         <center>
             <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
-                alt="VOYCELL Logo" style="width:200px; display:block;">
+                alt="VOYCELL Logo" style="width:200px; display:block; margin:0 auto;">
         </center>
 
         <p><strong>Hello ${userName || "Valued Customer"},</strong></p>
@@ -528,7 +527,7 @@ const sendHelpSupportReplyNotification = async (
         <div style="width:100%; overflow:hidden; margin-top: 30px;">
             <div style="float:left; width:110px; margin-right:10px;">
                 <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
-                    alt="VOYCELL Logo" style="width:100px; display:block;">
+                    alt="VOYCELL Logo" style="width:100px; display:block; margin:0 auto;">
             </div>
             <div style="overflow:hidden;">
                 <span style="color:rgb(45,49,58); font-size:14px; letter-spacing:0.25px;">Be Extraordinary,</span><br>
@@ -542,7 +541,7 @@ const sendHelpSupportReplyNotification = async (
         </div>
 
         <div class="footer">
-            <p>Need additional help? Contact us at <a href="mailto:support@voycell.com">support@voycell.com</a></p>
+            <p>Need additional help? Contact us at <a href="mailto:hello@voycell.com">hello@voycell.com</a></p>
             <p>Sent with ❤️ from VOYCELL</p>
             <p><a href="https://voycell.com/privacy-policy" target="_blank">Privacy Policy</a></p>
         </div>
@@ -636,7 +635,7 @@ const sendEmailChangeVerification = async (
     <div class="container">
 
         <center> <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
-                    alt="VOYCELL Logo" style="width:200px; display:block;"></center>
+                    alt="VOYCELL Logo" style="width:200px; display:block; margin:0 auto;"></center>
         <p><strong>Hello ${userName || "User"},</strong></p>
         
         <p>Your VOYCELL account email address has been updated by the system administrator.</p>
@@ -665,7 +664,7 @@ const sendEmailChangeVerification = async (
             <!-- Left Column (Image) -->
             <div style="float:left; width:110px; margin-right:10px;">
                 <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png"
-                    alt="VOYCELL logo" style="width:100px; display:block;">
+                    alt="VOYCELL logo" style="width:100px; display:block; margin:0 auto;">
             </div>
 
             <!-- Right Column (Text) -->
@@ -759,7 +758,7 @@ const sendMagicLinkEmail = async (email, link) => {
       <div class="container">
 
         <center>
-          <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png" style="width:180px;" />
+          <img src="https://voycell-api-bucket.s3.eu-north-1.amazonaws.com/static/voycell-logo.png" style="width:180px; display:block; margin:0 auto;" />
         </center>
 
         <h2>Login to VOYCELL using Magic Link</h2>
@@ -822,65 +821,17 @@ const sendMagicLinkEmail = async (email, link) => {
 
 // ─── sendAdminBroadcastEmail ─────────────────────────────────────────────────
 // Used by superAdmin "Email Notification" feature to broadcast custom emails
-const sendAdminBroadcastEmail = async ({ to, subject, title, body }) => {
+const sendAdminBroadcastEmail = async ({ to, subject, title, body, fromEmail, fromName, replyTo, attachments }) => {
+  const from = fromEmail
+    ? `"${fromName || "VOYCELL"}" <${fromEmail}>`
+    : '"VOYCELL" <noreply@voycell.com>';
   const mailOptions = {
-    from: '"VOYCELL" <noreply@voycell.com>',
+    from,
+    ...(replyTo ? { replyTo } : {}),
+    ...(attachments?.length ? { attachments } : {}),
     to,
     subject: subject || "A message from VOYCELL",
-    html: `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8"/>
-  <title>${subject || "VOYCELL Notification"}</title>
-</head>
-<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:30px 20px;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0"
-        style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-
-        <!-- Header bar -->
-        <tr>
-          <td style="background:#ffffff;padding:20px 32px;border-bottom:3px solid #6366f1;">
-            <img src="${FRONTEND_URL}/assets/img/voycell-logo.png"
-                 alt="VOYCELL" width="140"
-                 style="display:block;" />
-          </td>
-        </tr>
-
-        <!-- Title -->
-        <tr>
-          <td style="padding:28px 32px 0;">
-            <h2 style="margin:0;font-size:22px;color:#111827;font-weight:700;">${title || subject || ""}</h2>
-          </td>
-        </tr>
-
-        <!-- Body -->
-        <tr>
-          <td style="padding:16px 32px 28px;font-size:15px;color:#374151;line-height:1.7;">
-            ${body || ""}
-          </td>
-        </tr>
-
-        <!-- Divider -->
-        <tr><td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"/></td></tr>
-
-        <!-- Footer -->
-        <tr>
-          <td align="center" style="padding:20px 32px;font-size:13px;color:#9ca3af;">
-            <p style="margin:0 0 6px;">
-              Need help? Contact us at
-              <a href="mailto:support@voycell.com" style="color:#6366f1;text-decoration:none;">support@voycell.com</a>
-            </p>
-            <p style="margin:0;">© ${new Date().getFullYear()} VOYCELL. All rights reserved.</p>
-          </td>
-        </tr>
-
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`,
+    html: body || "",
   };
 
   return getTransporter().sendMail(mailOptions);

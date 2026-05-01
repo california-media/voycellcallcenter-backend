@@ -46,6 +46,13 @@ const invoiceSchema = new Schema(
     billingPeriodStart: { type: Date, default: null },
     billingPeriodEnd: { type: Date, default: null },
 
+    // Human-readable invoice type for display (e.g. "Additional Agent Seats", "Plan Subscription")
+    invoiceType: { type: String, default: null },
+
+    // For seat-addition invoices: face value of the seats purchased (extraSeats × agentPrice), in cents.
+    // Stripe charges a prorated amount (amountPaid) which differs from this; this is what users expect to see.
+    seatFaceAmount: { type: Number, default: null },
+
     // Coupon applied
     couponCode: { type: String, default: null },
     discountAmount: { type: Number, default: 0 }, // in cents

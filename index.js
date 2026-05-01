@@ -74,6 +74,11 @@ const billingRoutes  = require("./routes/billingRoutes");
 const creditsRoutes  = require("./routes/creditsRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const dashboardStatsRoutes = require("./routes/dashboardStatsRoutes");
+const didlogicRoutes = require("./routes/didlogicRoutes");
+const didlogicAdminRoutes = require("./routes/admin/didlogicAdminRoutes");
+const kycDocumentRoutes       = require("./routes/kycDocumentRoutes");
+const numberInventoryRoutes   = require("./routes/numberInventoryRoutes");
+const numberCartRoutes         = require("./routes/numberCartRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -87,6 +92,7 @@ const couponAdminRoutes = require("./routes/admin/couponAdminRoutes");
 const globalSettingsAdminRoutes = require("./routes/admin/globalSettingsAdminRoutes");
 const sendBulkEmailRoutes = require("./routes/admin/sendBulkEmailRoutes");
 const apiLogsRoutes = require("./routes/admin/apiLogsRoutes");
+const aiRoutes = require("./routes/aiRoutes");
 const userSessionsRoutes = require("./routes/admin/userSessionsRoutes");
 const { saveUserSession } = require("./controllers/admin/userSessionsController");
 const userActivityRoutes = require("./routes/admin/userActivityRoutes");
@@ -274,6 +280,9 @@ app.use(
   adminHelpSupportRoutes
 );
 
+// AI proxy — generate-content requires superadmin; transcribe-and-summarize requires any authenticated user
+app.use("/ai", checkForAuthentication(), aiRoutes);
+
 app.use(
   "/superAdmin",
   checkForAuthentication(),
@@ -352,6 +361,26 @@ app.use(
 
 // Credits — accessible by companyAdmin (and agents can view balance)
 app.use("/billing/credits", creditsRoutes);
+
+// DIDLogic — phone numbers & calling (companyAdmin + agents)
+app.use("/didlogic", checkForAuthentication(), didlogicRoutes);
+
+// DIDLogic — live number inventory (countries → regions → cities → numbers → purchase)
+app.use("/didlogic/inventory", checkForAuthentication(), numberInventoryRoutes);
+
+// DIDLogic — KYC document management (no phone numbers required)
+app.use("/didlogic/kyc", checkForAuthentication(), kycDocumentRoutes);
+
+// DIDLogic — Number cart (add to cart, remove, clear, purchase)
+app.use("/didlogic/cart", checkForAuthentication(), numberCartRoutes);
+
+// DIDLogic admin — margin & API settings (superAdmin only)
+app.use(
+  "/superAdmin/didlogic",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  didlogicAdminRoutes
+);
 
 app.use(
   "/notifications",
@@ -511,7 +540,17 @@ module.exports.handler = async (event, context) => {
     }
 
     /* ================================
-       2️⃣ EVENTBRIDGE BACKUP
+       2️⃣ SEND EMAIL BATCH
+    ================================= */
+    if (event?.type === "SEND_EMAIL_BATCH") {
+      const { jobId, batchIndex } = event;
+      const { sendEmailBatchService } = require("./services/emailBatchService");
+      await sendEmailBatchService({ jobId, batchIndex });
+      return { statusCode: 200, body: JSON.stringify({ success: true, message: `Batch ${batchIndex} of job ${jobId} processed` }) };
+    }
+
+    /* ================================
+       3️⃣ EVENTBRIDGE BACKUP
     ================================= */
     if (event?.type === "DB_BACKUP") {
       const { runBackup } = require("./utils/backupScheduler");

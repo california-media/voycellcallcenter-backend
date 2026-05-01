@@ -194,17 +194,26 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     const encodedStart = encodeURIComponent(startTime);
     const encodedEnd = encodeURIComponent(endTime);
 
+    console.log(`\n========================================`);
+    console.log(`[fetch-and-store] User: ${user.firstname} ${user.lastname} | Ext: ${ext}`);
+    console.log(`[fetch-and-store] Time window: ${startTime}  →  ${endTime} (${TZ})`);
+    console.log(`========================================`);
+
     // -------- OUTBOUND --------
     const urlFrom = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+    console.log(`\n[fetch-and-store] OUTBOUND URL → ${PBX_BASE_URL}/cdr/search?call_from=${ext}&start_time=${startTime}&end_time=${endTime}`);
     const respFrom = await axios.get(urlFrom, {
       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
     });
+    console.log(`[fetch-and-store] OUTBOUND Yeastar raw:\n${JSON.stringify(respFrom.data, null, 2)}`);
 
     // -------- INBOUND --------
     const urlTo = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+    console.log(`\n[fetch-and-store] INBOUND  URL → ${PBX_BASE_URL}/cdr/search?call_to=${ext}&start_time=${startTime}&end_time=${endTime}`);
     const respTo = await axios.get(urlTo, {
       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
     });
+    console.log(`[fetch-and-store] INBOUND  Yeastar raw:\n${JSON.stringify(respTo.data, null, 2)}`);
 
     const fromList = Array.isArray(respFrom.data?.data)
       ? respFrom.data.data
@@ -217,6 +226,7 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     const map = new Map();
     finalList.forEach((c) => map.set(c.id, c));
     finalList = [...map.values()];
+    console.log(`\n[fetch-and-store] ${finalList.length} unique call(s) after dedup`);
 
     // ==========================================
     // 🔐 Identify Company Users for Duplicate Check
@@ -242,7 +252,16 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
 
     for (const call of finalList) {
       const exists = await CallHistory.findOne({ yeastarId: call.id });
-      if (exists) continue;
+      if (exists) {
+        // Backfill talk_time for records stored before the talk_time field was added
+        if (exists.talk_time == null) {
+          await CallHistory.updateOne(
+            { yeastarId: call.id },
+            { $set: { talk_time: call.talk_duration ?? 0 } }
+          );
+        }
+        continue;
+      }
 
       const from_number = normalizeNumber(call.call_from_number);
       const to_number = normalizeNumber(call.call_to_number);
@@ -315,28 +334,30 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         }
       }
 
-      await CallHistory.create({
+      const dbPayload = {
         userId,
-        extensionNumber: ext,
-        yeastarId: call.id,
-
-        call_from: from_number,
-        call_to: to_number,
-
-        talk_time: call.talk_duration,
-        ring_time: call.ring_duration,
-        duration: call.duration,
-
-        direction: call.call_type,
-        status: call.disposition,
-
-        start_time: dubaiFormatted,
-        end_time: dubaiFormatted,
-
-        record_file: call.record_file,
+        extensionNumber:  ext,
+        yeastarId:        call.id,
+        call_from:        from_number,
+        call_to:          to_number,
+        // talk_duration absent for NO ANSWER/FAILED → store 0 explicitly
+        talk_time:        call.talk_duration ?? 0,
+        ring_time:        call.ring_duration  ?? 0,
+        duration:         call.duration       ?? 0,
+        direction:        call.call_type,
+        status:           call.disposition,
+        start_time:       dubaiFormatted,
+        end_time:         dubaiFormatted,
+        record_file:      call.record_file,
         disposition_code: call.reason,
-        trunk: call.dst_trunk,
-      });
+        trunk:            call.dst_trunk,
+      };
+
+      console.log(`\n[fetch-and-store] ── SAVING TO DB (yeastarId: ${call.id}) ──`);
+      console.log(`[fetch-and-store] Yeastar → duration:${call.duration} | talk_duration:${call.talk_duration} | ring_duration:${call.ring_duration} | disposition:${call.disposition}`);
+      console.log(`[fetch-and-store] DB save → duration:${dbPayload.duration} | talk_time:${dbPayload.talk_time} | ring_time:${dbPayload.ring_time} | status:${dbPayload.status}`);
+
+      await CallHistory.create(dbPayload);
 
       // ==========================================
       // 🔔 Missed call notification
@@ -493,7 +514,16 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
 
     for (const call of finalList) {
       const exists = await CallHistory.findOne({ yeastarId: call.id });
-      if (exists) continue;
+      if (exists) {
+        // Backfill talk_time for records stored before the talk_time field was added
+        if (exists.talk_time == null) {
+          await CallHistory.updateOne(
+            { yeastarId: call.id },
+            { $set: { talk_time: call.talk_duration ?? 0 } }
+          );
+        }
+        continue;
+      }
 
       const from_number = normalizeNumber(call.call_from_number);
       const to_number = normalizeNumber(call.call_to_number);
@@ -566,28 +596,30 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
         }
       }
 
-      await CallHistory.create({
+      const dbPayload = {
         userId,
-        extensionNumber: ext,
-        yeastarId: call.id,
-
-        call_from: from_number,
-        call_to: to_number,
-
-        talk_time: call.talk_duration,
-        ring_time: call.ring_duration,
-        duration: call.duration,
-
-        direction: call.call_type,
-        status: call.disposition,
-
-        start_time: dubaiFormatted,
-        end_time: dubaiFormatted,
-
-        record_file: call.record_file,
+        extensionNumber:  ext,
+        yeastarId:        call.id,
+        call_from:        from_number,
+        call_to:          to_number,
+        // talk_duration absent for NO ANSWER/FAILED → store 0 explicitly
+        talk_time:        call.talk_duration ?? 0,
+        ring_time:        call.ring_duration  ?? 0,
+        duration:         call.duration       ?? 0,
+        direction:        call.call_type,
+        status:           call.disposition,
+        start_time:       dubaiFormatted,
+        end_time:         dubaiFormatted,
+        record_file:      call.record_file,
         disposition_code: call.reason,
-        trunk: call.dst_trunk,
-      });
+        trunk:            call.dst_trunk,
+      };
+
+      console.log(`\n[fetch-and-store] ── SAVING TO DB (yeastarId: ${call.id}) ──`);
+      console.log(`[fetch-and-store] Yeastar → duration:${call.duration} | talk_duration:${call.talk_duration} | ring_duration:${call.ring_duration} | disposition:${call.disposition}`);
+      console.log(`[fetch-and-store] DB save → duration:${dbPayload.duration} | talk_time:${dbPayload.talk_time} | ring_time:${dbPayload.ring_time} | status:${dbPayload.status}`);
+
+      await CallHistory.create(dbPayload);
 
       // ==========================================
       // 🔔 Missed call notification
@@ -1729,10 +1761,10 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
             $gte: [
               {
                 $dateFromString: {
-                  dateString: { $toString: "$start_time" },
+                  dateString: { $trim: { input: { $toString: "$start_time" } } },
                   format: "%m/%d/%Y %H:%M:%S",
-                  onError: new Date("1970-01-01"),
-                  onNull: new Date("1970-01-01"),
+                  onError: null,
+                  onNull: null,
                 },
               },
               startDate,
@@ -1742,10 +1774,10 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
             $lt: [
               {
                 $dateFromString: {
-                  dateString: { $toString: "$start_time" },
+                  dateString: { $trim: { input: { $toString: "$start_time" } } },
                   format: "%m/%d/%Y %H:%M:%S",
-                  onError: new Date("2999-01-01"),
-                  onNull: new Date("2999-01-01"),
+                  onError: null,
+                  onNull: null,
                 },
               },
               endDate,
@@ -2492,20 +2524,27 @@ exports.incomingCallWebhook = async (req, res) => {
       message: "Incoming Call",
     };
 
-    const responce = await lambdaClient.send(
-      new InvokeCommand({
-        FunctionName: "incomingcall-connect",
-        InvocationType: "Event",
-        Payload: JSON.stringify({
-          action: "incomingcall",
-          connections: connections.map((c) => c.connectionId),
-          payload,
+    // Lambda invocation is best-effort (push notification to other connected
+    // clients). We intentionally do NOT await it inside the main try/catch so
+    // that a missing AWS credential locally, or a transient Lambda error in
+    // production, never causes this endpoint to return 500.
+    lambdaClient
+      .send(
+        new InvokeCommand({
+          FunctionName: "incomingcall-connect",
+          InvocationType: "Event",
+          Payload: JSON.stringify({
+            action: "incomingcall",
+            connections: connections.map((c) => c.connectionId),
+            payload,
+          }),
         }),
-      }),
-    );
+      )
+      .catch((lambdaErr) => {
+        // Log but do not propagate — Lambda is non-critical for this response
+        console.warn("Lambda incomingcall-connect invocation failed:", lambdaErr.message);
+      });
 
-    // You can process the incoming call data here
-    // For example, save it to the database or trigger other actions
     return res.status(200).json({ message: "Webhook received successfully" });
   } catch (error) {
     return res.status(500).json({

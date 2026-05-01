@@ -37,6 +37,6 @@ router.post("/addFormDataAfterCallEnd", checkAccountStatus, addFormDataAfterCall
 
 router.post("/find-by-phone-number", checkAccountStatus, findByPhoneNumber);
 
-router.get("/incoming-call-webhook", incomingCallWebhook);
+router.get("/incoming-call-webhook", checkAccountStatus, incomingCallWebhook);
 
 module.exports = router;

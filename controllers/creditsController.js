@@ -27,6 +27,7 @@ const autoRechargeIfNeeded = async (userId) => {
     customer:                       customer.id,
     auto_advance:                   false,
     pending_invoice_items_behavior: "exclude",
+    currency:                       "usd",
   });
 
   await stripeService.stripe.invoiceItems.create({
@@ -124,6 +125,7 @@ const purchaseCredits = async (req, res) => {
       customer:                       customer.id,
       auto_advance:                   false,
       pending_invoice_items_behavior: "exclude", // don't pull in subscription pending items
+      currency:                       "usd",
     });
 
     // 2. Attach the line item directly to this invoice using the invoice id

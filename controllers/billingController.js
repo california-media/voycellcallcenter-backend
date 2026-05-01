@@ -970,51 +970,36 @@ const previewAgentSeats = async (req, res) => {
     const plan = subscription.planId;
     const newTotal = calcTotalPrice(plan, subscription.billingPeriod, newAgentCount);
     const oldTotal = calcTotalPrice(plan, subscription.billingPeriod, subscription.agentCount);
-    const additionalPerPeriod = newTotal - oldTotal;
+    const additionalPerPeriod = newTotal - oldTotal; // extra cost per full billing period (USD)
 
-    // Calculate prorated amount using Stripe upcoming invoice
-    let proratedAmount = null;
-    if (subscription.stripeSubscriptionId) {
-      try {
-        const intervalConfig = {
-          monthly:   { interval: "month", intervalCount: 1 },
-          quarterly: { interval: "month", intervalCount: 3 },
-          yearly:    { interval: "year",  intervalCount: 1 },
-        };
-        const { interval, intervalCount } = intervalConfig[subscription.billingPeriod];
-        const product = await stripeService.stripe.products.create({
-          name: `Preview - ${plan.name} ${newAgentCount} agents`,
-        });
-        const newPrice = await stripeService.stripe.prices.create({
-          product: product.id,
-          unit_amount: Math.round(newTotal * 100),
-          currency: "usd",
-          recurring: { interval, interval_count: intervalCount },
-        });
-        const stripeSub = await stripeService.retrieveSubscription(subscription.stripeSubscriptionId);
-        const existingItemId = stripeSub.items?.data?.[0]?.id;
-        const upcoming = await stripeService.stripe.invoices.retrieveUpcoming({
-          customer: subscription.stripeCustomerId,
-          subscription: subscription.stripeSubscriptionId,
-          subscription_items: [{ id: existingItemId, price: newPrice.id }],
-        });
-        proratedAmount = upcoming.amount_due; // cents
-        // Clean up temp price/product
-        await stripeService.stripe.prices.update(newPrice.id, { active: false });
-        await stripeService.stripe.products.update(product.id, { active: false });
-      } catch (_) {
-        // fallback: just show the additional monthly cost
-      }
-    }
+    // ── Calculate proration directly from subscription period dates ──────────
+    // This matches exactly what Stripe's always_invoice proration does, without
+    // making an extra Stripe API call (which is slow and sometimes fails).
+    //
+    // proratedAmount = additionalPerPeriod × (remainingMs / totalPeriodMs)
+    const now         = Date.now();
+    const periodStart = subscription.currentPeriodStart ? new Date(subscription.currentPeriodStart).getTime() : now;
+    const periodEnd   = subscription.currentPeriodEnd   ? new Date(subscription.currentPeriodEnd).getTime()   : now;
+    const totalMs     = Math.max(1, periodEnd - periodStart);
+    const remainingMs = Math.max(0, periodEnd - now);
+    const fraction    = remainingMs / totalMs;                // 0 → 1 (how much of the period is left)
+    const totalDays   = Math.round(totalMs / 86_400_000);
+    const remainingDays = Math.ceil(remainingMs / 86_400_000);
+
+    // Prorated charge in cents (what Stripe will actually charge)
+    const proratedAmount = Math.round(additionalPerPeriod * 100 * fraction);
 
     res.json({
       success: true,
-      currentAgentCount: subscription.agentCount,
+      currentAgentCount:  subscription.agentCount,
       newAgentCount,
-      additionalPerPeriod, // USD, per billing period
-      proratedAmount,       // cents, what they'll be charged now
+      additionalPerPeriod,        // USD — full period cost for the extra seats
+      proratedAmount,             // cents — what will be charged today
+      remainingDays,              // days left in current billing period
+      totalDays,                  // total days in billing period
+      fraction,                   // 0–1 fraction of period remaining
       billingPeriod: subscription.billingPeriod,
-      agentPrice: plan.agentPrice || 0,
+      agentPrice:    plan.agentPrice || 0,
     });
   } catch (err) {
     console.error("previewAgentSeats error:", err);
@@ -1060,6 +1045,7 @@ const updateAgentSeats = async (req, res) => {
     }
 
     const plan = subscription.planId;
+    const extraSeatsAdded = newAgentCount - subscription.agentCount;
     const newTotal = calcTotalPrice(plan, subscription.billingPeriod, newAgentCount);
     const intervalConfig = {
       monthly:    { interval: "month", intervalCount: 1 },
@@ -1086,7 +1072,7 @@ const updateAgentSeats = async (req, res) => {
       const stripeSub = await stripeService.retrieveSubscription(subscription.stripeSubscriptionId);
       const existingItemId = stripeSub.items?.data?.[0]?.id;
       const product = await stripeService.stripe.products.create({
-        name: `${plan.name} - ${newAgentCount} agent${newAgentCount !== 1 ? "s" : ""} (${subscription.billingPeriod})`,
+        name: `Additional Agent Seat${extraSeatsAdded !== 1 ? "s" : ""} (+${extraSeatsAdded}) — ${plan.name} (${subscription.billingPeriod})`,
       });
       const newPrice = await stripeService.stripe.prices.create({
         product: product.id,
@@ -1094,6 +1080,17 @@ const updateAgentSeats = async (req, res) => {
         currency: "usd",
         recurring: { interval, interval_count: intervalCount },
       });
+      // ── Update subscription with proration ────────────────────────────────────
+      // proration_behavior:"always_invoice" tells Stripe to immediately create a
+      // proration invoice for the DIFFERENCE between the old and new plan price,
+      // covering only the remaining days in the current billing period.
+      //
+      // Effective charge = extraSeatsAdded × agentPrice × periodMultiplier
+      //                    × (remainingDays / totalDaysInPeriod)
+      //
+      // Examples (1 extra seat at $29, mid-month):
+      //   Monthly (28/30 days left): $29 × 1 × (28/30) ≈ $27.07
+      //   Yearly  (350/365 days left): $29 × 12 × (350/365) ≈ $333.04
       const updateParams = {
         items: [{ id: existingItemId, price: newPrice.id }],
         proration_behavior: "always_invoice",
@@ -1102,7 +1099,7 @@ const updateAgentSeats = async (req, res) => {
       if (stripeCouponId) updateParams.discounts = [{ coupon: stripeCouponId }];
       const updatedSub = await stripeService.stripe.subscriptions.update(subscription.stripeSubscriptionId, updateParams);
 
-      // "always_invoice" creates a new invoice immediately — pay it if not already paid
+      // "always_invoice" creates a proration invoice immediately — pay it
       const latestInvoice = updatedSub.latest_invoice;
       let clientSecret = null;
       let finalInvoice = latestInvoice;
@@ -1116,9 +1113,7 @@ const updateAgentSeats = async (req, res) => {
             clientSecret = latestInvoice.payment_intent?.client_secret || null;
           }
         } catch (payErr) {
-          // Payment requires action — return clientSecret for frontend confirmation
           clientSecret = latestInvoice.payment_intent?.client_secret || null;
-          // Fetch finalized invoice for DB save even if payment requires action
           try {
             finalInvoice = await stripeService.stripe.invoices.retrieve(latestInvoice.id, {
               expand: ["lines.data"],
@@ -1157,6 +1152,10 @@ const updateAgentSeats = async (req, res) => {
             billingPeriodEnd: periodEnd,
             stripeCreatedAt: finalInvoice.created ? new Date(finalInvoice.created * 1000) : new Date(),
             couponCode: couponCode || null,
+            invoiceType: `Additional Agent Seat${extraSeatsAdded !== 1 ? "s" : ""} (+${extraSeatsAdded})`,
+            // seatFaceAmount = prorated amount for the extra seats only.
+            // With always_invoice, amountPaid IS the prorated amount, so we store it directly.
+            seatFaceAmount: finalInvoice?.amount_paid ?? Math.round(extraSeatsAdded * (plan.agentPrice || 0) * 100),
           },
           { upsert: true, new: true }
         );
