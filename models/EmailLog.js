@@ -25,6 +25,17 @@ const emailLogSchema = new Schema(
     fromEmail:  { type: String, default: "noreply@voycell.com" },
     fromName:   { type: String, default: "VOYCELL" },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+
+    // ── SES tracking counters (incremented by the SNS webhook as events arrive) ──
+    stats: {
+      sends:       { type: Number, default: 0 },
+      deliveries:  { type: Number, default: 0 },
+      opens:       { type: Number, default: 0 },
+      clicks:      { type: Number, default: 0 },
+      bounces:     { type: Number, default: 0 },
+      complaints:  { type: Number, default: 0 },
+      rejections:  { type: Number, default: 0 },
+    },
   },
   { timestamps: true }
 );

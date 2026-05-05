@@ -820,7 +820,26 @@ const sendMagicLinkEmail = async (email, link) => {
 };
 
 // ─── sendAdminBroadcastEmail ─────────────────────────────────────────────────
-// Used by superAdmin "Email Notification" feature to broadcast custom emails
+// Used by superAdmin "Email Notification" feature to broadcast custom emails.
+// Returns { info, sesMessageId } so callers can store the SES message ID for tracking.
+const { CONFIG_SET_NAME } = require("../services/sesSetupService");
+
+/**
+ * Parse the SES-assigned message ID from the SMTP 250 response.
+ * SES SMTP response format: "250 Ok 0102018e9e5c3b7a-abc123-..."
+ * Returns the ID string, or null if parsing fails.
+ */
+function parseSesMessageId(response) {
+  if (!response) return null;
+  try {
+    // Response looks like: "250 Ok <sesMessageId>"
+    const match = response.match(/250 Ok\s+([^\s]+)/i);
+    return match ? match[1] : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 const sendAdminBroadcastEmail = async ({ to, subject, title, body, fromEmail, fromName, replyTo, attachments }) => {
   const from = fromEmail
     ? `"${fromName || "VOYCELL"}" <${fromEmail}>`
@@ -832,9 +851,15 @@ const sendAdminBroadcastEmail = async ({ to, subject, title, body, fromEmail, fr
     to,
     subject: subject || "A message from VOYCELL",
     html: body || "",
+    // Tell SES to apply our tracking configuration set
+    headers: {
+      "X-SES-CONFIGURATION-SET": CONFIG_SET_NAME,
+    },
   };
 
-  return getTransporter().sendMail(mailOptions);
+  const info = await getTransporter().sendMail(mailOptions);
+  const sesMessageId = parseSesMessageId(info.response);
+  return { info, sesMessageId };
 };
 
 module.exports = {

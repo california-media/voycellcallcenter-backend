@@ -24,6 +24,7 @@ const {
   sendEmailNotification,
   getEmailLogs,
   getEmailLogById,
+  syncEmailLogStats,
 } = require("../controllers/notificationController");
 
 const {
@@ -60,6 +61,7 @@ router.delete("/:id", deleteNotification);
 router.post("/", checkRole(["superadmin"]), createNotification);
 router.post("/send-email",     checkRole(["superadmin"]), upload.array("attachments", 5), sendEmailNotification);
 router.get("/email-logs", checkRole(["superadmin"]), getEmailLogs);
+router.get("/email-logs/:id/sync-stats", checkRole(["superadmin"]), syncEmailLogStats);
 router.get("/email-logs/:id", checkRole(["superadmin"]), getEmailLogById);
 
 // SuperAdmin only: manage "From" email sender addresses

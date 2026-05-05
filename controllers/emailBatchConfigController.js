@@ -1,7 +1,23 @@
 const EmailBatchConfig = require("../models/EmailBatchConfig");
 const EmailBatchJob    = require("../models/EmailBatchJob");
 const EmailLog         = require("../models/EmailLog");
+const SesEmailEvent    = require("../models/SesEmailEvent");
+const SesMessageLog    = require("../models/SesMessageLog");
 const { deleteEmailBatchSchedule } = require("../services/awsScheduler");
+
+// Maps SES event types to stats field names (same as notificationController)
+const emptyStats = () => ({ sends: 0, deliveries: 0, opens: 0, clicks: 0, bounces: 0, complaints: 0, rejections: 0 });
+
+const EVENT_STATS_MAP = {
+  Send:              "sends",
+  Delivery:          "deliveries",
+  Open:              "opens",
+  Click:             "clicks",
+  Bounce:            "bounces",
+  Complaint:         "complaints",
+  Reject:            "rejections",
+  RenderingFailure:  "rejections",
+};
 
 // ── GET /notifications/batch-config ──────────────────────────────────────────
 exports.getBatchConfig = async (req, res) => {
@@ -56,6 +72,52 @@ exports.updateBatchConfig = async (req, res) => {
   }
 };
 
+// ── Shared helper: resolve SES stats + per-recipient events for a batch job ──
+// Uses SesMessageLog as the authoritative mapping (batchJobId → sesMessageIds)
+// then queries SesEmailEvent by sesMessageId.  This is the same two-step
+// pattern getEmailLogs uses for completed batches and is immune to the race
+// condition where SNS delivers before SesMessageLog.insertMany completes.
+async function resolveBatchSesData(jobId) {
+  const sesLogs = await SesMessageLog.find({ batchJobId: jobId })
+    .select("sesMessageId recipientEmail")
+    .lean();
+
+  if (!sesLogs.length) {
+    return { recipientEventsMap: {}, stats: emptyStats() };
+  }
+
+  const sesMessageIds  = sesLogs.map((sl) => sl.sesMessageId);
+  const msgIdToEmail   = {};
+  sesLogs.forEach((sl) => { if (sl.sesMessageId) msgIdToEmail[sl.sesMessageId] = sl.recipientEmail; });
+
+  // Fetch all SES events for these messages (any batchJobId / emailLogId value)
+  const allEvents = await SesEmailEvent.find({
+    sesMessageId: { $in: sesMessageIds },
+  }).lean();
+
+  // Build per-recipient event map (first occurrence of each eventType wins)
+  const recipientEventsMap = {};
+  for (const ev of allEvents) {
+    const email = ev.recipientEmail || msgIdToEmail[ev.sesMessageId] || "";
+    if (!email) continue;
+    if (!recipientEventsMap[email]) recipientEventsMap[email] = {};
+    if (!recipientEventsMap[email][ev.eventType]) {
+      recipientEventsMap[email][ev.eventType] = ev.timestamp || ev.createdAt;
+    }
+  }
+
+  // Aggregate per-eventType counts (deduplicated: 1 per recipient per event type)
+  const stats = emptyStats();
+  for (const events of Object.values(recipientEventsMap)) {
+    for (const eventType of Object.keys(events)) {
+      const field = EVENT_STATS_MAP[eventType];
+      if (field) stats[field]++;
+    }
+  }
+
+  return { recipientEventsMap, stats };
+}
+
 // ── GET /notifications/batch-jobs/:jobId ─────────────────────────────────────
 exports.getBatchJobDetail = async (req, res) => {
   try {
@@ -63,16 +125,28 @@ exports.getBatchJobDetail = async (req, res) => {
     const job = await EmailBatchJob.findOne({ jobId });
     if (!job) return res.status(404).json({ status: "error", message: "Job not found" });
 
-    // Flatten all recipients from all batches for the recipients tab
-    const recipients = job.batches.flatMap((b) => b.recipients || []);
-    const recipientCount = recipients.length;
+    const { recipientEventsMap, stats } = await resolveBatchSesData(jobId);
+
+    // Flatten recipients from all batches and attach per-recipient SES events
+    const recipients = job.batches.flatMap((b) =>
+      (b.recipients || []).map((r) => ({
+        ...r,
+        batchIndex:  b.index,
+        batchStatus: b.status,
+        scheduledAt: b.scheduledAt,
+        sentAt:      b.sentAt,
+        batchError:  b.error,
+        events:      recipientEventsMap[r.email] || {},
+      }))
+    );
 
     res.json({
       status: "success",
       data: {
         ...job.toObject(),
         recipients,
-        recipientCount,
+        recipientCount: recipients.length,
+        stats,
       },
     });
   } catch (err) {
@@ -96,7 +170,63 @@ exports.listBatchJobs = async (req, res) => {
       .skip(skip)
       .limit(Number(limit));
 
-    res.json({ status: "success", data: jobs, total, page: Number(page), limit: Number(limit) });
+    if (!jobs.length) {
+      return res.json({ status: "success", data: [], total, page: Number(page), limit: Number(limit) });
+    }
+
+    // ── Resolve SES stats for all jobs via the reliable two-step path ─────────
+    // Step 1: SesMessageLog is the authoritative batchJobId → sesMessageId map.
+    // We use this (not SesEmailEvent.batchJobId) to avoid a race condition where
+    // the SNS webhook can arrive before SesMessageLog.insertMany completes, leaving
+    // SesEmailEvent.batchJobId = null even though the message belongs to a batch.
+    const jobIds = jobs.map((j) => j.jobId);
+
+    const sesLogs = await SesMessageLog.find({ batchJobId: { $in: jobIds } })
+      .select("sesMessageId batchJobId")
+      .lean();
+
+    const statsMap = {};
+
+    if (sesLogs.length) {
+      // Build sesMessageId → jobId map
+      const msgIdToJobId = {};
+      sesLogs.forEach((sl) => { if (sl.sesMessageId) msgIdToJobId[sl.sesMessageId] = sl.batchJobId; });
+      const allMsgIds = Object.keys(msgIdToJobId);
+
+      // Step 2: Aggregate events by sesMessageId — works regardless of whether
+      // SesEmailEvent.batchJobId was set correctly.
+      const eventAgg = await SesEmailEvent.aggregate([
+        { $match: { sesMessageId: { $in: allMsgIds } } },
+        // Deduplicate: each recipient counts once per eventType
+        {
+          $group: {
+            _id: { sesMessageId: "$sesMessageId", email: "$recipientEmail", eventType: "$eventType" },
+          },
+        },
+        {
+          $group: {
+            _id: { sesMessageId: "$_id.sesMessageId", eventType: "$_id.eventType" },
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      // Step 3: Map sesMessageId → jobId and accumulate stats
+      for (const { _id, count } of eventAgg) {
+        const jobId = msgIdToJobId[_id.sesMessageId];
+        const field = EVENT_STATS_MAP[_id.eventType];
+        if (!jobId || !field) continue;
+        if (!statsMap[jobId]) statsMap[jobId] = emptyStats();
+        statsMap[jobId][field] += count;
+      }
+    }
+
+    const jobsWithStats = jobs.map((job) => ({
+      ...job.toObject(),
+      stats: statsMap[job.jobId] || emptyStats(),
+    }));
+
+    res.json({ status: "success", data: jobsWithStats, total, page: Number(page), limit: Number(limit) });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }

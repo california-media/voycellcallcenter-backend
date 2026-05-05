@@ -105,12 +105,18 @@ const apiLoggerMiddleware = require("./middlewares/apiLogger");
 
 app.use(cors());
 
-// Stripe webhook must use raw body — register BEFORE express.json()
+// ── Webhooks that need their own body parsing — register BEFORE express.json() ──
+
+// Stripe: raw body for signature verification
 app.post(
   "/billing/webhook",
   express.raw({ type: "application/json" }),
   require("./controllers/billingController").handleStripeWebhook
 );
+
+// SNS: sends Content-Type text/plain with a JSON body
+const sesWebhookRoutes = require("./routes/sesWebhookRoutes");
+app.use("/ses-webhook", sesWebhookRoutes);
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -416,6 +422,7 @@ if (process.env.NODE_ENV === "serverless") {
 
 // ------------------- SOCKET HANDLER -------------------
 const http = require("http");
+
 
 
 // ------------------- START APP -------------------

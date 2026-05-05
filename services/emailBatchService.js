@@ -1,6 +1,7 @@
 const EmailBatchJob    = require("../models/EmailBatchJob");
 const EmailLog         = require("../models/EmailLog");
 const EmailBatchConfig = require("../models/EmailBatchConfig");
+const SesMessageLog    = require("../models/SesMessageLog");
 const { sendAdminBroadcastEmail } = require("../utils/emailUtils");
 
 /**
@@ -122,6 +123,25 @@ const sendEmailBatchService = async ({ jobId, batchIndex }) => {
         console.error(`[EmailBatch] ❌ Failed to send to ${recipientsToSend[i]?.email}:`, r.reason?.message || r.reason);
       }
     });
+
+    // Persist SES messageId → batchJob + recipient mapping for tracking
+    const sesLogDocs = [];
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled" && r.value?.sesMessageId) {
+        sesLogDocs.push({
+          sesMessageId:   r.value.sesMessageId,
+          emailLogId:     null,      // back-filled when EmailLog is created at job completion
+          batchJobId:     jobId,
+          recipientEmail: recipientsToSend[i]?.email || "",
+          sentAt:         new Date(),
+        });
+      }
+    });
+    if (sesLogDocs.length) {
+      SesMessageLog.insertMany(sesLogDocs, { ordered: false }).catch((err) =>
+        console.error("[SesMessageLog] Insert error (batch):", err.message)
+      );
+    }
   } catch (err) {
     sendError = err.message;
     failed    = batch.recipients.length;
@@ -171,7 +191,7 @@ const sendEmailBatchService = async ({ jobId, batchIndex }) => {
 
       // EmailLog is best-effort — failure here must NOT affect the batch result
       try {
-        await EmailLog.create({
+        const emailLog = await EmailLog.create({
           subject:        job.subject,
           title:          job.title || "",
           body:           job.body,
@@ -184,6 +204,14 @@ const sendEmailBatchService = async ({ jobId, batchIndex }) => {
           fromName:   job.fromName  || "VOYCELL",
           createdBy:  job.createdBy,
         });
+
+        // Back-fill emailLogId on all SesMessageLog entries for this batch job
+        SesMessageLog.updateMany(
+          { batchJobId: jobId, emailLogId: null },
+          { $set: { emailLogId: emailLog._id } }
+        ).catch((err) =>
+          console.error("[SesMessageLog] Back-fill emailLogId failed:", err.message)
+        );
       } catch (logErr) {
         console.error(`[EmailBatch] ⚠️ EmailLog create failed (emails were already sent):`, logErr.message);
       }

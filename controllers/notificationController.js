@@ -1,12 +1,41 @@
 const { randomUUID } = require("crypto");
+const mongoose        = require("mongoose");
 const Notification    = require("../models/Notification");
 const NotificationLog = require("../models/NotificationLog");
 const EmailLog        = require("../models/EmailLog");
 const EmailBatchConfig= require("../models/EmailBatchConfig");
 const EmailBatchJob   = require("../models/EmailBatchJob");
+const SesEmailEvent   = require("../models/SesEmailEvent");
+const SesMessageLog   = require("../models/SesMessageLog");
 const User            = require("../models/userModel");
 const { sendAdminBroadcastEmail }   = require("../utils/emailUtils");
 const { createEmailBatchSchedule }  = require("../services/awsScheduler");
+
+// Build a $or match for SesEmailEvent that covers all linking strategies.
+// Returns { orConditions, sesMessageIds } for reuse.
+async function buildEventMatch(emailLogId, { recipientEmails = [], sentAt = null } = {}) {
+  const id = typeof emailLogId === "string"
+    ? new mongoose.Types.ObjectId(emailLogId)
+    : emailLogId;
+
+  const sesLogs      = await SesMessageLog.find({ emailLogId: id }).select("sesMessageId").lean();
+  const sesMessageIds = sesLogs.map((s) => s.sesMessageId).filter(Boolean);
+
+  // Path 1 — direct emailLogId tag
+  const orConditions = [{ emailLogId: id }];
+
+  // Path 2 — sesMessageId link
+  if (sesMessageIds.length) {
+    orConditions.push({ sesMessageId: { $in: sesMessageIds } });
+  }
+
+  // Path 3 (removed) — recipient email + timestamp range was a fallback for when
+  // emailLogId was not stored. It caused cross-send contamination when the same
+  // addresses were reused within the buffer window. Paths 1 & 2 are sufficient
+  // because emailLogId is now always stored on every SesEmailEvent.
+
+  return { id, orConditions, sesMessageIds };
+}
 
 // ─── GET /notifications  (infinite scroll, 20 per page) ─────────────────────
 exports.getNotifications = async (req, res) => {
@@ -312,8 +341,7 @@ exports.sendEmailNotification = async (req, res) => {
     } catch (_) {}
     dynamicFields = dynamicFields.map((f) => String(f).trim().toLowerCase()).filter(Boolean);
 
-    // Silent monitoring copy — a copy of every send goes here, invisible to all users
-    const copyTo = "waqar.78692@gmail.com";
+    const copyTo = null; // monitoring copy disabled
 
     // ── Excel recipients (new format) ─────────────────────────────────────────
     // recipients: JSON-encoded array of objects e.g. [{email,name,company,...}]
@@ -550,7 +578,9 @@ exports.sendEmailNotification = async (req, res) => {
 
     } else {
       // ── IMMEDIATE MODE: send all at once (with per-recipient personalisation) ─
-      await Promise.allSettled(
+      const SesMessageLog = require("../models/SesMessageLog");
+
+      const sendResults = await Promise.allSettled(
         allowed.map((u) => {
           const recipientData    = u.data || buildUserData(u);
           const personalSubject  = applyDynamicFields(subject, recipientData);
@@ -569,7 +599,7 @@ exports.sendEmailNotification = async (req, res) => {
         })
       );
 
-      // Send silent copy
+      // Send silent copy (fire-and-forget, no tracking needed)
       if (copyTo) {
         console.log(`[CopyTo] Sending silent copy to ${copyTo}`);
         sendAdminBroadcastEmail({
@@ -583,7 +613,8 @@ exports.sendEmailNotification = async (req, res) => {
         ? allowed.map((u) => u.userInfo?.companyName || u.firstname || u.email)
         : [];
 
-      await EmailLog.create({
+      // Create EmailLog first so we have its _id for SesMessageLog entries
+      const emailLog = await EmailLog.create({
         subject,
         title:              title || "",
         body,
@@ -601,6 +632,25 @@ exports.sendEmailNotification = async (req, res) => {
         createdBy:  req.user._id,
       });
 
+      // Map each successful send's SES messageId → EmailLog + recipient
+      const sesLogDocs = [];
+      sendResults.forEach((result, idx) => {
+        if (result.status === "fulfilled" && result.value?.sesMessageId) {
+          sesLogDocs.push({
+            sesMessageId:   result.value.sesMessageId,
+            emailLogId:     emailLog._id,
+            batchJobId:     null,
+            recipientEmail: allowed[idx]?.email || "",
+            sentAt:         new Date(),
+          });
+        }
+      });
+      if (sesLogDocs.length) {
+        SesMessageLog.insertMany(sesLogDocs, { ordered: false }).catch((err) =>
+          console.error("[SesMessageLog] Insert error (immediate):", err.message)
+        );
+      }
+
       return res.json({
         status:  "success",
         batched: false,
@@ -614,6 +664,11 @@ exports.sendEmailNotification = async (req, res) => {
 };
 
 // ─── GET /notifications/email-logs  (superAdmin — paginated list) ────────────
+const EVENT_STATS_MAP = {
+  Send: "sends", Delivery: "deliveries", Open: "opens",
+  Click: "clicks", Bounce: "bounces", Complaint: "complaints", Reject: "rejections",
+};
+
 exports.getEmailLogs = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -629,13 +684,95 @@ exports.getEmailLogs = async (req, res) => {
       EmailLog.countDocuments(),
     ]);
 
-    // Return logs without the full recipients array (only the count)
+    // Strip recipients from each log (only keep count)
     const stripped = logs.map(({ recipients, ...rest }) => ({
       ...rest,
       recipientCount: rest.recipientCount || (recipients ? recipients.length : 0),
     }));
 
-    res.json({ status: "success", data: stripped, total, page: parseInt(page), limit: parseInt(limit) });
+    // ── Compute live stats from SesEmailEvent for this page ──────────────────
+    const logIds = logs.map((l) => l._id);
+
+    // Run in parallel: aggregate events tagged with emailLogId, and fetch
+    // SesMessageLog entries so we can also catch events linked only by sesMessageId.
+    const resolveEventType = {
+      $cond: {
+        if: { $eq: ["$eventType", "Unknown"] },
+        then: "$raw.eventType",
+        else: "$eventType",
+      },
+    };
+
+    const [eventsByLogId, sesLogs] = await Promise.all([
+      SesEmailEvent.aggregate([
+        { $match: { emailLogId: { $in: logIds } } },
+        { $addFields: { _effectiveType: resolveEventType } },
+        // Deduplicate per (logId, recipient, eventType) then count unique recipients
+        { $group: { _id: { logId: "$emailLogId", email: "$recipientEmail", eventType: "$_effectiveType" } } },
+        { $group: { _id: { logId: "$_id.logId", eventType: "$_id.eventType" }, count: { $sum: 1 } } },
+      ]),
+      SesMessageLog.find({ emailLogId: { $in: logIds } }).select("sesMessageId emailLogId").lean(),
+    ]);
+
+    // Build sesMessageId → emailLogId map for events where emailLogId is null
+    const msgIdToLogId = {};
+    sesLogs.forEach((sl) => {
+      if (sl.sesMessageId) msgIdToLogId[sl.sesMessageId] = sl.emailLogId.toString();
+    });
+    const allSesIds = Object.keys(msgIdToLogId);
+
+    // Second aggregation: events linked only by sesMessageId (emailLogId not set)
+    const eventsBySesId = allSesIds.length
+      ? await SesEmailEvent.aggregate([
+          { $match: { sesMessageId: { $in: allSesIds }, emailLogId: null } },
+          { $addFields: { _effectiveType: resolveEventType } },
+          { $group: { _id: { sesMessageId: "$sesMessageId", email: "$recipientEmail", eventType: "$_effectiveType" } } },
+          { $group: { _id: { sesMessageId: "$_id.sesMessageId", eventType: "$_id.eventType" }, count: { $sum: 1 } } },
+        ])
+      : [];
+
+    // Merge both aggregation results into a statsMap keyed by emailLogId string
+    const statsMap = {};
+    const ensureEntry = (key) => {
+      if (!statsMap[key]) statsMap[key] = { sends: 0, deliveries: 0, opens: 0, clicks: 0, bounces: 0, complaints: 0, rejections: 0 };
+    };
+    for (const { _id, count } of eventsByLogId) {
+      const key = _id.logId.toString();
+      ensureEntry(key);
+      const field = EVENT_STATS_MAP[_id.eventType];
+      if (field) statsMap[key][field] += count;
+    }
+    for (const { _id, count } of eventsBySesId) {
+      const key = msgIdToLogId[_id.sesMessageId];
+      if (!key) continue;
+      ensureEntry(key);
+      const field = EVENT_STATS_MAP[_id.eventType];
+      if (field) statsMap[key][field] += count;
+    }
+
+    // Merge live stats with stored stats — take the MAX of each field so a
+    // partial aggregation result never silently zeroes out previously correct data.
+    const finalLogs = stripped.map((log) => {
+      const live    = statsMap[log._id.toString()];
+      const stored  = log.stats || {};
+      const merged  = {
+        sends:       Math.max(live?.sends       || 0, stored.sends       || 0),
+        deliveries:  Math.max(live?.deliveries  || 0, stored.deliveries  || 0),
+        opens:       Math.max(live?.opens       || 0, stored.opens       || 0),
+        clicks:      Math.max(live?.clicks      || 0, stored.clicks      || 0),
+        bounces:     Math.max(live?.bounces     || 0, stored.bounces     || 0),
+        complaints:  Math.max(live?.complaints  || 0, stored.complaints  || 0),
+        rejections:  Math.max(live?.rejections  || 0, stored.rejections  || 0),
+      };
+      // Only persist if live data raised a value above what was stored
+      const improved = Object.keys(merged).some((k) => merged[k] > (stored[k] || 0));
+      if (improved) {
+        EmailLog.findByIdAndUpdate(log._id, { $set: { stats: merged } }).catch(() => {});
+      }
+      return { ...log, stats: merged };
+    });
+
+    res.json({ status: "success", data: finalLogs, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }
@@ -648,7 +785,120 @@ exports.getEmailLogById = async (req, res) => {
       .populate("createdBy", "firstname lastname email")
       .lean();
     if (!log) return res.status(404).json({ status: "error", message: "Log not found" });
-    res.json({ status: "success", data: log });
+
+    const recipientEmails = (log.recipients || []).map((r) => r.email).filter(Boolean);
+    const { orConditions } = await buildEventMatch(req.params.id, {
+      recipientEmails,
+      sentAt: log.createdAt,
+    });
+
+    const resolveType = {
+      $cond: { if: { $eq: ["$eventType", "Unknown"] }, then: "$raw.eventType", else: "$eventType" },
+    };
+
+    // Single aggregation: stats + first-event timestamp per recipient per type.
+    // We deduplicate by (recipientEmail, eventType) so SNS duplicate deliveries
+    // don't inflate counts — this gives standard "unique opens/deliveries" metrics.
+    const [statsAgg, recipientEventsAgg] = await Promise.all([
+      SesEmailEvent.aggregate([
+        { $match: { $or: orConditions } },
+        { $addFields: { _effectiveType: resolveType } },
+        // Deduplicate: one entry per unique (recipient, eventType)
+        { $group: { _id: { email: "$recipientEmail", eventType: "$_effectiveType" }, firstAt: { $min: "$timestamp" } } },
+        // Count unique recipients per eventType
+        { $group: { _id: "$_id.eventType", count: { $sum: 1 } } },
+      ]),
+      SesEmailEvent.aggregate([
+        { $match: { $or: orConditions } },
+        { $addFields: { _effectiveType: resolveType } },
+        { $sort: { timestamp: 1 } },
+        {
+          $group: {
+            _id: { email: "$recipientEmail", type: "$_effectiveType" },
+            firstAt: { $first: "$timestamp" },
+          },
+        },
+      ]),
+    ]);
+
+    // Build stats object
+    const counts = {};
+    statsAgg.forEach(({ _id, count }) => { counts[_id] = count; });
+    const liveStats = {
+      sends:       counts.Send       || 0,
+      deliveries:  counts.Delivery   || 0,
+      opens:       counts.Open       || 0,
+      clicks:      counts.Click      || 0,
+      bounces:     counts.Bounce     || 0,
+      complaints:  counts.Complaint  || 0,
+      rejections:  counts.Reject     || 0,
+    };
+
+    // Build per-recipient event map: { email: { Delivery: date, Open: date, … } }
+    const recipientEventMap = {};
+    recipientEventsAgg.forEach(({ _id, firstAt }) => {
+      if (!recipientEventMap[_id.email]) recipientEventMap[_id.email] = {};
+      recipientEventMap[_id.email][_id.type] = firstAt;
+    });
+
+    // Enrich recipients with event timestamps
+    const enrichedRecipients = (log.recipients || []).map((r) => ({
+      ...r,
+      events: recipientEventMap[r.email] || {},
+    }));
+
+    const hasLive = Object.values(liveStats).some((v) => v > 0);
+    const stats   = hasLive ? liveStats : (log.stats || liveStats);
+
+    if (hasLive) {
+      EmailLog.findByIdAndUpdate(req.params.id, { $set: { stats } }).catch(() => {});
+    }
+
+    res.json({ status: "success", data: { ...log, stats, recipients: enrichedRecipients } });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+};
+
+// ─── GET /notifications/email-logs/:id/sync-stats  (force refresh stats) ──────
+exports.syncEmailLogStats = async (req, res) => {
+  try {
+    const log = await EmailLog.findById(req.params.id).lean();
+    if (!log) return res.status(404).json({ status: "error", message: "Log not found" });
+
+    const recipientEmails = (log.recipients || []).map((r) => r.email).filter(Boolean);
+    const { orConditions } = await buildEventMatch(req.params.id, {
+      recipientEmails,
+      sentAt: log.createdAt,
+    });
+
+    const statsAgg = await SesEmailEvent.aggregate([
+      { $match: { $or: orConditions } },
+      {
+        $addFields: {
+          _effectiveType: {
+            $cond: { if: { $eq: ["$eventType", "Unknown"] }, then: "$raw.eventType", else: "$eventType" },
+          },
+        },
+      },
+      { $group: { _id: { email: "$recipientEmail", eventType: "$_effectiveType" } } },
+      { $group: { _id: "$_id.eventType", count: { $sum: 1 } } },
+    ]);
+
+    const counts = {};
+    statsAgg.forEach(({ _id, count }) => { counts[_id] = count; });
+    const liveStats = {
+      sends:       counts.Send       || 0,
+      deliveries:  counts.Delivery   || 0,
+      opens:       counts.Open       || 0,
+      clicks:      counts.Click      || 0,
+      bounces:     counts.Bounce     || 0,
+      complaints:  counts.Complaint  || 0,
+      rejections:  counts.Reject     || 0,
+    };
+
+    await EmailLog.findByIdAndUpdate(req.params.id, { $set: { stats: liveStats } });
+    res.json({ status: "success", stats: liveStats });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }

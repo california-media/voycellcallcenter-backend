@@ -1,10 +1,10 @@
-const OpenAI = require("openai");
+// const OpenAI = require("openai");
 const User = require("../models/userModel");
 const Contact = require("../models/contactModel");
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// const openai = new OpenAI({
+//   apiKey: process.env.OPENAI_API_KEY,
+// });
 
 /* ================================
    🔍 INTENT DETECTOR
@@ -187,50 +187,47 @@ exports.chatAgent = async (req, res) => {
     }
 
     /* ================================
-       🤖 AI CHAT
+       🤖 AI CHAT — disabled (OpenAI removed)
     ================================ */
-    console.log("🤖 AI_CHAT start");
-
-    let systemContext = `
-You are an AI assistant.
-The user is NOT logged in.
-Instead of saying just hi greet with the name according the day timing.
-Answer in a general and helpful way.
-`;
-
-    if (req.user?._id) {
-      console.log("👤 Fetching logged-in user for AI context");
-
-      const user = await User.findById(req.user._id).lean();
-
-      if (user) {
-        systemContext = `
-You are an AI assistant.
-Instead of saying just hi greet with the name according the day timing but not in all the messages.
-The user IS logged in.
-
-${buildUserContext(user)}
-`;
-      }
-    }
-
-    console.log("🤖 Calling OpenAI");
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemContext },
-        { role: "user", content: message },
-      ],
-      temperature: 0.4,
+    return res.status(503).json({
+      success: false,
+      reply: "AI chat is currently disabled.",
     });
 
-    console.log("🤖 OpenAI response received");
+    // console.log("🤖 AI_CHAT start");
 
-    return res.status(200).json({
-      success: true,
-      reply: completion.choices[0].message.content,
-    });
+    // let systemContext = `
+    // You are an AI assistant.
+    // The user is NOT logged in.
+    // Instead of saying just hi greet with the name according the day timing.
+    // Answer in a general and helpful way.
+    // `;
+
+    // if (req.user?._id) {
+    //   const user = await User.findById(req.user._id).lean();
+    //   if (user) {
+    //     systemContext = `
+    // You are an AI assistant.
+    // Instead of saying just hi greet with the name according the day timing but not in all the messages.
+    // The user IS logged in.
+    // ${buildUserContext(user)}
+    // `;
+    //   }
+    // }
+
+    // const completion = await openai.chat.completions.create({
+    //   model: "gpt-4o-mini",
+    //   messages: [
+    //     { role: "system", content: systemContext },
+    //     { role: "user", content: message },
+    //   ],
+    //   temperature: 0.4,
+    // });
+
+    // return res.status(200).json({
+    //   success: true,
+    //   reply: completion.choices[0].message.content,
+    // });
   } catch (error) {
     console.error("❌ ChatAgent ERROR");
     console.error("❌ Message:", error.message);
