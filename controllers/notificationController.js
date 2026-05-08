@@ -327,7 +327,7 @@ function buildUserData(user) {
 // fromSenderId: optional ObjectId — if omitted, the default sender is used
 exports.sendEmailNotification = async (req, res) => {
   try {
-    const { subject, title, body, target = "all", fromSenderId, replyTo } = req.body;
+    const { subject, title, body, target = "all", fromSenderId, replyTo, startAt } = req.body;
 
     // targetCompanyIds can come as repeated FormData fields or JSON arrays
     const targetCompanyIds = [].concat(req.body["targetCompanyIds[]"] || req.body.targetCompanyIds || []);
@@ -459,12 +459,21 @@ exports.sendEmailNotification = async (req, res) => {
       const batches    = [];
       let   batchIndex = 0;
 
+      // If a future startAt was provided, shift the entire schedule to begin there.
+      // We enforce a minimum of "now + 2 minutes" so EventBridge never rejects
+      // a schedule that is too close to the current time (AWS requires >= 1 min,
+      // we use 2 min as a safety buffer for API call latency).
+      const MIN_BUFFER_MS = 2 * 60 * 1000; // 2 minutes
+      const scheduleBase = startAt
+        ? Math.max(new Date(startAt).getTime(), now.getTime() + MIN_BUFFER_MS)
+        : now.getTime() + MIN_BUFFER_MS;
+
       for (let i = 0; i < allowed.length; i += batchSize) {
-        // For scheduler mode: first batch fires in intervalSecs (EventBridge min 60s)
-        // For direct mode: scheduledAt is now (we send them immediately in sequence)
+        // For scheduler mode: batch 0 fires at scheduleBase, then +intervalSecs per batch
+        // For direct mode: same offset from scheduleBase (0 delay for batch 0)
         const scheduledAt = useScheduler
-          ? new Date(now.getTime() + (batchIndex + 1) * intervalSecs * 1000)
-          : new Date(now.getTime() + batchIndex * intervalSecs * 1000);
+          ? new Date(scheduleBase + batchIndex * intervalSecs * 1000)
+          : new Date(scheduleBase + batchIndex * intervalSecs * 1000);
 
         batches.push({
           index:      batchIndex,
@@ -520,8 +529,12 @@ exports.sendEmailNotification = async (req, res) => {
       const unitLabel = `${batchConfig.intervalValue} ${batchConfig.intervalUnit}`;
 
       if (useScheduler) {
-        // ── EventBridge scheduled batches ────────────────────────────────────
-        await Promise.allSettled(
+        // ── EventBridge scheduled batches ─────────────────────────────────────
+        // PARALLEL creation — all schedules fire at once so API Gateway's 29-second
+        // hard timeout is never hit even for 2000+ email jobs (228 batches × ~5ms = ~1s).
+        // Promise.allSettled means we never throw — we inspect EVERY result and
+        // write failures to MongoDB immediately so nothing is ever silently lost.
+        const scheduleResults = await Promise.allSettled(
           batches.map((b) =>
             createEmailBatchSchedule({
               jobId,
@@ -532,13 +545,64 @@ exports.sendEmailNotification = async (req, res) => {
           )
         );
 
+        const successfulBatchIdxs = [];
+        const failedBatchIdxs     = [];
+
+        scheduleResults.forEach((result, i) => {
+          if (result.status === "fulfilled") {
+            successfulBatchIdxs.push(i);
+          } else {
+            failedBatchIdxs.push(i);
+            console.error(`[EmailBatch] ❌ Schedule creation failed for batch ${i} of job ${jobId}:`, result.reason?.message || result.reason);
+          }
+        });
+
+        // One DB write for all failed batches
+        if (failedBatchIdxs.length > 0) {
+          await EmailBatchJob.findOneAndUpdate(
+            { jobId },
+            {
+              $set: Object.fromEntries([
+                ...failedBatchIdxs.map((idx) => [`batches.${idx}.status`, "failed"]),
+                ...failedBatchIdxs.map((idx) => [
+                  `batches.${idx}.error`,
+                  `EventBridge schedule creation failed: ${scheduleResults[idx].reason?.message || "Unknown error"}`,
+                ]),
+              ]),
+              $inc: {
+                completedBatches: failedBatchIdxs.length,
+                failedBatches:    failedBatchIdxs.length,
+              },
+            }
+          );
+        }
+
+        // One DB write for all successful batches — flip scheduledInEventBridge: true
+        // Any batch still showing false + status "pending" has no real EventBridge
+        // schedule and will never fire — easily visible in the UI.
+        if (successfulBatchIdxs.length > 0) {
+          await EmailBatchJob.findOneAndUpdate(
+            { jobId },
+            {
+              $set: Object.fromEntries(
+                successfulBatchIdxs.map((idx) => [`batches.${idx}.scheduledInEventBridge`, true])
+              ),
+            }
+          );
+        }
+
+        const scheduledCount = successfulBatchIdxs.length;
+        console.log(`[EmailBatch] ✅ Job ${jobId}: ${scheduledCount}/${batches.length} schedules created in EventBridge${failedBatchIdxs.length ? ` | ❌ Failed batches: [${failedBatchIdxs.join(", ")}]` : ""}`);
+
         return res.json({
-          status:          "success",
+          status:          failedBatchIdxs.length > 0 ? "partial" : "success",
           batched:         true,
           scheduled:       true,
-          message:         `${allowed.length} emails scheduled across ${batches.length} batch${batches.length !== 1 ? "es" : ""} — 1 batch every ${unitLabel}`,
+          message:         `${allowed.length} emails scheduled across ${scheduledCount} batch${scheduledCount !== 1 ? "es" : ""} — 1 batch every ${unitLabel}${failedBatchIdxs.length ? ` (⚠️ ${failedBatchIdxs.length} batch(es) failed to schedule)` : ""}`,
           jobId,
           totalBatches:    batches.length,
+          scheduledBatches: scheduledCount,
+          failedBatches:   failedBatchIdxs,
           totalRecipients: allowed.length,
           firstBatchAt:    batches[0]?.scheduledAt,
           lastBatchAt:     batches[batches.length - 1]?.scheduledAt,
@@ -693,8 +757,18 @@ exports.getEmailLogs = async (req, res) => {
     // ── Compute live stats from SesEmailEvent for this page ──────────────────
     const logIds = logs.map((l) => l._id);
 
-    // Run in parallel: aggregate events tagged with emailLogId, and fetch
-    // SesMessageLog entries so we can also catch events linked only by sesMessageId.
+    // Build a map of logId → Set<lowercased recipientEmails>.
+    // All comparisons are case-insensitive so SES email casing (e.g. "Alice@Co.COM")
+    // matches the stored recipients (e.g. "alice@co.com").
+    const recipientEmailsByLogId = {};
+    logs.forEach((log) => {
+      if (log.recipients && log.recipients.length > 0) {
+        recipientEmailsByLogId[log._id.toString()] = new Set(
+          log.recipients.map((r) => (r.email || "").toLowerCase()).filter(Boolean)
+        );
+      }
+    });
+
     const resolveEventType = {
       $cond: {
         if: { $eq: ["$eventType", "Unknown"] },
@@ -703,71 +777,120 @@ exports.getEmailLogs = async (req, res) => {
       },
     };
 
-    const [eventsByLogId, sesLogs] = await Promise.all([
-      SesEmailEvent.aggregate([
-        { $match: { emailLogId: { $in: logIds } } },
-        { $addFields: { _effectiveType: resolveEventType } },
-        // Deduplicate per (logId, recipient, eventType) then count unique recipients
-        { $group: { _id: { logId: "$emailLogId", email: "$recipientEmail", eventType: "$_effectiveType" } } },
-        { $group: { _id: { logId: "$_id.logId", eventType: "$_id.eventType" }, count: { $sum: 1 } } },
-      ]),
-      SesMessageLog.find({ emailLogId: { $in: logIds } }).select("sesMessageId emailLogId").lean(),
-    ]);
-
-    // Build sesMessageId → emailLogId map for events where emailLogId is null
+    // ── Single per-recipient aggregation — same logic as getEmailLogById ─────────
+    // This guarantees the table and modal always show identical numbers.
+    // Step 1: build sesMessageId → emailLogId map for the fallback path
+    const sesLogs = await SesMessageLog.find({ emailLogId: { $in: logIds } })
+      .select("sesMessageId emailLogId")
+      .lean();
     const msgIdToLogId = {};
     sesLogs.forEach((sl) => {
       if (sl.sesMessageId) msgIdToLogId[sl.sesMessageId] = sl.emailLogId.toString();
     });
     const allSesIds = Object.keys(msgIdToLogId);
 
-    // Second aggregation: events linked only by sesMessageId (emailLogId not set)
-    const eventsBySesId = allSesIds.length
-      ? await SesEmailEvent.aggregate([
-          { $match: { sesMessageId: { $in: allSesIds }, emailLogId: null } },
-          { $addFields: { _effectiveType: resolveEventType } },
-          { $group: { _id: { sesMessageId: "$sesMessageId", email: "$recipientEmail", eventType: "$_effectiveType" } } },
-          { $group: { _id: { sesMessageId: "$_id.sesMessageId", eventType: "$_id.eventType" }, count: { $sum: 1 } } },
-        ])
-      : [];
+    // Step 2: fetch all events for these logs via both paths in one query
+    const allOrConditions = [
+      { emailLogId: { $in: logIds } },
+      ...(allSesIds.length ? [{ sesMessageId: { $in: allSesIds } }] : []),
+    ];
 
-    // Merge both aggregation results into a statsMap keyed by emailLogId string
+    const perRecipientAgg = await SesEmailEvent.aggregate([
+      { $match: { $or: allOrConditions } },
+      // Collect all event flags per (emailLogId, sesMessageId, email)
+      {
+        $group: {
+          _id: {
+            emailLogId:  "$emailLogId",
+            sesMessageId: "$sesMessageId",
+            // Normalise to lowercase so "Alice@Co.COM" and "alice@co.com" are the same key
+            email: { $toLower: { $ifNull: ["$recipientEmail", ""] } },
+          },
+          hasDelivery:  { $max: { $cond: [{ $eq: ["$eventType", "Delivery"]  }, 1, 0] } },
+          hasOpen:      { $max: { $cond: [{ $eq: ["$eventType", "Open"]      }, 1, 0] } },
+          hasClick:     { $max: { $cond: [{ $eq: ["$eventType", "Click"]     }, 1, 0] } },
+          hasBounce:    { $max: { $cond: [{ $eq: ["$eventType", "Bounce"]    }, 1, 0] } },
+          hasComplaint: { $max: { $cond: [{ $eq: ["$eventType", "Complaint"] }, 1, 0] } },
+          hasReject:    { $max: { $cond: [{ $in:  ["$eventType", ["Reject", "RenderingFailure"]] }, 1, 0] } },
+          hasSend:      { $max: { $cond: [{ $eq: ["$eventType", "Send"]      }, 1, 0] } },
+        },
+      },
+    ]);
+
+    // Step 3: resolve logId and merge flags per (logId, email)
+    // An email can appear via BOTH emailLogId and sesMessageId paths — take the max flag.
+    // Only count events for emails that are actually in log.recipients (same filter the
+    // modal uses) so outer table and modal statistics always match.
+    // Email comparison is case-insensitive (the aggregate already lowercased emails).
+    const recipientFlagsMap = {}; // logKey → { email → flags }
+    for (const doc of perRecipientAgg) {
+      const logKey = doc._id.emailLogId
+        ? doc._id.emailLogId.toString()
+        : (msgIdToLogId[doc._id.sesMessageId] || null);
+      if (!logKey) continue;
+
+      // email is already lowercased by $toLower in the aggregate
+      const email = doc._id.email || "";
+      if (!email) continue;
+
+      // Skip events for emails not in the recipient list (guards against stray SES
+      // events for forwarded/monitored addresses that are not actual recipients)
+      const recipientSet = recipientEmailsByLogId[logKey];
+      if (recipientSet && recipientSet.size > 0 && !recipientSet.has(email)) continue;
+
+      if (!recipientFlagsMap[logKey]) recipientFlagsMap[logKey] = {};
+      if (!recipientFlagsMap[logKey][email]) {
+        recipientFlagsMap[logKey][email] = { hasDelivery: 0, hasOpen: 0, hasClick: 0, hasBounce: 0, hasComplaint: 0, hasReject: 0, hasSend: 0 };
+      }
+      const f = recipientFlagsMap[logKey][email];
+      f.hasDelivery  = Math.max(f.hasDelivery,  doc.hasDelivery);
+      f.hasOpen      = Math.max(f.hasOpen,      doc.hasOpen);
+      f.hasClick     = Math.max(f.hasClick,     doc.hasClick);
+      f.hasBounce    = Math.max(f.hasBounce,    doc.hasBounce);
+      f.hasComplaint = Math.max(f.hasComplaint, doc.hasComplaint);
+      f.hasReject    = Math.max(f.hasReject,    doc.hasReject);
+      f.hasSend      = Math.max(f.hasSend,      doc.hasSend);
+    }
+
+    // Step 4: count stats per logId from per-recipient flags
     const statsMap = {};
-    const ensureEntry = (key) => {
-      if (!statsMap[key]) statsMap[key] = { sends: 0, deliveries: 0, opens: 0, clicks: 0, bounces: 0, complaints: 0, rejections: 0 };
-    };
-    for (const { _id, count } of eventsByLogId) {
-      const key = _id.logId.toString();
-      ensureEntry(key);
-      const field = EVENT_STATS_MAP[_id.eventType];
-      if (field) statsMap[key][field] += count;
-    }
-    for (const { _id, count } of eventsBySesId) {
-      const key = msgIdToLogId[_id.sesMessageId];
-      if (!key) continue;
-      ensureEntry(key);
-      const field = EVENT_STATS_MAP[_id.eventType];
-      if (field) statsMap[key][field] += count;
+    for (const [logKey, emailMap] of Object.entries(recipientFlagsMap)) {
+      const s = { sends: 0, deliveries: 0, netDeliveries: 0, opens: 0, clicks: 0, bounces: 0, complaints: 0, rejections: 0 };
+      for (const f of Object.values(emailMap)) {
+        if (f.hasSend)                         s.sends++;
+        if (f.hasDelivery)                     s.deliveries++;
+        if (f.hasDelivery && !f.hasBounce)     s.netDeliveries++;  // delivered AND not bounced
+        if (f.hasOpen)                         s.opens++;
+        if (f.hasClick)                        s.clicks++;
+        if (f.hasBounce)                       s.bounces++;
+        if (f.hasComplaint)                    s.complaints++;
+        if (f.hasReject)                       s.rejections++;
+      }
+      statsMap[logKey] = s;
     }
 
-    // Merge live stats with stored stats — take the MAX of each field so a
-    // partial aggregation result never silently zeroes out previously correct data.
+    // Step 5: build final stats — always use live per-recipient computation.
+    // Never short-circuit on stored stats, because stored stats may have been saved
+    // by old code before the recipient-filter fix and could be inflated.
     const finalLogs = stripped.map((log) => {
-      const live    = statsMap[log._id.toString()];
-      const stored  = log.stats || {};
-      const merged  = {
-        sends:       Math.max(live?.sends       || 0, stored.sends       || 0),
-        deliveries:  Math.max(live?.deliveries  || 0, stored.deliveries  || 0),
-        opens:       Math.max(live?.opens       || 0, stored.opens       || 0),
-        clicks:      Math.max(live?.clicks      || 0, stored.clicks      || 0),
-        bounces:     Math.max(live?.bounces     || 0, stored.bounces     || 0),
-        complaints:  Math.max(live?.complaints  || 0, stored.complaints  || 0),
-        rejections:  Math.max(live?.rejections  || 0, stored.rejections  || 0),
+      const live   = statsMap[log._id.toString()];
+      const stored = log.stats || {};
+
+      const merged = live || {
+        sends:         stored.sends         || 0,
+        deliveries:    stored.deliveries    || 0,
+        netDeliveries: stored.netDeliveries || 0,
+        opens:         stored.opens         || 0,
+        clicks:        stored.clicks        || 0,
+        bounces:       stored.bounces       || 0,
+        complaints:    stored.complaints    || 0,
+        rejections:    stored.rejections    || 0,
       };
-      // Only persist if live data raised a value above what was stored
-      const improved = Object.keys(merged).some((k) => merged[k] > (stored[k] || 0));
-      if (improved) {
-        EmailLog.findByIdAndUpdate(log._id, { $set: { stats: merged } }).catch(() => {});
+
+      // Persist whenever the live value differs from stored (keeps stored fresh)
+      if (live) {
+        const changed = Object.keys(merged).some((k) => (merged[k] || 0) !== (stored[k] || 0));
+        if (changed) EmailLog.findByIdAndUpdate(log._id, { $set: { stats: merged } }).catch(() => {});
       }
       return { ...log, stats: merged };
     });
@@ -847,14 +970,101 @@ exports.getEmailLogById = async (req, res) => {
       events: recipientEventMap[r.email] || {},
     }));
 
-    const hasLive = Object.values(liveStats).some((v) => v > 0);
-    const stats   = hasLive ? liveStats : (log.stats || liveStats);
+    // ── Compute accurate per-recipient stats ──────────────────────────────────
+    // Count only from log.recipients (same as what the modal's Statistics tab
+    // and Recipients tab show).  liveStats from the aggregate above may count
+    // events for emails NOT in the recipient list (e.g. forwarded/tracked by
+    // third parties), inflating numbers.  These per-recipient stats are saved
+    // back to EmailLog.stats with a marker so getEmailLogs can use them instead
+    // of re-running the aggregate (which would produce the inflated figure).
+    const perRecipientStats = {
+      sends:                  liveStats.sends,   // SES Send events — keep aggregate value
+      deliveries:             enrichedRecipients.filter((r) => r.events?.Delivery).length,
+      netDeliveries:          enrichedRecipients.filter((r) => r.events?.Delivery && !r.events?.Bounce).length,
+      opens:                  enrichedRecipients.filter((r) => r.events?.Open).length,
+      clicks:                 enrichedRecipients.filter((r) => r.events?.Click).length,
+      bounces:                enrichedRecipients.filter((r) => r.events?.Bounce).length,
+      complaints:             enrichedRecipients.filter((r) => r.events?.Complaint).length,
+      rejections:             enrichedRecipients.filter((r) => r.events?.Reject).length,
+      statsComputedPerRecipient: true,  // flag: outer table should use these, not re-aggregate
+    };
 
-    if (hasLive) {
-      EmailLog.findByIdAndUpdate(req.params.id, { $set: { stats } }).catch(() => {});
+    const hasEvents = Object.entries(perRecipientStats)
+      .filter(([k]) => k !== "statsComputedPerRecipient")
+      .some(([, v]) => (v || 0) > 0);
+
+    if (hasEvents) {
+      EmailLog.findByIdAndUpdate(req.params.id, { $set: { stats: perRecipientStats } }).catch(() => {});
     }
 
-    res.json({ status: "success", data: { ...log, stats, recipients: enrichedRecipients } });
+    res.json({ status: "success", data: { ...log, stats: perRecipientStats, recipients: enrichedRecipients } });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+};
+
+// ─── GET /notifications/email-logs/:id/recipients  (paginated + filtered) ──────
+// Supports:  ?page=1&limit=20&filter=all|delivered|opened|bounced
+// ?download=true  returns ALL matching recipients without pagination (for Excel)
+exports.getEmailLogRecipients = async (req, res) => {
+  try {
+    const log = await EmailLog.findById(req.params.id)
+      .select("recipients createdAt subject")
+      .lean();
+    if (!log) return res.status(404).json({ status: "error", message: "Log not found" });
+
+    const page     = parseInt(req.query.page)  || 1;
+    const limit    = parseInt(req.query.limit) || 20;
+    const filter   = req.query.filter   || "all";   // all | delivered | opened | bounced
+    const download = req.query.download === "true"; // bypass pagination
+
+    const recipientEmails = (log.recipients || []).map((r) => r.email).filter(Boolean);
+    const { orConditions } = await buildEventMatch(req.params.id, { recipientEmails, sentAt: log.createdAt });
+
+    const resolveType = {
+      $cond: { if: { $eq: ["$eventType", "Unknown"] }, then: "$raw.eventType", else: "$eventType" },
+    };
+
+    // Build per-recipient event map
+    const recipientEventsAgg = await SesEmailEvent.aggregate([
+      { $match: { $or: orConditions } },
+      { $addFields: { _effectiveType: resolveType } },
+      { $sort: { timestamp: 1 } },
+      { $group: { _id: { email: "$recipientEmail", type: "$_effectiveType" }, firstAt: { $first: "$timestamp" } } },
+    ]);
+    const recipientEventMap = {};
+    recipientEventsAgg.forEach(({ _id, firstAt }) => {
+      if (!recipientEventMap[_id.email]) recipientEventMap[_id.email] = {};
+      recipientEventMap[_id.email][_id.type] = firstAt;
+    });
+
+    // Enrich and filter
+    let enriched = (log.recipients || []).map((r) => ({
+      ...r,
+      events: recipientEventMap[r.email] || {},
+    }));
+
+    if (filter === "delivered") {
+      enriched = enriched.filter((r) => r.events?.Delivery && !r.events?.Bounce);
+    } else if (filter === "opened") {
+      enriched = enriched.filter((r) => r.events?.Open);
+    } else if (filter === "bounced") {
+      enriched = enriched.filter((r) => r.events?.Bounce);
+    }
+
+    const total = enriched.length;
+
+    const paged = download
+      ? enriched
+      : enriched.slice((page - 1) * limit, page * limit);
+
+    res.json({
+      status: "success",
+      data:   paged,
+      total,
+      page:   download ? 1 : page,
+      limit:  download ? total : limit,
+    });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }

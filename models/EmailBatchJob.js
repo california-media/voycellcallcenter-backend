@@ -53,10 +53,18 @@ const emailBatchJobSchema = new Schema(
             data:  { type: Schema.Types.Mixed, default: {} },
           },
         ],
-        status:      { type: String, enum: ["pending", "sent", "failed"], default: "pending" },
-        scheduledAt: { type: Date, default: null },
-        sentAt:      { type: Date, default: null },
-        error:       { type: String, default: null },
+        // "partial" = some emails in the batch sent, some failed
+        status:                 { type: String, enum: ["pending", "sent", "failed", "partial"], default: "pending" },
+        scheduledAt:            { type: Date, default: null },
+        sentAt:                 { type: Date, default: null },
+        error:                  { type: String, default: null },
+        // Per-batch send result counts — visible in UI so partial failures are never hidden
+        succeededCount:         { type: Number, default: 0 },
+        failedCount:            { type: Number, default: 0 },
+        // True only when EventBridge confirmed the schedule was created successfully.
+        // If this is false and status is still "pending", the batch has no schedule
+        // in EventBridge and will never fire on its own — use the manual trigger endpoint.
+        scheduledInEventBridge: { type: Boolean, default: false },
       },
     ],
 
@@ -67,5 +75,7 @@ const emailBatchJobSchema = new Schema(
 
 emailBatchJobSchema.index({ status: 1, createdAt: -1 });
 emailBatchJobSchema.index({ createdBy: 1 });
+// Needed by the daily cap query in emailBatchService which filters by status + updatedAt
+emailBatchJobSchema.index({ status: 1, updatedAt: -1 });
 
 module.exports = model("EmailBatchJob", emailBatchJobSchema);

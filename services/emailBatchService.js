@@ -49,16 +49,43 @@ const sendEmailBatchService = async ({ jobId, batchIndex }) => {
   }
 
   // ── Step 2: Check daily cap at fire time ─────────────────────────────────
+  // Count BOTH completed EmailLogs AND in-progress batch jobs (batches already
+  // sent within the current day but whose EmailLog hasn't been written yet because
+  // the job isn't finished). This prevents two overlapping large jobs from both
+  // blasting through the daily cap before either one writes its EmailLog.
   const now     = new Date();
   const day1Ago = new Date(now - 24 * 60 * 60 * 1000);
 
   const config = await EmailBatchConfig.findOne({ key: "global" }).lean();
+
+  // Emails from fully-completed jobs (written to EmailLog)
   const [dailyAgg] = await Promise.all([
     EmailLog.aggregate([{ $match: { createdAt: { $gte: day1Ago } } }, { $group: { _id: null, total: { $sum: "$recipientCount" } } }]),
   ]);
-  const dailyUsed = dailyAgg[0]?.total ?? 0;
+  const completedEmailLogCount = dailyAgg[0]?.total ?? 0;
+
+  // Emails already sent by ALL in-progress batch jobs TODAY (not yet in EmailLog).
+  // Intentionally includes the CURRENT job so batches within the same large job
+  // correctly count toward the daily cap as previous batches complete.
+  const inProgressJobs = await EmailBatchJob.find({
+    status: { $in: ["in_progress", "completed"] },
+    updatedAt: { $gte: day1Ago },
+  }).select("batches").lean();
+
+  let inProgressSentCount = 0;
+  for (const j of inProgressJobs) {
+    for (const b of (j.batches || [])) {
+      if (b.status === "sent" || b.status === "partial") {
+        inProgressSentCount += (b.succeededCount ?? b.recipients?.length ?? 0);
+      }
+    }
+  }
+
+  const dailyUsed = completedEmailLogCount + inProgressSentCount;
   const dailyCap  = config?.dailyCap   ?? Infinity;
   const canSend   = Math.max(0, dailyCap - dailyUsed);
+
+  console.log(`[EmailBatch] Daily cap check — EmailLog: ${completedEmailLogCount}, in-progress sent: ${inProgressSentCount}, total used: ${dailyUsed}/${dailyCap}, canSend: ${canSend}`);
 
   if (canSend <= 0) {
     console.log(`[EmailBatch] 🚫 Batch ${batchIndex} of job ${jobId} skipped — daily cap reached (${dailyUsed}/${dailyCap})`);
@@ -153,14 +180,24 @@ const sendEmailBatchService = async ({ jobId, batchIndex }) => {
   // ── Step 3: Update job status — separate try/catch so logging failures never
   //           affect the "emails were sent" status ─────────────────────────────
   try {
-    const batchStatus = (sendError || failed === batch.recipients.length) ? "failed" : "sent";
+    // "failed"  = every single email in the batch failed (or fatal error)
+    // "partial" = some succeeded, some failed — visible in UI, never hidden
+    // "sent"    = all emails succeeded
+    const batchStatus = sendError || failed === recipientsToSend.length
+      ? "failed"
+      : failed > 0
+        ? "partial"
+        : "sent";
 
     const update = {
-      [`batches.${batchIndex}.status`]: batchStatus,
-      [`batches.${batchIndex}.sentAt`]: new Date(),
+      [`batches.${batchIndex}.status`]:         batchStatus,
+      [`batches.${batchIndex}.sentAt`]:          new Date(),
+      [`batches.${batchIndex}.succeededCount`]:  succeeded,
+      [`batches.${batchIndex}.failedCount`]:     failed,
       ...(sendError && { [`batches.${batchIndex}.error`]: sendError }),
       $inc: {
         completedBatches: 1,
+        // Only count as a failed batch if EVERY email failed — partial is not a full failure
         failedBatches:    batchStatus === "failed" ? 1 : 0,
       },
     };

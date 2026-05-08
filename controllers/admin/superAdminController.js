@@ -2,12 +2,17 @@ const User = require("../../models/userModel");
 const Subscription = require("../../models/Subscription");
 const Invoice = require("../../models/Invoice");
 const crypto = require("crypto");
+const https = require("https");
 const mongoose = require("mongoose");
 const { sendEmailChangeVerification } = require("../../utils/emailUtils");
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const getDeviceToken = require("../../services/yeastarTokenService").getDeviceToken;
 const axios = require("axios");
 const { getConfig } = require("../../utils/getConfig");
+
+// Yeastar PBX devices use self-signed / private-CA certificates.
+// Node.js rejects these by default; Postman ignores them.
+const pbxHttpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const friendlyMongoError = (err) => {
   if (err.code === 11000 || err.code === 11001) {
@@ -984,6 +989,7 @@ exports.addYeastarDeviceBySuperAdmin = async (req, res) => {
       PBX_USER_AGENT,
     } = req.body;
 
+
     // 1️⃣ Check Super Admin
     const superAdmin = await User.findById(superAdminId);
 
@@ -995,60 +1001,44 @@ exports.addYeastarDeviceBySuperAdmin = async (req, res) => {
     }
 
     // 2️⃣ 🔐 Validate PBX Credentials
+    const cleanBase = PBX_BASE_URL.replace(/\/+$/, ""); // strip trailing slashes
     try {
       const pbxRes = await axios.post(
-        `${PBX_BASE_URL}/get_token`,
+        `${cleanBase}/get_token`,
+        { username: PBX_USERNAME, password: PBX_PASSWORD },
         {
-          username: PBX_USERNAME,
-          password: PBX_PASSWORD,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent":
-              PBX_USER_AGENT || "Voycell-App",
-          },
+          headers: { "Content-Type": "application/json", "User-Agent": PBX_USER_AGENT || "Voycell-App" },
           timeout: 10000,
+          httpsAgent: pbxHttpsAgent,
         }
       );
-
       if (!pbxRes.data?.access_token) {
-        throw new Error("PBX auth failed");
+        return res.status(400).json({ success: false, message: `PBX login failed: ${JSON.stringify(pbxRes.data)}` });
       }
-
     } catch (err) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid PBX credentials.",
-      });
+      const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+      return res.status(400).json({ success: false, message: `PBX connection error: ${detail}` });
     }
 
-    // 3️⃣ 🔐 Validate SDK Credentials
-    try {
-      const sdkRes = await axios.post(
-        `${PBX_BASE_URL}/get_token`,
-        {
-          username: PBX_SDK_ACCESS_ID,
-          password: PBX_SDK_ACCESS_KEY,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent":
-              PBX_USER_AGENT || "Voycell-App",
-          },
-          timeout: 10000,
+    // 3️⃣ 🔐 Validate SDK Credentials (only if provided)
+    if (PBX_SDK_ACCESS_ID && PBX_SDK_ACCESS_KEY) {
+      try {
+        const sdkRes = await axios.post(
+          `${cleanBase}/get_token`,
+          { username: PBX_SDK_ACCESS_ID, password: PBX_SDK_ACCESS_KEY },
+          {
+            headers: { "Content-Type": "application/json" },
+            timeout: 10000,
+            httpsAgent: pbxHttpsAgent,
+          }
+        );
+        if (!sdkRes.data?.access_token) {
+          return res.status(400).json({ success: false, message: `SDK login failed: ${JSON.stringify(sdkRes.data)}` });
         }
-      );
-
-      if (!sdkRes.data?.access_token) {
-        throw new Error("SDK auth failed");
+      } catch (err) {
+        const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+        return res.status(400).json({ success: false, message: `SDK connection error: ${detail}` });
       }
-    } catch (err) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid SDK credentials.",
-      });
     }
 
     // 4️⃣ Create deviceId AFTER validation

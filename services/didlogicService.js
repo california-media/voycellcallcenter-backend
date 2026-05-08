@@ -155,7 +155,7 @@ async function purchaseNumbers({ id_in = [], did_numbers = [], identities = [] }
   console.log(`[DIDProvider]    Token      : ${apiToken ? `${apiToken.slice(0, 6)}...${apiToken.slice(-4)}` : "NOT SET ⚠️"}`);
   // ───────────────────────────────────────────────────────────────────────────
 
-  const res = await axios.post(`${BASE}/v2/numbers/purchas`, form, {
+  const res = await axios.post(`${BASE}/v2/numbers/purchase`, form, {
     headers: {
       Authorization: `Bearer ${apiToken}`,
       ...form.getHeaders(),   // sets the correct multipart/form-data Content-Type + boundary

@@ -209,19 +209,26 @@ const calcTotalPrice = (plan, billingPeriod, agentCount) => {
   // agentCount is the TOTAL seats (1 is always included in basePrice).
   // Only charge for seats beyond the first included one.
   const extraAgents = Math.max(0, agentCount - 1);
-  const totalPerMonth = basePrice + extraAgents * agentPrice;
-  const totalBeforeDiscount = totalPerMonth * periodMultiplier;
-  return totalBeforeDiscount * (1 - discount / 100);
+  // Period discount applies to base plan only; agent seats are full monthly rate × period
+  const basePeriodAmount = basePrice * periodMultiplier * (1 - discount / 100);
+  const agentPeriodAmount = extraAgents * agentPrice * periodMultiplier;
+  return basePeriodAmount + agentPeriodAmount;
 };
 
-// Period discounts are for first-time purchases only — upgrades always use the base price.
+// Upgrade price applies the period discount because discountPercent encodes the actual
+// billing-period rate (e.g. yearly tier stores price=$271 with discountPercent=89.18% to
+// represent $29.25/mo — charging without the discount would inflate the total to $3,252).
 const calcUpgradePrice = (plan, billingPeriod, agentCount) => {
   const tier = plan.pricing[billingPeriod];
   const basePrice = tier.price || 0;
+  const discount = tier.discountPercent || 0;
   const agentPrice = plan.agentPrice || 0;
   const periodMultiplier = billingPeriod === "monthly" ? 1 : billingPeriod === "quarterly" ? 3 : billingPeriod === "semiannual" ? 6 : 12;
   const extraAgents = Math.max(0, agentCount - 1);
-  return (basePrice + extraAgents * agentPrice) * periodMultiplier;
+  // Period discount applies to base plan only; agent seats are full monthly rate × period
+  const basePeriodAmount = basePrice * periodMultiplier * (1 - discount / 100);
+  const agentPeriodAmount = extraAgents * agentPrice * periodMultiplier;
+  return basePeriodAmount + agentPeriodAmount;
 };
 
 const subscribeToPlan = async (req, res) => {
@@ -731,10 +738,14 @@ const previewUpgrade = async (req, res) => {
       return res.status(404).json({ success: false, message: "No active subscription found" });
     }
 
-    // Use calcUpgradePrice — no period discount for upgrades (first-purchase only).
     const agentCount = subscription.agentCount || 1;
-    const totalAmount = calcUpgradePrice(plan, billingPeriod, agentCount); // USD, no discount
+    const totalAmount = calcUpgradePrice(plan, billingPeriod, agentCount); // USD
     const planTotalCents = Math.round(totalAmount * 100);
+
+    // Breakdown: base plan (1 seat) vs extra agent seats — returned to the UI for transparency
+    const extraAgentCount = Math.max(0, agentCount - 1);
+    const basePlanAmount  = calcUpgradePrice(plan, billingPeriod, 1); // base plan, 1 seat
+    const agentSeatsAmount = Math.max(0, totalAmount - basePlanAmount);
 
     // Manual proration: credit = remaining fraction × undiscounted current-plan price.
     let negativeAmount = 0;
@@ -798,7 +809,11 @@ const previewUpgrade = async (req, res) => {
 
     return res.json({
       success: true,
-      planTotal: planTotalCents,             // cents — full new plan charge
+      planTotal: planTotalCents,                           // cents — full charge (base + all agent seats)
+      basePlanTotal: Math.round(basePlanAmount * 100),     // cents — base plan only (1 seat)
+      agentSeatsTotal: Math.round(agentSeatsAmount * 100), // cents — extra seats cost
+      agentCount,                                          // total seats being migrated
+      extraAgentCount,                                     // seats beyond the 1 included in plan
       proratedCredit: negativeAmount,        // cents — credit for unused time
       couponDiscount,                        // cents — coupon discount applied
       appliedCoupon: appliedCouponData,      // coupon metadata (or null)
@@ -1023,6 +1038,9 @@ const updateAgentSeats = async (req, res) => {
       return res.status(404).json({ success: false, message: "No active subscription found" });
     }
 
+    // Capture cancellation state before any Stripe update — re-applied afterward
+    const wasCancellationScheduled = !!subscription.cancelAtPeriodEnd;
+
     // Verify Stripe status — incomplete subscriptions cannot be modified
     if (subscription.stripeSubscriptionId) {
       const stripeSub = await stripeService.retrieveSubscription(subscription.stripeSubscriptionId);
@@ -1159,6 +1177,19 @@ const updateAgentSeats = async (req, res) => {
           },
           { upsert: true, new: true }
         );
+      }
+
+      // If the subscription was scheduled to cancel, Stripe may reset cancel_at_period_end
+      // when the subscription items are updated. Re-apply it to prevent an unwanted renewal
+      // that would charge the user a full period instead of just the remaining prorated days.
+      if (wasCancellationScheduled) {
+        try {
+          await stripeService.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+            cancel_at_period_end: true,
+          });
+        } catch (reapplyErr) {
+          console.warn("Could not re-apply cancel_at_period_end:", reapplyErr.message);
+        }
       }
 
       subscription.agentCount = newAgentCount;

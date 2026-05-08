@@ -1753,39 +1753,16 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     // FETCH CALLS
     // ------------------------------
 
+    // ── Fast indexed query using startTimeParsed ──────────────────────────────
+    // Uses the compound index { userId, startTimeParsed } — sub-millisecond on
+    // any dataset size.  Replaces the old $expr + $dateFromString full-scan.
+    // Records created before the migration will have startTimeParsed: null and
+    // are excluded from the fast path; the migration (in CallHistory.js) backfills
+    // them at server startup so this is only a transient gap.
     const calls = await CallHistory.find({
-      userId: { $in: userIdsToInclude },
-      $expr: {
-        $and: [
-          {
-            $gte: [
-              {
-                $dateFromString: {
-                  dateString: { $trim: { input: { $toString: "$start_time" } } },
-                  format: "%m/%d/%Y %H:%M:%S",
-                  onError: null,
-                  onNull: null,
-                },
-              },
-              startDate,
-            ],
-          },
-          {
-            $lt: [
-              {
-                $dateFromString: {
-                  dateString: { $trim: { input: { $toString: "$start_time" } } },
-                  format: "%m/%d/%Y %H:%M:%S",
-                  onError: null,
-                  onNull: null,
-                },
-              },
-              endDate,
-            ],
-          },
-        ],
-      },
-    }).select("start_time direction");
+      userId:           { $in: userIdsToInclude },
+      startTimeParsed:  { $gte: startDate, $lt: endDate },
+    }).select("startTimeParsed direction");
 
     // ------------------------------
     // FORMAT DATE: 24 Nov 2025
@@ -1828,9 +1805,9 @@ exports.getInboundOutBoundCallGraph = async (req, res) => {
     // COUNT CALLS DAY-WISE
     // ------------------------------
     calls.forEach((call) => {
-      const d = new Date(
-        call.start_time.replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$1-$2"),
-      );
+      // startTimeParsed is already a real Date — no string parsing needed
+      const d = call.startTimeParsed;
+      if (!d) return;
 
       const diffDays = Math.floor((d - startDate) / (1000 * 60 * 60 * 24));
 
@@ -1908,46 +1885,15 @@ exports.getMonthlyCallGraph = async (req, res) => {
       userIdsToSearch = [...userIdsToSearch, ...agentIds];
     }
 
-    // 4️⃣ Fetch calls (safe for start_time stored as STRING "MM/DD/YYYY HH:mm:ss")
-    // Converts start_time -> Date using $dateFromString, safely handles nulls/mixed types.
+    // 4️⃣ Fetch calls — fast indexed query using startTimeParsed
+    // Uses compound index { userId, startTimeParsed } — replaces the old
+    // $expr + $dateFromString full-collection-scan that caused infinite loading
+    // on cold Lambda starts.
     const calls = await CallHistory.find({
-      userId: { $in: userIdsToSearch },
-      direction: { $ne: "Internal" },
-      $expr: {
-        $and: [
-          {
-            $gte: [
-              {
-                $dateFromString: {
-                  dateString: {
-                    $trim: { input: { $toString: "$start_time" } },
-                  },
-                  format: "%m/%d/%Y %H:%M:%S",
-                  onError: null,
-                  onNull: null,
-                },
-              },
-              startDate,
-            ],
-          },
-          {
-            $lte: [
-              {
-                $dateFromString: {
-                  dateString: {
-                    $trim: { input: { $toString: "$start_time" } },
-                  },
-                  format: "%m/%d/%Y %H:%M:%S",
-                  onError: null,
-                  onNull: null,
-                },
-              },
-              endDate,
-            ],
-          },
-        ],
-      },
-    }).select("start_time direction status userId");
+      userId:          { $in: userIdsToSearch },
+      direction:       { $ne: "Internal" },
+      startTimeParsed: { $gte: startDate, $lte: endDate },
+    }).select("direction status userId");
 
     // 7️⃣ Summary counts
     const inboundTotal = calls.filter((c) => c.direction === "Inbound").length;

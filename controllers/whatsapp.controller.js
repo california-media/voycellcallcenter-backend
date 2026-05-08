@@ -3979,17 +3979,18 @@ exports.getWhatsappConversations = async (req, res) => {
                             ]
                         } : {},
                         type === "chats"
-                            ? {
-                                $or: [
-                                    { lastIncomingTime: { $gte: before24Hours } },
-                                    { lastMessageTime: { $gte: before24Hours } }
-                                ]
-                            }
+                            // Active chats: customer sent a message within the last 24 hours
+                            ? { lastIncomingTime: { $gte: before24Hours } }
                             : type === "history"
+                                // History: customer has NOT sent a message in the last 24 hours,
+                                // OR has never sent one at all (e.g. outgoing-only template sends).
+                                // We intentionally use lastIncomingTime — not lastMessageTime —
+                                // because an outgoing template sent today should still appear in
+                                // history if the customer never replied.
                                 ? {
                                     $or: [
-                                        { lastMessageTime: { $lt: before24Hours } },
-                                        { lastMessageTime: null }
+                                        { lastIncomingTime: { $lt: before24Hours } },
+                                        { lastIncomingTime: null }
                                     ]
                                 }
                                 : {}
@@ -4519,6 +4520,222 @@ exports.manageWabaAssignment = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Internal server error",
+        });
+    }
+};
+// ─────────────────────────────────────────────────────────────────────────────
+// Meta Embedded Signup — OAuth code exchange
+// POST /api/whatsapp/embedded-signup/exchange
+//
+// Flow:
+//  1. Exchange the short-lived authorization code for a user access token
+//  2. Discover which WABA was just authorized (via /me/whatsapp_business_accounts)
+//  3. List phone numbers on that WABA using the System User Token
+//  4. Subscribe the WABA to our app so webhooks start flowing
+//  5. Prevent the same WABA being connected to two accounts (409 path)
+//  6. Save credentials — we store the System User Token (never-expiring) as the
+//     ongoing access token so company admins never need to rotate it manually
+// ─────────────────────────────────────────────────────────────────────────────
+// Decode the base64url-encoded payload of a Meta signedRequest.
+// Returns the JSON object, or null if decoding fails.
+function decodeSignedRequestPayload(signedRequest) {
+    try {
+        if (!signedRequest) return null;
+        const parts = signedRequest.split(".");
+        if (parts.length !== 2) return null;
+        // base64url → base64 padding
+        const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+        return JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
+    } catch (_) {
+        return null;
+    }
+}
+
+exports.embeddedSignupExchange = async (req, res) => {
+    try {
+        const { code, signedRequest } = req.body;
+        const userId = req.user._id;
+
+        if (!code) {
+            return res.status(400).json({ status: "error", message: "Authorization code is required" });
+        }
+
+        const {
+            META_APP_ID:            appId,
+            META_APP_SECRET:        appSecret,
+            META_SYSTEM_USER_TOKEN: systemToken,
+            META_GRAPH_VERSION:     graphVersion = "v24.0",
+        } = process.env;
+
+        const GRAPH         = `https://graph.facebook.com/${graphVersion}`;
+        const appAccessToken = `${appId}|${appSecret}`;
+
+        // ── Step 1: Try to get waba_id + phone_number_id from signedRequest ────
+        // When sessionInfoVersion:2 is used, Meta encodes these IDs directly in
+        // the signedRequest payload so we never need fragile discovery API calls.
+        let wabaId, phoneNumberId;
+        const srPayload = decodeSignedRequestPayload(signedRequest);
+        const appData   = srPayload?.app_data || {};
+
+        if (appData.waba_id && appData.phone_number_id) {
+            wabaId        = appData.waba_id;
+            phoneNumberId = appData.phone_number_id;
+            console.log(`[EmbeddedSignup] IDs from signedRequest — wabaId: ${wabaId}, phoneNumberId: ${phoneNumberId}`);
+        }
+
+        // ── Step 2: Exchange code → user access token (always needed) ─────────
+        let userAccessToken;
+        try {
+            const tokenRes = await axios.get(`${GRAPH}/oauth/access_token`, {
+                params: { client_id: appId, client_secret: appSecret, code },
+            });
+            userAccessToken = tokenRes.data.access_token;
+        } catch (err) {
+            const msg = err.response?.data?.error?.message || "Failed to exchange authorization code";
+            return res.status(400).json({ status: "error", message: msg });
+        }
+
+        // ── Step 3: Discover WABA if signedRequest didn't have it ─────────────
+        // We try four increasingly broad paths.  For tech-provider flows the BM
+        // owned_whatsapp_business_accounts path is the most reliable since the
+        // customer's WABA is shared into our BM when they complete signup.
+        if (!wabaId) {
+            try {
+                const wabaRes = await axios.get(`${GRAPH}/me/whatsapp_business_accounts`, {
+                    params: { access_token: userAccessToken, fields: "id,name,creation_time" },
+                });
+                const list = (wabaRes.data?.data || [])
+                    .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
+                if (list.length) wabaId = list[0].id;
+            } catch (_) { /* fall through */ }
+        }
+
+        if (!wabaId) {
+            try {
+                const bizRes = await axios.get(`${GRAPH}/me/businesses`, {
+                    params: { access_token: userAccessToken, fields: "id,whatsapp_business_accounts{id,name,creation_time}" },
+                });
+                for (const biz of (bizRes.data?.data || [])) {
+                    const wabas = (biz.whatsapp_business_accounts?.data || [])
+                        .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
+                    if (wabas.length) { wabaId = wabas[0].id; break; }
+                }
+            } catch (_) { /* fall through */ }
+        }
+
+        // Most reliable path for tech providers: list WABAs owned by our BM
+        // sorted by creation_time — the newest is the one just connected.
+        if (!wabaId && process.env.META_BUSINESS_MANAGER_ID) {
+            try {
+                const bmRes = await axios.get(
+                    `${GRAPH}/${process.env.META_BUSINESS_MANAGER_ID}/owned_whatsapp_business_accounts`,
+                    { params: { access_token: systemToken, fields: "id,name,creation_time", limit: 10 } }
+                );
+                const list = (bmRes.data?.data || [])
+                    .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
+                if (list.length) wabaId = list[0].id;
+            } catch (_) { /* fall through */ }
+        }
+
+        // Final fallback: client WABAs in our BM
+        if (!wabaId && process.env.META_BUSINESS_MANAGER_ID) {
+            try {
+                const clientRes = await axios.get(
+                    `${GRAPH}/${process.env.META_BUSINESS_MANAGER_ID}/client_whatsapp_business_accounts`,
+                    { params: { access_token: systemToken, fields: "id,name,creation_time", limit: 10 } }
+                );
+                const list = (clientRes.data?.data || [])
+                    .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
+                if (list.length) wabaId = list[0].id;
+            } catch (_) { /* fall through */ }
+        }
+
+        if (!wabaId) {
+            return res.status(400).json({
+                status:  "error",
+                message: "Could not determine WhatsApp Business Account. Please complete the Meta signup, wait a moment, then try again.",
+            });
+        }
+
+        // ── Step 4: Get phone numbers for this WABA ────────────────────────────
+        let phoneNumber, verifiedName;
+        try {
+            const phoneRes = await axios.get(`${GRAPH}/${wabaId}/phone_numbers`, {
+                params: {
+                    access_token: systemToken,
+                    fields: "id,display_phone_number,verified_name,status,quality_rating",
+                },
+            });
+            const phones = phoneRes.data?.data || [];
+            if (!phones.length) {
+                return res.status(400).json({
+                    status:  "error",
+                    message: "No phone numbers found on this WhatsApp Business Account.",
+                });
+            }
+            const phone   = phones[0];
+            // If phoneNumberId came from signedRequest, keep it; otherwise use API value
+            phoneNumberId = phoneNumberId || phone.id;
+            phoneNumber   = phone.display_phone_number;
+            verifiedName  = phone.verified_name || "";
+        } catch (err) {
+            const msg = err.response?.data?.error?.message || "Failed to retrieve phone numbers";
+            return res.status(400).json({ status: "error", message: msg });
+        }
+
+        // ── Step 5: Subscribe WABA to our app (enables webhook delivery) ───────
+        try {
+            await axios.post(
+                `${GRAPH}/${wabaId}/subscribed_apps`,
+                {},
+                { headers: { Authorization: `Bearer ${appAccessToken}` } }
+            );
+        } catch (_) {
+            // Non-fatal — resubscription can be triggered manually from the UI
+        }
+
+        // ── Step 6: Conflict check — same WABA connected to another user? ──────
+        const existing = await User.findOne({
+            "whatsappWaba.wabaId":      wabaId,
+            "whatsappWaba.isConnected": true,
+            _id:                        { $ne: userId },
+        }).select("email").lean();
+
+        if (existing) {
+            return res.status(409).json({
+                status:         "error",
+                message:        "This WhatsApp Business Account is already connected to another account.",
+                connectedEmail: existing.email,
+            });
+        }
+
+        // ── Step 7: Persist credentials ────────────────────────────────────────
+        await User.findByIdAndUpdate(userId, {
+            $set: {
+                "whatsappWaba.isConnected":       true,
+                "whatsappWaba.wabaId":            wabaId,
+                "whatsappWaba.businessAccountId": wabaId,
+                "whatsappWaba.phoneNumberId":     phoneNumberId,
+                "whatsappWaba.phoneNumber":       phoneNumber,
+                "whatsappWaba.displayName":       verifiedName,
+                "whatsappWaba.accessToken":       systemToken,
+            },
+        });
+
+        console.log(`[EmbeddedSignup] ✅ Connected — wabaId: ${wabaId}, phoneNumberId: ${phoneNumberId}`);
+
+        return res.status(200).json({
+            status:  "success",
+            message: "WhatsApp connected successfully",
+            data:    { wabaId, phoneNumberId, phoneNumber, displayName: verifiedName },
+        });
+
+    } catch (error) {
+        console.error("[EmbeddedSignup] Unhandled error:", error.response?.data || error.message);
+        return res.status(500).json({
+            status:  "error",
+            message: error.response?.data?.error?.message || "Internal server error",
         });
     }
 };

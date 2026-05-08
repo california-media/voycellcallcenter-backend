@@ -26,4 +26,7 @@ router.get("/search",                                            ctrl.searchNumb
 // Purchase a number — our backend verifies credits, calls DIDProvider, records the assignment
 router.post("/purchase",                                         ctrl.purchaseNumber);
 
+// Record a purchase made directly via DIDProvider (frontend-initiated) — deducts credits & saves assignment
+router.post("/record-purchase",                                  ctrl.recordPurchase);
+
 module.exports = router;

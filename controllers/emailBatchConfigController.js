@@ -256,6 +256,38 @@ exports.cancelBatchJob = async (req, res) => {
   }
 };
 
+// ── DELETE /notifications/ses-events/cleanup ─────────────────────────────────
+// Deletes SesEmailEvent records older than N days (default 30).
+// Safe to run because:
+//   - EmailLog.stats are already aggregated and stored on the EmailLog document
+//     (incremented live by the SNS webhook) — they are NOT re-computed from SesEmailEvent
+//   - SesMessageLog is NOT deleted here — it stays as the mapping layer
+// What you LOSE after deletion:
+//   - Per-recipient event breakdown inside a completed batch job detail view
+//   - Exact timestamp of when each recipient opened/clicked (for old campaigns)
+// What you KEEP:
+//   - EmailLog.stats totals (sends/deliveries/opens/clicks/bounces) — always correct
+//   - Sent Email History table — fully intact
+//   - SesMessageLog mapping — fully intact
+exports.cleanupSesEvents = async (req, res) => {
+  try {
+    const retainDays = Number(req.query.retainDays) || 30;
+    const cutoff     = new Date(Date.now() - retainDays * 24 * 60 * 60 * 1000);
+
+    const result = await SesEmailEvent.deleteMany({ createdAt: { $lt: cutoff } });
+
+    console.log(`[SesCleanup] Deleted ${result.deletedCount} SesEmailEvent records older than ${retainDays} days`);
+    res.json({
+      status:       "success",
+      deletedCount: result.deletedCount,
+      cutoffDate:   cutoff.toISOString(),
+      message:      `Deleted ${result.deletedCount} SES event records older than ${retainDays} days. EmailLog stats and Sent Email History are unaffected.`,
+    });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+};
+
 // ── GET /notifications/send-caps ─────────────────────────────────────────────
 // Returns how many emails have been sent in the last hour and last 24h
 exports.getSendCaps = async (req, res) => {

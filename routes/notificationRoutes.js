@@ -24,6 +24,7 @@ const {
   sendEmailNotification,
   getEmailLogs,
   getEmailLogById,
+  getEmailLogRecipients,
   syncEmailLogStats,
 } = require("../controllers/notificationController");
 
@@ -41,6 +42,7 @@ const {
   getBatchJobDetail,
   cancelBatchJob,
   getSendCaps,
+  cleanupSesEvents,
 } = require("../controllers/emailBatchConfigController");
 
 const { triggerBatchJob } = require("../controllers/emailBatchTriggerController");
@@ -62,6 +64,7 @@ router.post("/", checkRole(["superadmin"]), createNotification);
 router.post("/send-email",     checkRole(["superadmin"]), upload.array("attachments", 5), sendEmailNotification);
 router.get("/email-logs", checkRole(["superadmin"]), getEmailLogs);
 router.get("/email-logs/:id/sync-stats", checkRole(["superadmin"]), syncEmailLogStats);
+router.get("/email-logs/:id/recipients", checkRole(["superadmin"]), getEmailLogRecipients);
 router.get("/email-logs/:id", checkRole(["superadmin"]), getEmailLogById);
 
 // SuperAdmin only: manage "From" email sender addresses
@@ -78,5 +81,6 @@ router.get("/batch-jobs/:jobId",            checkRole(["superadmin"]), getBatchJ
 router.post("/batch-jobs/:jobId/trigger",   checkRole(["superadmin"]), triggerBatchJob);
 router.delete("/batch-jobs/:jobId/cancel",  checkRole(["superadmin"]), cancelBatchJob);
 router.get("/send-caps",                    checkRole(["superadmin"]), getSendCaps);
+router.delete("/ses-events/cleanup",        checkRole(["superadmin"]), cleanupSesEvents);
 
 module.exports = router;

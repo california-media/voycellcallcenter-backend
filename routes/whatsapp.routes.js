@@ -8,6 +8,7 @@ const {
     connectWhatsApp,
     disconnectWhatsApp,
     resubscribeWabaWebhook,
+    embeddedSignupExchange,
     // whatsappCallback,
     webhookVerify,
     webhookReceive,
@@ -30,6 +31,7 @@ const { createTemplate, editTemplate, getWabaTemplates, deleteWabaTemplate, getA
 const upload = multer();
 
 router.post("/connect", checkForAuthentication(), connectWhatsApp);
+router.post("/embedded-signup/exchange", checkForAuthentication(), embeddedSignupExchange);
 router.post("/disconnect", checkForAuthentication(), disconnectWhatsApp);
 router.post("/resubscribe-webhook", checkForAuthentication(), resubscribeWabaWebhook);
 router.post("/assignedUnassignedToAgent", checkForAuthentication(), manageWabaAssignment);

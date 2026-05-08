@@ -1,8 +1,11 @@
 const axios = require("axios");
+const https = require("https");
 const YeastarToken = require("../models/YeastarToken");
 const YeastarSDKToken = require("../models/YeastarSDKToken");
 const User = require("../models/userModel");
 const mongoose = require("mongoose");
+
+const pbxAgent = new https.Agent({ rejectUnauthorized: false });
 
 
 /**
@@ -38,7 +41,8 @@ exports.getDeviceToken = async (deviceId, type = "pbx") => {
         ) {
             try {
                 const test = await axios.get(
-                    `${tokenDoc.base_url}/extension/list?access_token=${tokenDoc.access_token}`
+                    `${tokenDoc.base_url}/extension/list?access_token=${tokenDoc.access_token}`,
+                    { httpsAgent: pbxAgent }
                 );
 
                 if (test.data?.errcode === 0) {
@@ -96,9 +100,8 @@ exports.getDeviceToken = async (deviceId, type = "pbx") => {
             try {
                 const refreshRes = await axios.post(
                     `${device.PBX_BASE_URL}/refresh_token`,
-                    {
-                        refresh_token: tokenDoc.refresh_token,
-                    }
+                    { refresh_token: tokenDoc.refresh_token },
+                    { httpsAgent: pbxAgent }
                 );
 
                 if (refreshRes.data?.access_token) {
@@ -138,9 +141,9 @@ exports.getDeviceToken = async (deviceId, type = "pbx") => {
             {
                 headers: {
                     "Content-Type": "application/json",
-                    "User-Agent":
-                        device.PBX_USER_AGENT || "Voycell-App",
+                    "User-Agent": device.PBX_USER_AGENT || "Voycell-App",
                 },
+                httpsAgent: pbxAgent,
             }
         );
 

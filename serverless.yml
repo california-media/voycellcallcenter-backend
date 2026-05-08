@@ -3,15 +3,70 @@ useDotenv: true
 provider:
   name: aws
   runtime: nodejs18.x
+  region: eu-north-1
+
+  # IAM permissions added to the Lambda execution role automatically by serverless
+  iam:
+    role:
+      statements:
+        # Allow Lambda to write failed invocations to the DLQ (required for onError)
+        - Effect: Allow
+          Action: sqs:SendMessage
+          Resource:
+            Fn::GetAtt: [EmailBatchDLQ, Arn]
+
   environment:
     MONGO_URL: ${env:MONGO_URL}
     JWT_SECRET: ${env:JWT_SECRET}
     FRONTEND_URL: ${env:FRONTEND_URL}
+    SCHEDULE_LAMBDA_ARN: ${env:SCHEDULE_LAMBDA_ARN}
+    SCHEDULER_ROLE_ARN: ${env:SCHEDULER_ROLE_ARN}
+    # DLQ ARN is resolved automatically from the SQS queue created in resources below.
+    # No manual ARN needed — CloudFormation injects it at deploy time.
+    SCHEDULER_DLQ_ARN:
+      Fn::GetAtt: [EmailBatchDLQ, Arn]
     NODE_ENV: production
+
 functions:
   app:
     handler: index.handler
+    timeout: 120
+    memorySize: 1024
+    # Lambda-level DLQ: if Lambda itself crashes or times out after all retries,
+    # the event is dropped into this SQS queue so nothing is silently lost.
+    onError:
+      Fn::GetAtt: [EmailBatchDLQ, Arn]
     events:
       - http:
           path: /{proxy+}
           method: ANY
+
+resources:
+  Resources:
+
+    # ── SQS Dead Letter Queue ────────────────────────────────────────────────
+    # Catches any batch event that EventBridge or Lambda could not process
+    # after all retries. Messages are kept for 14 days so you can inspect them.
+    EmailBatchDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: voycell-email-batch-dlq
+        MessageRetentionPeriod: 1209600   # 14 days in seconds
+
+    # ── EventBridge Scheduler role → DLQ permission ──────────────────────────
+    # The Scheduler IAM role (used by EventBridge to fire the Lambda) also needs
+    # sqs:SendMessage so it can forward failed events to the DLQ.
+    # SCHEDULER_ROLE_NAME = the name-only part of your SCHEDULER_ROLE_ARN
+    # e.g. if ARN is arn:aws:iam::123:role/my-role, set SCHEDULER_ROLE_NAME=my-role
+    SchedulerDLQPolicy:
+      Type: AWS::IAM::RolePolicy
+      Properties:
+        PolicyName: voycell-scheduler-dlq-send
+        RoleName: ${env:SCHEDULER_ROLE_NAME}
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: sqs:SendMessage
+              Resource:
+                Fn::GetAtt: [EmailBatchDLQ, Arn]

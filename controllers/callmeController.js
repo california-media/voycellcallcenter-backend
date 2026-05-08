@@ -403,13 +403,30 @@ async function getPopupJS(req, tokenDoc, user) {
 
   /* ---------------- Start Call (POST) ---------------- */
   async function startCall(ctx) {
+    console.log('[Voycell] ▶ startCall() triggered');
     const phoneEl = $( '#callme-phone', ctx );
     const countryEl = $( '#callme-country', ctx );
     const country = countryEl ? countryEl.value : '+971';
     const btn = $( '#callme-send', ctx );
 
-    const digits = (phoneEl && phoneEl.value) ? phoneEl.value.replace(/\\D/g, '') : '';
+    const rawInput = phoneEl ? phoneEl.value : '';
+   
+let digits = rawInput ? rawInput.replace(/\D/g, '') : '';
+
+
+if (digits.startsWith('971')) {
+  digits = digits.slice(3);
+}
+
+
+if (!digits.startsWith('0')) {
+  digits = '0' + digits;
+}
+
+    console.log('[Voycell] Raw input:', rawInput, '| Digits only:', digits);
+
     if (!digits || digits.length < 3) {
+      console.warn('[Voycell] Validation failed — too short or empty:', digits);
       if (phoneEl) {
         phoneEl.focus();
         phoneEl.style.borderColor = '#ff4757';
@@ -418,7 +435,15 @@ async function getPopupJS(req, tokenDoc, user) {
       return;
     }
 
-    const mobNumber = country + digits;
+    // Landline detection (UAE): numbers starting with '04' or '4' (leading zero omitted)
+    // are treated as landlines — the country code must NOT be prepended so the PBX
+    // dials them exactly as entered (e.g. 04-XXX-XXXX).
+    var isLandline = digits.startsWith('04') || digits[0] === '4';
+    var effectiveCountryCode = isLandline ? '' : country;
+    console.log('[Voycell] isLandline:', isLandline, '| country from dropdown:', country, '| effectiveCountryCode:', effectiveCountryCode || '(empty — no prefix)');
+
+    const mobNumber = effectiveCountryCode + digits;
+    console.log('[Voycell] Final callee will be:', mobNumber || digits, '| Payload → countryCode:', JSON.stringify(effectiveCountryCode), ', mob_number:', digits);
 
     if (btn) {
       btn.disabled = true;
@@ -427,29 +452,40 @@ async function getPopupJS(req, tokenDoc, user) {
     }
 
     try {
-     const resp = await fetch(API_URL, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    caller_extension: CALLER_EXTENSION,
-    countryCode: country,
-    mob_number: digits,
-    assignedDeviceId: ASSIGNED_DEVICE_ID,
-    pbxBaseUrl: PBX_BASE_URL,
-  })
-});
+      const reqBody = {
+        caller_extension: CALLER_EXTENSION,
+        countryCode: effectiveCountryCode,
+        mob_number: digits,
+        assignedDeviceId: ASSIGNED_DEVICE_ID,
+        pbxBaseUrl: PBX_BASE_URL,
+      };
+      console.log('[Voycell] POST', API_URL, JSON.stringify(reqBody));
+
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody)
+      });
+
+      console.log('[Voycell] HTTP status:', resp.status, resp.statusText);
 
       let data;
-      try { data = await resp.json(); } catch (e) { data = { status: 'error', message: 'invalid-json-response' }; }
+      try { data = await resp.json(); } catch (e) {
+        console.error('[Voycell] Could not parse response JSON:', e);
+        data = { status: 'error', message: 'invalid-json-response' };
+      }
+      console.log('[Voycell] Response body:', JSON.stringify(data));
 
       if (data && (data.status === 'success' || data.success || (data.call_json && data.call_json.errcode === 0))) {
+        console.log('[Voycell] ✅ Call initiated successfully');
         showTimer(ctx);
       } else {
         const msg = data && (data.message || data.errmsg || JSON.stringify(data)) ? (data.message || data.errmsg || JSON.stringify(data)) : 'Call initiation failed';
+        console.error('[Voycell] ❌ Call failed — server response:', JSON.stringify(data));
         alert('❌ ' + msg);
       }
     } catch (err) {
-      console.error('[callme] network error', err);
+      console.error('[Voycell] ❌ Network error in startCall:', err);
       alert('Network error. Please try again.');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = original; }
