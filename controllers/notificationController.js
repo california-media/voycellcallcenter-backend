@@ -518,11 +518,14 @@ exports.sendEmailNotification = async (req, res) => {
         intervalValue:   batchConfig.intervalValue,
         intervalUnit:    batchConfig.intervalUnit,
         intervalSeconds: intervalSecs,
-        totalRecipients: allowed.length,
-        droppedCount:    trimmed,
-        totalBatches:    batches.length,
+        totalRecipients:  allowed.length,
+        droppedCount:     trimmed,
+        totalBatches:     batches.length,
+        // Store the user's raw startAt (before the 2-min buffer) so the UI can
+        // distinguish a scheduled batch from an immediate one unambiguously.
+        scheduledStartAt: startAt ? new Date(startAt) : null,
         batches,
-        createdBy:       req.user._id,
+        createdBy:        req.user._id,
       });
 
       const fmt = (d) => d.toISOString().replace(/\.\d{3}Z$/, "");
@@ -553,7 +556,14 @@ exports.sendEmailNotification = async (req, res) => {
             successfulBatchIdxs.push(i);
           } else {
             failedBatchIdxs.push(i);
-            console.error(`[EmailBatch] ❌ Schedule creation failed for batch ${i} of job ${jobId}:`, result.reason?.message || result.reason);
+            // Log the full AWS error so it appears in CloudWatch — helps diagnose
+            // IAM permission issues, wrong ARN, region mismatch, etc.
+            console.error(
+              `[EmailBatch] ❌ Schedule creation failed for batch ${i} of job ${jobId}:`,
+              result.reason?.name,        // e.g. "AccessDeniedException"
+              result.reason?.message,     // e.g. "User is not authorized to perform..."
+              result.reason?.$metadata?.httpStatusCode  // e.g. 403
+            );
           }
         });
 
@@ -607,6 +617,14 @@ exports.sendEmailNotification = async (req, res) => {
           firstBatchAt:    batches[0]?.scheduledAt,
           lastBatchAt:     batches[batches.length - 1]?.scheduledAt,
           ...(trimmed > 0 && { warning: `${trimmed} recipients trimmed due to sending caps` }),
+          // Actual AWS error reasons — visible in browser network tab / response
+          // so you can diagnose without needing CloudWatch access
+          ...(failedBatchIdxs.length > 0 && {
+            scheduleError: scheduleResults
+              .filter((r) => r.status === "rejected")
+              .map((r) => `${r.reason?.name || "Error"}: ${r.reason?.message || "Unknown"}`)
+              [0] ?? "Unknown error",
+          }),
         });
 
       } else {
@@ -958,16 +976,18 @@ exports.getEmailLogById = async (req, res) => {
     };
 
     // Build per-recipient event map: { email: { Delivery: date, Open: date, … } }
+    // Keys are normalised to lowercase — SES sometimes returns different casing than stored.
     const recipientEventMap = {};
     recipientEventsAgg.forEach(({ _id, firstAt }) => {
-      if (!recipientEventMap[_id.email]) recipientEventMap[_id.email] = {};
-      recipientEventMap[_id.email][_id.type] = firstAt;
+      const emailKey = (_id.email || "").toLowerCase();
+      if (!recipientEventMap[emailKey]) recipientEventMap[emailKey] = {};
+      recipientEventMap[emailKey][_id.type] = firstAt;
     });
 
     // Enrich recipients with event timestamps
     const enrichedRecipients = (log.recipients || []).map((r) => ({
       ...r,
-      events: recipientEventMap[r.email] || {},
+      events: recipientEventMap[(r.email || "").toLowerCase()] || {},
     }));
 
     // ── Compute accurate per-recipient stats ──────────────────────────────────
@@ -1034,14 +1054,15 @@ exports.getEmailLogRecipients = async (req, res) => {
     ]);
     const recipientEventMap = {};
     recipientEventsAgg.forEach(({ _id, firstAt }) => {
-      if (!recipientEventMap[_id.email]) recipientEventMap[_id.email] = {};
-      recipientEventMap[_id.email][_id.type] = firstAt;
+      const emailKey = (_id.email || "").toLowerCase();
+      if (!recipientEventMap[emailKey]) recipientEventMap[emailKey] = {};
+      recipientEventMap[emailKey][_id.type] = firstAt;
     });
 
     // Enrich and filter
     let enriched = (log.recipients || []).map((r) => ({
       ...r,
-      events: recipientEventMap[r.email] || {},
+      events: recipientEventMap[(r.email || "").toLowerCase()] || {},
     }));
 
     if (filter === "delivered") {

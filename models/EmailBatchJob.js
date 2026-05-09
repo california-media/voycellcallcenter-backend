@@ -29,9 +29,13 @@ const emailBatchJobSchema = new Schema(
     intervalValue:    { type: Number, required: true },
     intervalUnit:     { type: String, required: true },
     intervalSeconds:  { type: Number, required: true },   // pre-computed for scheduling
-    totalRecipients:  { type: Number, default: 0 },
-    droppedCount:     { type: Number, default: 0 },   // recipients trimmed by hourly/daily cap
-    totalBatches:     { type: Number, default: 0 },
+    totalRecipients:   { type: Number, default: 0 },
+    droppedCount:      { type: Number, default: 0 },   // recipients trimmed by hourly/daily cap
+    totalBatches:      { type: Number, default: 0 },
+    // The user-provided startAt (raw, before the 2-min minimum-buffer is applied).
+    // null means the user chose "send immediately".  Used by the UI to correctly
+    // display "Immediately" vs an actual scheduled time without ambiguity.
+    scheduledStartAt:  { type: Date,   default: null },
     completedBatches: { type: Number, default: 0 },
     failedBatches:    { type: Number, default: 0 },
 

@@ -127,8 +127,15 @@ async function processSesEvent(sesEvent) {
       eventDoc.ipAddress = sesEvent.open.ipAddress;
     }
 
-    // Look up the campaign this message belongs to
-    const msgLog = await SesMessageLog.findOne({ sesMessageId }).lean();
+    // Look up the campaign this message belongs to.
+    // The SES "Send" event fires within milliseconds of SES accepting the email —
+    // sometimes BEFORE our SesMessageLog.insertMany has finished writing to MongoDB.
+    // We retry once after 3 seconds to eliminate this race condition.
+    let msgLog = await SesMessageLog.findOne({ sesMessageId }).lean();
+    if (!msgLog) {
+      await new Promise((r) => setTimeout(r, 3000));
+      msgLog = await SesMessageLog.findOne({ sesMessageId }).lean();
+    }
 
     if (msgLog?.emailLogId) {
       eventDoc.emailLogId = msgLog.emailLogId;

@@ -95,10 +95,11 @@ async function resolveBatchSesData(jobId) {
     sesMessageId: { $in: sesMessageIds },
   }).lean();
 
-  // Build per-recipient event map (first occurrence of each eventType wins)
+  // Build per-recipient event map (first occurrence of each eventType wins).
+  // Keys are normalised to lowercase — SES sometimes returns different casing than stored.
   const recipientEventsMap = {};
   for (const ev of allEvents) {
-    const email = ev.recipientEmail || msgIdToEmail[ev.sesMessageId] || "";
+    const email = (ev.recipientEmail || msgIdToEmail[ev.sesMessageId] || "").toLowerCase();
     if (!email) continue;
     if (!recipientEventsMap[email]) recipientEventsMap[email] = {};
     if (!recipientEventsMap[email][ev.eventType]) {
@@ -127,8 +128,13 @@ exports.getBatchJobDetail = async (req, res) => {
 
     const { recipientEventsMap, stats } = await resolveBatchSesData(jobId);
 
+    // Convert to plain object first — spreading a Mongoose subdocument with `{ ...r }`
+    // does NOT include schema fields (email, name, data) because they are stored
+    // internally and not enumerable. toObject() gives us a plain JS object.
+    const jobPlain = job.toObject();
+
     // Flatten recipients from all batches and attach per-recipient SES events
-    const recipients = job.batches.flatMap((b) =>
+    const recipients = jobPlain.batches.flatMap((b) =>
       (b.recipients || []).map((r) => ({
         ...r,
         batchIndex:  b.index,
@@ -136,7 +142,7 @@ exports.getBatchJobDetail = async (req, res) => {
         scheduledAt: b.scheduledAt,
         sentAt:      b.sentAt,
         batchError:  b.error,
-        events:      recipientEventsMap[r.email] || {},
+        events:      recipientEventsMap[(r.email || "").toLowerCase()] || {},
       }))
     );
 
@@ -284,6 +290,95 @@ exports.cleanupSesEvents = async (req, res) => {
       message:      `Deleted ${result.deletedCount} SES event records older than ${retainDays} days. EmailLog stats and Sent Email History are unaffected.`,
     });
   } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+};
+
+// ── POST /notifications/fix-email-stats ──────────────────────────────────────
+// One-time (and re-runnable) migration to fix all past EmailLog entries where:
+//   1. SesEmailEvent.emailLogId is null  (events arrived before EmailLog was created)
+//   2. EmailLog.stats show 0s            (webhook couldn't increment because emailLogId was null)
+//
+// How it works:
+//   Step A — For every SesEmailEvent with emailLogId=null, look up SesMessageLog
+//            by sesMessageId to get the emailLogId, then set it.
+//   Step B — For every affected EmailLog, re-aggregate stats from its SesEmailEvent records.
+//
+// Safe to run multiple times — only touches orphaned records.
+exports.fixEmailStats = async (req, res) => {
+  try {
+    const STATS_FIELD_MAP = {
+      Send: "sends", Delivery: "deliveries", Open: "opens",
+      Click: "clicks", Bounce: "bounces", Complaint: "complaints", Reject: "rejections",
+    };
+
+    // ── Step A: Link orphaned SesEmailEvent records to their EmailLog ─────────
+    const orphanedEvents = await SesEmailEvent.find({ emailLogId: null })
+      .select("_id sesMessageId batchJobId")
+      .lean();
+
+    console.log(`[FixStats] Found ${orphanedEvents.length} orphaned SesEmailEvent records`);
+
+    let linkedCount = 0;
+    const affectedEmailLogIds = new Set();
+
+    // Group by sesMessageId to minimise SesMessageLog lookups
+    const byMsgId = {};
+    orphanedEvents.forEach((e) => {
+      if (!byMsgId[e.sesMessageId]) byMsgId[e.sesMessageId] = [];
+      byMsgId[e.sesMessageId].push(e._id);
+    });
+
+    for (const [sesMessageId, eventIds] of Object.entries(byMsgId)) {
+      const msgLog = await SesMessageLog.findOne({ sesMessageId })
+        .select("emailLogId batchJobId").lean();
+
+      if (!msgLog?.emailLogId) continue; // can't resolve yet — job may not have completed
+
+      await SesEmailEvent.updateMany(
+        { _id: { $in: eventIds } },
+        { $set: { emailLogId: msgLog.emailLogId, batchJobId: msgLog.batchJobId || null } }
+      );
+
+      affectedEmailLogIds.add(String(msgLog.emailLogId));
+      linkedCount += eventIds.length;
+    }
+
+    console.log(`[FixStats] Linked ${linkedCount} events to their EmailLog. Affected logs: ${affectedEmailLogIds.size}`);
+
+    // ── Step B: Re-aggregate EmailLog.stats for every affected EmailLog ───────
+    let statsFixed = 0;
+    for (const emailLogId of affectedEmailLogIds) {
+      const events = await SesEmailEvent.find({ emailLogId })
+        .select("recipientEmail eventType").lean();
+
+      const seen  = new Set();
+      const stats = { sends: 0, deliveries: 0, opens: 0, clicks: 0, bounces: 0, complaints: 0, rejections: 0 };
+
+      for (const e of events) {
+        const key   = `${e.recipientEmail}||${e.eventType}`;
+        const field = STATS_FIELD_MAP[e.eventType];
+        if (field && !seen.has(key)) {
+          seen.add(key);
+          stats[field]++;
+        }
+      }
+
+      await EmailLog.findByIdAndUpdate(emailLogId, { $set: { stats } });
+      statsFixed++;
+    }
+
+    console.log(`[FixStats] ✅ Re-aggregated stats for ${statsFixed} EmailLog entries`);
+
+    res.json({
+      status:           "success",
+      orphanedEvents:   orphanedEvents.length,
+      linkedEvents:     linkedCount,
+      emailLogsFixed:   statsFixed,
+      message:          `Fixed ${linkedCount} orphaned events and re-aggregated stats for ${statsFixed} email log entries. Run again if you have more completed jobs.`,
+    });
+  } catch (err) {
+    console.error("[FixStats] Error:", err.message);
     res.status(500).json({ status: "error", message: err.message });
   }
 };

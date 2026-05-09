@@ -1,6 +1,45 @@
-const UAParser = require("ua-parser-js");
 const UserSession = require("../../models/UserSession");
-const User = require("../../models/userModel");
+const User        = require("../../models/userModel");
+
+// ── Zero-dependency user-agent parser ─────────────────────────────────────────
+function parseUA(ua) {
+  if (!ua) return { browser: {}, os: {}, device: { type: "desktop" } };
+  const s = ua;
+  let bName = null, bVer = null;
+  const browsers = [
+    [/edg(?:e|a|ios)?\/(\d+)/i, "Edge"],
+    [/opr\/(\d+)/i,             "Opera"],
+    [/samsungbrowser\/(\d+)/i,  "Samsung Browser"],
+    [/ucbrowser\/(\d+)/i,       "UC Browser"],
+    [/firefox\/(\d+)/i,         "Firefox"],
+    [/chrome\/(\d+)/i,          "Chrome"],
+    [/version\/(\d+).*safari/i, "Safari"],
+    [/msie (\d+)/i,             "IE"],
+    [/trident.*rv:(\d+)/i,      "IE"],
+  ];
+  for (const [re, name] of browsers) {
+    const m = s.match(re);
+    if (m) { bName = name; bVer = m[1]; break; }
+  }
+  let oName = null, oVer = null;
+  const oses = [
+    [/windows nt ([\d.]+)/i,  "Windows"],
+    [/iphone os ([\d_]+)/i,   "iOS"],
+    [/ipad.*os ([\d_]+)/i,    "iPadOS"],
+    [/android ([\d.]+)/i,     "Android"],
+    [/mac os x ([\d_.]+)/i,   "macOS"],
+    [/cros/i,                 "ChromeOS"],
+    [/linux/i,                "Linux"],
+  ];
+  for (const [re, name] of oses) {
+    const m = s.match(re);
+    if (m) { oName = name; oVer = (m[1] || "").replace(/_/g, "."); break; }
+  }
+  let dType = "desktop";
+  if (/mobile/i.test(s) && !/tablet/i.test(s)) dType = "mobile";
+  else if (/tablet|ipad/i.test(s))              dType = "tablet";
+  return { browser: { name: bName, version: bVer }, os: { name: oName, version: oVer }, device: { type: dType, vendor: null, model: null } };
+}
 
 // ── Called by frontend on login ───────────────────────────────────────────────
 const saveUserSession = async (req, res) => {
@@ -8,10 +47,7 @@ const saveUserSession = async (req, res) => {
     const { screenWidth, screenHeight, viewportWidth, viewportHeight, pixelRatio, timezone, language } = req.body;
 
     const ua = req.headers["user-agent"] || "";
-    const parser = new UAParser(ua);
-    const browserResult = parser.getBrowser();
-    const osResult     = parser.getOS();
-    const deviceResult = parser.getDevice();
+    const { browser: browserResult, os: osResult, device: deviceResult } = parseUA(ua);
 
     const deviceType = deviceResult.type
       ? (deviceResult.type === "mobile" ? "mobile" : deviceResult.type === "tablet" ? "tablet" : "desktop")

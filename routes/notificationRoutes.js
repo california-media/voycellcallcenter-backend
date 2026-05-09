@@ -43,6 +43,7 @@ const {
   cancelBatchJob,
   getSendCaps,
   cleanupSesEvents,
+  fixEmailStats,
 } = require("../controllers/emailBatchConfigController");
 
 const { triggerBatchJob } = require("../controllers/emailBatchTriggerController");
@@ -82,5 +83,6 @@ router.post("/batch-jobs/:jobId/trigger",   checkRole(["superadmin"]), triggerBa
 router.delete("/batch-jobs/:jobId/cancel",  checkRole(["superadmin"]), cancelBatchJob);
 router.get("/send-caps",                    checkRole(["superadmin"]), getSendCaps);
 router.delete("/ses-events/cleanup",        checkRole(["superadmin"]), cleanupSesEvents);
+router.post("/fix-email-stats",             checkRole(["superadmin"]), fixEmailStats);
 
 module.exports = router;

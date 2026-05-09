@@ -2,7 +2,42 @@ const EmailBatchJob    = require("../models/EmailBatchJob");
 const EmailLog         = require("../models/EmailLog");
 const EmailBatchConfig = require("../models/EmailBatchConfig");
 const SesMessageLog    = require("../models/SesMessageLog");
+const SesEmailEvent    = require("../models/SesEmailEvent");
 const { sendAdminBroadcastEmail } = require("../utils/emailUtils");
+
+// Maps SES eventType → EmailLog.stats field name
+const STATS_FIELD_MAP = {
+  Send:       "sends",
+  Delivery:   "deliveries",
+  Open:       "opens",
+  Click:      "clicks",
+  Bounce:     "bounces",
+  Complaint:  "complaints",
+  Reject:     "rejections",
+};
+
+/**
+ * Re-aggregate EmailLog.stats from SesEmailEvent records.
+ * Called after back-filling emailLogId so stats reflect reality.
+ * Deduplicates: counts one event per eventType per recipient.
+ */
+async function recalcEmailLogStats(emailLogId) {
+  const events = await SesEmailEvent.find({ emailLogId }).select("recipientEmail eventType").lean();
+  const seen   = new Set();
+  const stats  = { sends: 0, deliveries: 0, opens: 0, clicks: 0, bounces: 0, complaints: 0, rejections: 0 };
+
+  for (const e of events) {
+    const key   = `${e.recipientEmail}||${e.eventType}`;
+    const field = STATS_FIELD_MAP[e.eventType];
+    if (field && !seen.has(key)) {
+      seen.add(key);
+      stats[field]++;
+    }
+  }
+
+  await EmailLog.findByIdAndUpdate(emailLogId, { $set: { stats } });
+  return stats;
+}
 
 /**
  * Replace all {{fieldName}} placeholders in `text` with values from `data`.
@@ -237,18 +272,52 @@ const sendEmailBatchService = async ({ jobId, batchIndex }) => {
           recipients:     job.batches.flatMap((b) =>
             b.recipients.map((r) => ({ email: r.email, name: r.name || "", userId: null }))
           ),
-          fromEmail:  job.fromEmail || "noreply@voycell.com",
-          fromName:   job.fromName  || "VOYCELL",
-          createdBy:  job.createdBy,
+          fromEmail:        job.fromEmail || "noreply@voycell.com",
+          fromName:         job.fromName  || "VOYCELL",
+          createdBy:        job.createdBy,
+          batchJobId:       jobId,
+          scheduledStartAt: job.scheduledStartAt || null,
+          batchSize:        job.batchSize,
+          intervalValue:    job.intervalValue,
+          intervalUnit:     job.intervalUnit,
+          intervalSeconds:  job.intervalSeconds,
+          totalBatches:     job.totalBatches,
         });
 
-        // Back-fill emailLogId on all SesMessageLog entries for this batch job
-        SesMessageLog.updateMany(
+        // ── Back-fill emailLogId on SesMessageLog ────────────────────────────
+        await SesMessageLog.updateMany(
           { batchJobId: jobId, emailLogId: null },
           { $set: { emailLogId: emailLog._id } }
-        ).catch((err) =>
-          console.error("[SesMessageLog] Back-fill emailLogId failed:", err.message)
-        );
+        ).catch((err) => console.error("[SesMessageLog] Back-fill emailLogId failed:", err.message));
+
+        // ── Back-fill emailLogId on SesEmailEvent ─────────────────────────────
+        // Events that arrived while the job was running were saved with
+        // emailLogId: null because EmailLog didn't exist yet. Now that it does,
+        // link them so the history table and per-recipient view show correct data.
+        // Step 1: fix events linked by batchJobId (most events arrive after SesMessageLog is written)
+        await SesEmailEvent.updateMany(
+          { batchJobId: jobId, emailLogId: null },
+          { $set: { emailLogId: emailLog._id } }
+        ).catch((err) => console.error("[SesEmailEvent] Back-fill by batchJobId failed:", err.message));
+
+        // Step 2: fix orphaned events (batchJobId: null — arrived before SesMessageLog was written)
+        // Look up via sesMessageId → SesMessageLog to find the ones belonging to this job
+        const sesLogs = await SesMessageLog.find({ batchJobId: jobId })
+          .select("sesMessageId").lean();
+        const sesMessageIds = sesLogs.map((s) => s.sesMessageId);
+        if (sesMessageIds.length) {
+          await SesEmailEvent.updateMany(
+            { sesMessageId: { $in: sesMessageIds }, emailLogId: null },
+            { $set: { emailLogId: emailLog._id, batchJobId: jobId } }
+          ).catch((err) => console.error("[SesEmailEvent] Back-fill orphaned events failed:", err.message));
+        }
+
+        // ── Re-aggregate EmailLog.stats from actual events ────────────────────
+        // Stats were never incremented via webhook because emailLogId was null
+        // when events arrived. Now recalculate from the complete event set.
+        recalcEmailLogStats(emailLog._id)
+          .then((stats) => console.log(`[EmailBatch] ✅ EmailLog stats recalculated for job ${jobId}:`, stats))
+          .catch((err) => console.error("[EmailBatch] Stats recalc failed:", err.message));
       } catch (logErr) {
         console.error(`[EmailBatch] ⚠️ EmailLog create failed (emails were already sent):`, logErr.message);
       }

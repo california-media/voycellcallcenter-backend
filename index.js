@@ -79,6 +79,7 @@ const didlogicAdminRoutes = require("./routes/admin/didlogicAdminRoutes");
 const kycDocumentRoutes       = require("./routes/kycDocumentRoutes");
 const numberInventoryRoutes   = require("./routes/numberInventoryRoutes");
 const numberCartRoutes         = require("./routes/numberCartRoutes");
+const callRateRoutes           = require("./routes/callRateRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -379,6 +380,9 @@ app.use("/didlogic/kyc", checkForAuthentication(), kycDocumentRoutes);
 
 // DIDLogic — Number cart (add to cart, remove, clear, purchase)
 app.use("/didlogic/cart", checkForAuthentication(), numberCartRoutes);
+
+// Call Rates — superadmin manages, all authenticated users can read
+app.use("/call-rates", callRateRoutes);
 
 // DIDLogic admin — margin & API settings (superAdmin only)
 app.use(

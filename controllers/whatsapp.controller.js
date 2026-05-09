@@ -4574,6 +4574,9 @@ exports.embeddedSignupExchange = async (req, res) => {
         // ── Step 1: Try to get waba_id + phone_number_id from signedRequest ────
         // When sessionInfoVersion:2 is used, Meta encodes these IDs directly in
         // the signedRequest payload so we never need fragile discovery API calls.
+        // NOTE: Meta only includes waba_id in app_data on FIRST-TIME setup.
+        //       Re-authorisations return a signedRequest without WABA IDs — use
+        //       the fallback paths below.
         let wabaId, phoneNumberId;
         const srPayload = decodeSignedRequestPayload(signedRequest);
         const appData   = srPayload?.app_data || {};
@@ -4581,7 +4584,9 @@ exports.embeddedSignupExchange = async (req, res) => {
         if (appData.waba_id && appData.phone_number_id) {
             wabaId        = appData.waba_id;
             phoneNumberId = appData.phone_number_id;
-            console.log(`[EmbeddedSignup] IDs from signedRequest — wabaId: ${wabaId}, phoneNumberId: ${phoneNumberId}`);
+            console.log(`[EmbeddedSignup] ✅ Step 1 (signedRequest) — wabaId: ${wabaId}, phoneNumberId: ${phoneNumberId}`);
+        } else {
+            console.log(`[EmbeddedSignup] Step 1 (signedRequest) — no WABA IDs in app_data (expected for re-connections). app_data keys: ${Object.keys(appData).join(", ") || "none"}`);
         }
 
         // ── Step 2: Exchange code → user access token (always needed) ─────────
@@ -4591,15 +4596,29 @@ exports.embeddedSignupExchange = async (req, res) => {
                 params: { client_id: appId, client_secret: appSecret, code },
             });
             userAccessToken = tokenRes.data.access_token;
+            console.log(`[EmbeddedSignup] ✅ Step 2 — code exchanged for user access token`);
         } catch (err) {
             const msg = err.response?.data?.error?.message || "Failed to exchange authorization code";
+            console.error(`[EmbeddedSignup] ❌ Step 2 — code exchange failed: ${msg}`);
             return res.status(400).json({ status: "error", message: msg });
         }
 
-        // ── Step 3: Discover WABA if signedRequest didn't have it ─────────────
-        // We try four increasingly broad paths.  For tech-provider flows the BM
-        // owned_whatsapp_business_accounts path is the most reliable since the
-        // customer's WABA is shared into our BM when they complete signup.
+        // ── Step 2b: Re-connection shortcut ───────────────────────────────────
+        // If this user already has a WABA configured in the DB, re-use its ID
+        // instead of running the full discovery cascade.  This is the common
+        // case when a company admin re-authorises to refresh their session.
+        if (!wabaId) {
+            const User = require("../models/userModel");
+            const existingUser = await User.findById(userId).select("whatsappWaba").lean();
+            const existingWabaId = existingUser?.whatsappWaba?.wabaId;
+            if (existingWabaId) {
+                wabaId        = existingWabaId;
+                phoneNumberId = existingUser?.whatsappWaba?.phoneNumberId || null;
+                console.log(`[EmbeddedSignup] ✅ Step 2b (re-connection shortcut) — reusing existing wabaId: ${wabaId}`);
+            }
+        }
+
+        // ── Step 3: Discover WABA if still unknown ────────────────────────────
         if (!wabaId) {
             try {
                 const wabaRes = await axios.get(`${GRAPH}/me/whatsapp_business_accounts`, {
@@ -4607,8 +4626,15 @@ exports.embeddedSignupExchange = async (req, res) => {
                 });
                 const list = (wabaRes.data?.data || [])
                     .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
-                if (list.length) wabaId = list[0].id;
-            } catch (_) { /* fall through */ }
+                if (list.length) {
+                    wabaId = list[0].id;
+                    console.log(`[EmbeddedSignup] ✅ Step 3a (/me/whatsapp_business_accounts) — wabaId: ${wabaId}`);
+                } else {
+                    console.log(`[EmbeddedSignup] Step 3a — endpoint returned 0 WABAs`);
+                }
+            } catch (err) {
+                console.warn(`[EmbeddedSignup] Step 3a failed: ${err.response?.data?.error?.message || err.message}`);
+            }
         }
 
         if (!wabaId) {
@@ -4621,11 +4647,17 @@ exports.embeddedSignupExchange = async (req, res) => {
                         .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
                     if (wabas.length) { wabaId = wabas[0].id; break; }
                 }
-            } catch (_) { /* fall through */ }
+                if (wabaId) {
+                    console.log(`[EmbeddedSignup] ✅ Step 3b (/me/businesses) — wabaId: ${wabaId}`);
+                } else {
+                    console.log(`[EmbeddedSignup] Step 3b — no WABAs found via businesses`);
+                }
+            } catch (err) {
+                console.warn(`[EmbeddedSignup] Step 3b failed: ${err.response?.data?.error?.message || err.message}`);
+            }
         }
 
         // Most reliable path for tech providers: list WABAs owned by our BM
-        // sorted by creation_time — the newest is the one just connected.
         if (!wabaId && process.env.META_BUSINESS_MANAGER_ID) {
             try {
                 const bmRes = await axios.get(
@@ -4634,11 +4666,18 @@ exports.embeddedSignupExchange = async (req, res) => {
                 );
                 const list = (bmRes.data?.data || [])
                     .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
-                if (list.length) wabaId = list[0].id;
-            } catch (_) { /* fall through */ }
+                if (list.length) {
+                    wabaId = list[0].id;
+                    console.log(`[EmbeddedSignup] ✅ Step 3c (BM owned WABAs) — wabaId: ${wabaId}`);
+                } else {
+                    console.log(`[EmbeddedSignup] Step 3c — BM owned_whatsapp_business_accounts returned 0 results`);
+                }
+            } catch (err) {
+                console.warn(`[EmbeddedSignup] Step 3c (BM owned) failed: ${err.response?.data?.error?.message || err.message} — system token may be expired`);
+            }
         }
 
-        // Final fallback: client WABAs in our BM
+        // Final fallback: client WABAs shared into our BM
         if (!wabaId && process.env.META_BUSINESS_MANAGER_ID) {
             try {
                 const clientRes = await axios.get(
@@ -4647,14 +4686,22 @@ exports.embeddedSignupExchange = async (req, res) => {
                 );
                 const list = (clientRes.data?.data || [])
                     .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
-                if (list.length) wabaId = list[0].id;
-            } catch (_) { /* fall through */ }
+                if (list.length) {
+                    wabaId = list[0].id;
+                    console.log(`[EmbeddedSignup] ✅ Step 3d (BM client WABAs) — wabaId: ${wabaId}`);
+                } else {
+                    console.log(`[EmbeddedSignup] Step 3d — BM client_whatsapp_business_accounts returned 0 results`);
+                }
+            } catch (err) {
+                console.warn(`[EmbeddedSignup] Step 3d (BM client) failed: ${err.response?.data?.error?.message || err.message} — system token may be expired`);
+            }
         }
 
         if (!wabaId) {
+            console.error(`[EmbeddedSignup] ❌ All WABA discovery steps failed. Check META_SYSTEM_USER_TOKEN validity and BM permissions.`);
             return res.status(400).json({
                 status:  "error",
-                message: "Could not determine WhatsApp Business Account. Please complete the Meta signup, wait a moment, then try again.",
+                message: "Could not determine WhatsApp Business Account. If you previously had a WABA connected, please use the 'Manual Connect' option. Otherwise, check that your Meta System User Token (META_SYSTEM_USER_TOKEN) is still valid in Meta Business Suite.",
             });
         }
 

@@ -54,37 +54,55 @@ const deleteCampaignSchedule = async (campaignId) => {
  * The Lambda will receive event.type === "SEND_EMAIL_BATCH"
  */
 const createEmailBatchSchedule = async ({ jobId, batchIndex, scheduleTime, payload }) => {
-  // Build the Target — conditionally include DLQ only if the ARN is configured
-  const target = {
-    Arn:     process.env.SCHEDULE_LAMBDA_ARN,
+  const minimalTarget = {
+    Arn:    process.env.SCHEDULE_LAMBDA_ARN,
     RoleArn: process.env.SCHEDULER_ROLE_ARN,
-    Input:   JSON.stringify({ type: "SEND_EMAIL_BATCH", ...payload }),
-    // Retry up to 2 times if Lambda returns an error (not a timeout).
-    // MaximumEventAgeInSeconds: discard the event after 1 hour so stale batches
-    // don't fire hours later after an outage.
-    RetryPolicy: {
-      MaximumRetryAttempts:     2,
-      MaximumEventAgeInSeconds: 3600, // 1 hour
-    },
+    Input:  JSON.stringify({ type: "SEND_EMAIL_BATCH", ...payload }),
   };
 
-  // Attach the per-schedule DLQ only when the ARN env var is set.
-  // EventBridge Scheduler sends the failed event to this SQS queue after all
-  // retries are exhausted, so no fired batch is ever silently lost.
+  const baseParams = {
+    Name:                 `email-batch-${jobId}-${batchIndex}`,
+    GroupName:            "default",
+    ScheduleExpression:   `at(${scheduleTime})`,
+    FlexibleTimeWindow:   { Mode: "OFF" },
+    ActionAfterCompletion: "DELETE",
+  };
+
+  console.log(`[EmailBatch] Creating schedule for batch ${batchIndex} at ${scheduleTime} | LambdaARN: ${process.env.SCHEDULE_LAMBDA_ARN ? "SET" : "NOT SET"} | RoleARN: ${process.env.SCHEDULER_ROLE_ARN ? "SET" : "NOT SET"} | DLQ: ${process.env.SCHEDULER_DLQ_ARN ? "SET" : "NOT SET"}`);
+
+  // ── Attempt 1: with DLQ + RetryPolicy (preferred, if DLQ is configured) ──
   if (process.env.SCHEDULER_DLQ_ARN) {
-    target.DeadLetterConfig = { Arn: process.env.SCHEDULER_DLQ_ARN };
+    try {
+      await client.send(new CreateScheduleCommand({
+        ...baseParams,
+        Target: {
+          ...minimalTarget,
+          RetryPolicy:       { MaximumRetryAttempts: 2, MaximumEventAgeInSeconds: 3600 },
+          DeadLetterConfig:  { Arn: process.env.SCHEDULER_DLQ_ARN },
+        },
+      }));
+      console.log(`[EmailBatch] ✅ Schedule created with DLQ for batch ${batchIndex}`);
+      return;
+    } catch (dlqErr) {
+      console.warn(`[EmailBatch] ⚠️  DLQ attempt failed for batch ${batchIndex}: [${dlqErr.name}] ${dlqErr.message} — falling back to minimal schedule`);
+    }
   }
 
-  const command = new CreateScheduleCommand({
-    Name:             `email-batch-${jobId}-${batchIndex}`,
-    GroupName:        "default",
-    ScheduleExpression: `at(${scheduleTime})`,   // YYYY-MM-DDTHH:MM:SS  (UTC)
-    FlexibleTimeWindow: { Mode: "OFF" },
-    // Auto-delete the schedule after it fires — keeps things clean
-    ActionAfterCompletion: "DELETE",
-    Target: target,
-  });
-  await client.send(command);
+  // ── Attempt 2: minimal fallback — EXACTLY the same as the original working code ──
+  // No RetryPolicy, no DLQ. This is what was working before the DLQ was added.
+  try {
+    await client.send(new CreateScheduleCommand({
+      ...baseParams,
+      Target: minimalTarget,
+    }));
+    console.log(`[EmailBatch] ✅ Schedule created (minimal) for batch ${batchIndex}`);
+  } catch (fallbackErr) {
+    console.error(`[EmailBatch] ❌ Minimal fallback ALSO failed for batch ${batchIndex}: [${fallbackErr.name}] ${fallbackErr.message}`);
+    console.error(`[EmailBatch]    scheduleTime: ${scheduleTime}`);
+    console.error(`[EmailBatch]    SCHEDULE_LAMBDA_ARN: ${process.env.SCHEDULE_LAMBDA_ARN}`);
+    console.error(`[EmailBatch]    SCHEDULER_ROLE_ARN:  ${process.env.SCHEDULER_ROLE_ARN}`);
+    throw fallbackErr; // re-throw so the controller marks this batch as failed
+  }
 };
 
 const deleteEmailBatchSchedule = async (jobId, batchIndex) => {

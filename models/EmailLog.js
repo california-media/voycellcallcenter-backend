@@ -24,7 +24,17 @@ const emailLogSchema = new Schema(
     // Which sender address was used
     fromEmail:  { type: String, default: "noreply@voycell.com" },
     fromName:   { type: String, default: "VOYCELL" },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    createdBy:  { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+
+    // Batch job reference — set when this log was created from an EmailBatchJob.
+    // Used by the "Sent Email Detail" modal to show batch timing information.
+    batchJobId:       { type: String,  default: null },
+    scheduledStartAt: { type: Date,    default: null },   // user-provided startAt (null = immediate)
+    batchSize:        { type: Number,  default: null },
+    intervalValue:    { type: Number,  default: null },
+    intervalUnit:     { type: String,  default: null },
+    intervalSeconds:  { type: Number,  default: null },
+    totalBatches:     { type: Number,  default: null },
 
     // ── SES tracking counters (incremented by the SNS webhook as events arrive) ──
     stats: {
