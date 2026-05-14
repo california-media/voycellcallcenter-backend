@@ -530,49 +530,43 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     }
 
     // =========================================================
-    // 🧠 CASE 2 → USER (AGENT) DEVICE AUTO-ASSIGN
+    // 🧠 CASE 2 → USER (AGENT) DEVICE ASSIGN
     // =========================================================
     if (isAgentUser && extensionNumber) {
-      // 1️⃣ Find Company Admin
-      const companyAdmin = await User.findById(
-        user.createdByWhichCompanyAdmin
-      );
-
-      if (!companyAdmin) {
-        return res.status(400).json({
-          error: "Company Admin not found for this user.",
+      if (assignedDeviceId) {
+        // Device explicitly provided — look it up directly
+        deviceOwnerSuperAdmin = await User.findOne({
+          role: "superadmin",
+          "PBXDevices.deviceId": assignedDeviceId,
         });
-      }
-
-      if (!companyAdmin.PBXDetails?.assignedDeviceId) {
-        return res.status(400).json({
-          error:
-            "No PBX device assigned to this Company Admin.",
-        });
-      }
-
-      finalAssignedDeviceId =
-        companyAdmin.PBXDetails.assignedDeviceId;
-
-      // 2️⃣ Find SuperAdmin owning device
-      deviceOwnerSuperAdmin = await User.findOne({
-        role: "superadmin",
-        "PBXDevices.deviceId": finalAssignedDeviceId,
-      });
-
-      if (!deviceOwnerSuperAdmin) {
-        return res.status(400).json({
-          error: "Device not found under SuperAdmin.",
-        });
-      }
-
-      // 3️⃣ Get device object
-      selectedDevice =
-        deviceOwnerSuperAdmin.PBXDevices.find(
-          (d) =>
-            d.deviceId.toString() ===
-            finalAssignedDeviceId.toString()
+        if (!deviceOwnerSuperAdmin) {
+          return res.status(400).json({ error: "Device not found under any SuperAdmin." });
+        }
+        selectedDevice = deviceOwnerSuperAdmin.PBXDevices.find(
+          (d) => d.deviceId.toString() === assignedDeviceId.toString()
         );
+        finalAssignedDeviceId = assignedDeviceId;
+      } else {
+        // No device in request — fall back to company admin's device
+        const companyAdmin = await User.findById(user.createdByWhichCompanyAdmin);
+        if (!companyAdmin) {
+          return res.status(400).json({ error: "Company Admin not found for this user." });
+        }
+        if (!companyAdmin.PBXDetails?.assignedDeviceId) {
+          return res.status(400).json({ error: "No PBX device assigned to this Company Admin." });
+        }
+        finalAssignedDeviceId = companyAdmin.PBXDetails.assignedDeviceId;
+        deviceOwnerSuperAdmin = await User.findOne({
+          role: "superadmin",
+          "PBXDevices.deviceId": finalAssignedDeviceId,
+        });
+        if (!deviceOwnerSuperAdmin) {
+          return res.status(400).json({ error: "Device not found under SuperAdmin." });
+        }
+        selectedDevice = deviceOwnerSuperAdmin.PBXDevices.find(
+          (d) => d.deviceId.toString() === finalAssignedDeviceId.toString()
+        );
+      }
     }
 
     // =========================================================
