@@ -1,46 +1,22 @@
 const CallRate       = require("../models/CallRate");
 const CallRateConfig = require("../models/CallRateConfig");
+const XLSX           = require("xlsx");
 
-// ── Zero-dependency CSV parser ────────────────────────────────────────────────
-// Handles quoted fields, commas inside quotes, and CRLF/LF line endings.
-// Returns an array of objects keyed by the normalised header row.
-function parseCsv(buffer) {
-  const text = buffer.toString("utf8").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const lines = text.split("\n");
-  const rows  = [];
+// ── XLSX parser ───────────────────────────────────────────────────────────────
+// Reads the first sheet, normalises headers (lowercase, no spaces),
+// returns an array of objects — same shape as the old CSV parser.
+function parseXlsx(buffer) {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const sheet    = workbook.Sheets[workbook.SheetNames[0]];
+  const rows     = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-
-    const fields = [];
-    let field    = "";
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = !inQuotes;
-      } else if (ch === "," && !inQuotes) {
-        fields.push(field.trim());
-        field = "";
-      } else {
-        field += ch;
-      }
-    }
-    fields.push(field.trim());
-    rows.push(fields);
-  }
-
-  if (rows.length < 2) return [];
-
-  // Normalise header names (lowercase, remove spaces)
-  const headers = rows[0].map((h) => h.toLowerCase().replace(/\s+/g, "").replace(/['"]/g, ""));
-  return rows.slice(1).map((fields) => {
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = fields[i] ?? ""; });
-    return obj;
+  return rows.map((row) => {
+    const normalised = {};
+    Object.entries(row).forEach(([k, v]) => {
+      const key = String(k).toLowerCase().replace(/\s+/g, "").replace(/['"]/g, "");
+      normalised[key] = String(v ?? "").trim();
+    });
+    return normalised;
   });
 }
 
@@ -179,14 +155,14 @@ exports.uploadCallRates = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded." });
 
-    const normalised = parseCsv(req.file.buffer);
-    if (!normalised.length) return res.status(400).json({ success: false, message: "CSV file is empty or has no data rows." });
+    const normalised = parseXlsx(req.file.buffer);
+    if (!normalised.length) return res.status(400).json({ success: false, message: "XLSX file is empty or has no data rows." });
 
     const docs   = [];
     const errors = [];
 
     normalised.forEach((row, i) => {
-      const country      = String(row.country || row.countryname || "").trim();
+      const country      = String(row.country || row.countryname || row.name || "").trim();
       const prefix       = String(row.prefix  || row.dialcode   || row.code || "").trim();
       const standardRate = parseFloat(row.standardrate || row.standard_rate || row.rate || row.price || 0);
 

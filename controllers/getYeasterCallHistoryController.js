@@ -1,7 +1,6 @@
 const axios = require("axios");
 // const moment = require("moment");
 const mongoose = require("mongoose");
-const https = require("https");
 const { getDeviceToken } = require("../services/yeastarTokenService");
 const User = require("../models/userModel"); // make sure to import
 const CallHistory = require("../models/CallHistory");
@@ -14,9 +13,126 @@ const { createGoogleMeetEvent } = require("../utils/googleCalendar");
 const incomingcallConnection = require("../models/incomingcallConnection");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 const { hubspotAfterCallSync } = require("../services/hubspotSync.service");
-const Notification = require("../models/Notification");
+const Notification                             = require("../models/Notification");
+const DIDAssignment                            = require("../models/DIDAssignment");
+const LiveCallBilling                          = require("../models/LiveCallBilling");
+const { findCallRateByLPM, normalizeDigits }   = require("../utils/callRateLPM");
 
-//show all calls of number agent and company admin calls, show proper agent ya company admin name in call,extention is change so call is not show
+// ── Billing helpers ───────────────────────────────────────────────────────────
+function isRealDID(number) {
+  const digits = (number || "").replace(/\D/g, "");
+  return digits.length >= 7 && !/^0+$/.test(digits);
+}
+
+async function calculateAndBill({ companyAdminId, userId, call_from, call_to, talk_time, yeastarId, startTime }) {
+  console.log(`\n[BILLING] ══════════════════════════════════════════`);
+  console.log(`[BILLING] Checking billing for outbound call`);
+  console.log(`[BILLING]   companyAdminId : ${companyAdminId}`);
+  console.log(`[BILLING]   userId         : ${userId}`);
+  console.log(`[BILLING]   call_from      : ${call_from}`);
+  console.log(`[BILLING]   call_to        : ${call_to}`);
+  console.log(`[BILLING]   talk_time      : ${talk_time}s (${(talk_time / 60).toFixed(4)} min)`);
+  console.log(`[BILLING]   yeastarId      : ${yeastarId}`);
+  console.log(`[BILLING]   startTime      : ${startTime}`);
+
+  if (!companyAdminId || !userId || !call_to || !talk_time) {
+    console.log(`[BILLING] ✗ Skipped — missing required field(s)`);
+    return null;
+  }
+
+  // ── Check if this call was already live-billed (prevents double deduction) ──
+  // Try exact sdkCallId match first, then time-based fallback
+  let liveBill = null;
+  if (yeastarId) {
+    liveBill = await LiveCallBilling.findOne({ sdkCallId: yeastarId, companyAdminId }).lean();
+  }
+  if (!liveBill && startTime) {
+    const callMoment = moment(startTime, "MM/DD/YYYY HH:mm:ss");
+    if (callMoment.isValid()) {
+      const callDate = callMoment.toDate();
+      liveBill = await LiveCallBilling.findOne({
+        companyAdminId,
+        destination: normalizeDigits(call_to),
+        endedAt:     { $ne: null },
+        createdAt: {
+          $gte: new Date(callDate.getTime() - 2 * 60 * 1000),                     // 2 min before start
+          $lte: new Date(callDate.getTime() + (talk_time + 600) * 1000),           // end + 10 min buffer
+        },
+      }).sort({ createdAt: -1 }).lean();
+    }
+  }
+  if (liveBill && liveBill.billedMinutes > 0) {
+    console.log(`[BILLING] ✓ Live billing record found — billedMinutes: ${liveBill.billedMinutes} | totalCharged: $${liveBill.totalCharged} | skipping CDR deduction`);
+    console.log(`[BILLING] ══════════════════════════════════════════\n`);
+    return {
+      charges:    Number(liveBill.totalCharged.toFixed(6)),
+      ratePerMin: liveBill.ratePerMin,
+      billedFrom: liveBill.didNumber || call_from,
+    };
+  }
+
+  // No live billing record — only bill if call_from is itself a real purchased DID.
+  // If call_from is a PBX extension (e.g. "1010"), live billing should have handled it;
+  // skip CDR billing to avoid billing calls made from non-purchased numbers.
+  const callFromDigits = normalizeDigits(call_from || "");
+
+  if (!isRealDID(callFromDigits)) {
+    console.log(`[BILLING] ✗ call_from "${call_from}" is a PBX extension (not a real phone number) and no live billing record found → no CDR charge`);
+    console.log(`[BILLING] ══════════════════════════════════════════\n`);
+    return null;
+  }
+
+  // PATH A: call_from is a real phone number → check directly against admin's purchased DIDs
+  console.log(`[BILLING]   call_from "${callFromDigits}" looks like a real number — checking purchase list`);
+  const allCompanyDIDs = await DIDAssignment.find({ companyAdminId, status: "assigned" })
+    .select("number").lean();
+  console.log(`[BILLING]   Company purchased DIDs (${allCompanyDIDs.length}): ${JSON.stringify(allCompanyDIDs.map(d => normalizeDigits(d.number)))}`);
+
+  const matchedDID = allCompanyDIDs.find(d => normalizeDigits(d.number) === callFromDigits) || null;
+
+  if (!matchedDID) {
+    console.log(`[BILLING] ✗ call_from "${callFromDigits}" is NOT in admin's purchased DID list → no charge`);
+    console.log(`[BILLING] ══════════════════════════════════════════\n`);
+    return null;
+  }
+
+  console.log(`[BILLING] ✓ call_from "${callFromDigits}" IS in purchase list (DID: "${matchedDID.number}") → will bill`);
+
+  // LPM lookup on destination
+  console.log(`[BILLING]   Running LPM on destination: ${call_to}`);
+  const rate = await findCallRateByLPM(call_to);
+
+  if (!rate) {
+    console.log(`[BILLING] ✗ No call rate found for destination "${call_to}" → no charge`);
+    console.log(`[BILLING] ══════════════════════════════════════════\n`);
+    return null;
+  }
+  console.log(`[BILLING] ✓ Rate found — country: ${rate.country} | prefix: ${rate.prefix} | standardRate: $${rate.standardRate}/min | customerRate: $${rate.customerRate}/min`);
+
+  const billedMinutes = Math.ceil(talk_time / 60);
+  const charges       = Number((billedMinutes * rate.customerRate).toFixed(6));
+
+  if (charges <= 0) {
+    console.log(`[BILLING] ✗ Calculated charges = $${charges} (zero or negative) → no charge`);
+    console.log(`[BILLING] ══════════════════════════════════════════\n`);
+    return null;
+  }
+  console.log(`[BILLING] ✓ Charges = ${billedMinutes} billed min (${talk_time}s actual) × $${rate.customerRate}/min = $${charges}`);
+
+  const userBefore = await User.findById(companyAdminId).select("creditBalance email").lean();
+  console.log(`[BILLING]   Balance BEFORE : $${userBefore?.creditBalance?.toFixed(6) ?? "N/A"} (${userBefore?.email})`);
+
+  await User.findByIdAndUpdate(companyAdminId, { $inc: { creditBalance: -charges } });
+
+  const userAfter = await User.findById(companyAdminId).select("creditBalance").lean();
+  console.log(`[BILLING]   Balance AFTER  : $${userAfter?.creditBalance?.toFixed(6) ?? "N/A"}`);
+  console.log(`[BILLING]   Deducted       : $${charges}`);
+  console.log(`[BILLING] ✓ Balance deducted successfully`);
+  console.log(`[BILLING] ══════════════════════════════════════════\n`);
+
+  return { charges, ratePerMin: rate.customerRate, billedFrom: matchedDID.number };
+}
+
 
 /**
  * Format date like PHP (m/d/Y H:i:s)
@@ -205,7 +321,6 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
     const respFrom = await axios.get(urlFrom, {
       httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
     });
-    console.log(`[fetch-and-store] OUTBOUND Yeastar raw:\n${JSON.stringify(respFrom.data, null, 2)}`);
 
     // -------- INBOUND --------
     const urlTo = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
@@ -334,14 +449,55 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         }
       }
 
+      const talkTime = call.talk_duration ?? 0;
+
+      // ── Billing (outbound ANSWERED calls from a purchased DID only) ───────
+      const companyAdminId =
+        user.role === "companyAdmin"
+          ? userId
+          : user.createdByWhichCompanyAdmin || null;
+
+      // Log the raw Yeastar CDR fields so we can see exactly what Yeastar reports
+      console.log(`[CDR-RAW] yeastarId: ${call.id} | call_type: ${call.call_type} | disposition: ${call.disposition} | talkTime: ${talkTime}s`);
+      console.log(`[CDR-RAW]   call.call_from_number (raw from Yeastar): "${call.call_from_number}"`);
+      console.log(`[CDR-RAW]   call.call_to_number   (raw from Yeastar): "${call.call_to_number}"`);
+      console.log(`[CDR-RAW]   from_number (after normalizeNumber)     : "${from_number}"`);
+      console.log(`[CDR-RAW]   to_number   (after normalizeNumber)     : "${to_number}"`);
+      console.log(`[CDR-RAW]   ext (extension making the call)         : "${ext}"`);
+      console.log(`[CDR-RAW]   companyAdminId: ${companyAdminId} | userId: ${userId}`);
+
+      let billingResult = null;
+      if (call.call_type === "Outbound" && call.disposition === "ANSWERED" && talkTime > 0) {
+        console.log(`[BILLING] >>> Outbound ANSWERED call — triggering calculateAndBill for yeastarId: ${call.id} | ext: ${ext} | from: ${from_number}`);
+        try {
+          billingResult = await calculateAndBill({
+            companyAdminId,
+            userId,
+            call_from:  from_number,
+            call_to:    to_number,
+            talk_time:  talkTime,
+            yeastarId:  call.id,
+            startTime:  dubaiFormatted,
+          });
+          if (billingResult) {
+            console.log(`[BILLING] ✓ Call billed — yeastarId: ${call.id} | charges: $${billingResult.charges} | rate: $${billingResult.ratePerMin}/min | DID: ${billingResult.billedFrom}`);
+          } else {
+            console.log(`[BILLING] — Call NOT billed — yeastarId: ${call.id} | no DID assigned or no matching rate`);
+          }
+        } catch (billingErr) {
+          console.error(`[BILLING] ✗ Error billing yeastarId ${call.id}:`, billingErr.message);
+        }
+      } else {
+        console.log(`[BILLING] Skipping — not (Outbound + ANSWERED + talkTime>0) | yeastarId: ${call.id} | direction: ${call.call_type} | status: ${call.disposition} | talkTime: ${talkTime}s`);
+      }
+
       const dbPayload = {
         userId,
         extensionNumber:  ext,
         yeastarId:        call.id,
         call_from:        from_number,
         call_to:          to_number,
-        // talk_duration absent for NO ANSWER/FAILED → store 0 explicitly
-        talk_time:        call.talk_duration ?? 0,
+        talk_time:        talkTime,
         ring_time:        call.ring_duration  ?? 0,
         duration:         call.duration       ?? 0,
         direction:        call.call_type,
@@ -351,11 +507,14 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         record_file:      call.record_file,
         disposition_code: call.reason,
         trunk:            call.dst_trunk,
+        charges:          billingResult?.charges    ?? null,
+        ratePerMin:       billingResult?.ratePerMin ?? null,
+        billedFrom:       billingResult?.billedFrom ?? null,
       };
 
       console.log(`\n[fetch-and-store] ── SAVING TO DB (yeastarId: ${call.id}) ──`);
       console.log(`[fetch-and-store] Yeastar → duration:${call.duration} | talk_duration:${call.talk_duration} | ring_duration:${call.ring_duration} | disposition:${call.disposition}`);
-      console.log(`[fetch-and-store] DB save → duration:${dbPayload.duration} | talk_time:${dbPayload.talk_time} | ring_time:${dbPayload.ring_time} | status:${dbPayload.status}`);
+      console.log(`[fetch-and-store] DB save → duration:${dbPayload.duration} | talk_time:${dbPayload.talk_time} | ring_time:${dbPayload.ring_time} | status:${dbPayload.status} | charges:${dbPayload.charges}`);
 
       await CallHistory.create(dbPayload);
 
@@ -596,14 +755,55 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
         }
       }
 
+      const talkTime = call.talk_duration ?? 0;
+
+      // ── Billing (outbound ANSWERED calls from a purchased DID only) ───────
+      const companyAdminId =
+        user.role === "companyAdmin"
+          ? userId
+          : user.createdByWhichCompanyAdmin || null;
+
+      // Log the raw Yeastar CDR fields so we can see exactly what Yeastar reports
+      console.log(`[CDR-RAW] yeastarId: ${call.id} | call_type: ${call.call_type} | disposition: ${call.disposition} | talkTime: ${talkTime}s`);
+      console.log(`[CDR-RAW]   call.call_from_number (raw from Yeastar): "${call.call_from_number}"`);
+      console.log(`[CDR-RAW]   call.call_to_number   (raw from Yeastar): "${call.call_to_number}"`);
+      console.log(`[CDR-RAW]   from_number (after normalizeNumber)     : "${from_number}"`);
+      console.log(`[CDR-RAW]   to_number   (after normalizeNumber)     : "${to_number}"`);
+      console.log(`[CDR-RAW]   ext (extension making the call)         : "${ext}"`);
+      console.log(`[CDR-RAW]   companyAdminId: ${companyAdminId} | userId: ${userId}`);
+
+      let billingResult = null;
+      if (call.call_type === "Outbound" && call.disposition === "ANSWERED" && talkTime > 0) {
+        console.log(`[BILLING] >>> Outbound ANSWERED call — triggering calculateAndBill for yeastarId: ${call.id} | ext: ${ext} | from: ${from_number}`);
+        try {
+          billingResult = await calculateAndBill({
+            companyAdminId,
+            userId,
+            call_from:  from_number,
+            call_to:    to_number,
+            talk_time:  talkTime,
+            yeastarId:  call.id,
+            startTime:  dubaiFormatted,
+          });
+          if (billingResult) {
+            console.log(`[BILLING] ✓ Call billed — yeastarId: ${call.id} | charges: $${billingResult.charges} | rate: $${billingResult.ratePerMin}/min | DID: ${billingResult.billedFrom}`);
+          } else {
+            console.log(`[BILLING] — Call NOT billed — yeastarId: ${call.id} | no DID assigned or no matching rate`);
+          }
+        } catch (billingErr) {
+          console.error(`[BILLING] ✗ Error billing yeastarId ${call.id}:`, billingErr.message);
+        }
+      } else {
+        console.log(`[BILLING] Skipping — not (Outbound + ANSWERED + talkTime>0) | yeastarId: ${call.id} | direction: ${call.call_type} | status: ${call.disposition} | talkTime: ${talkTime}s`);
+      }
+
       const dbPayload = {
         userId,
         extensionNumber:  ext,
         yeastarId:        call.id,
         call_from:        from_number,
         call_to:          to_number,
-        // talk_duration absent for NO ANSWER/FAILED → store 0 explicitly
-        talk_time:        call.talk_duration ?? 0,
+        talk_time:        talkTime,
         ring_time:        call.ring_duration  ?? 0,
         duration:         call.duration       ?? 0,
         direction:        call.call_type,
@@ -613,11 +813,14 @@ exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
         record_file:      call.record_file,
         disposition_code: call.reason,
         trunk:            call.dst_trunk,
+        charges:          billingResult?.charges    ?? null,
+        ratePerMin:       billingResult?.ratePerMin ?? null,
+        billedFrom:       billingResult?.billedFrom ?? null,
       };
 
       console.log(`\n[fetch-and-store] ── SAVING TO DB (yeastarId: ${call.id}) ──`);
       console.log(`[fetch-and-store] Yeastar → duration:${call.duration} | talk_duration:${call.talk_duration} | ring_duration:${call.ring_duration} | disposition:${call.disposition}`);
-      console.log(`[fetch-and-store] DB save → duration:${dbPayload.duration} | talk_time:${dbPayload.talk_time} | ring_time:${dbPayload.ring_time} | status:${dbPayload.status}`);
+      console.log(`[fetch-and-store] DB save → duration:${dbPayload.duration} | talk_time:${dbPayload.talk_time} | ring_time:${dbPayload.ring_time} | status:${dbPayload.status} | charges:${dbPayload.charges}`);
 
       await CallHistory.create(dbPayload);
 

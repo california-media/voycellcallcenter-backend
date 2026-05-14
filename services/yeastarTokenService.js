@@ -148,8 +148,13 @@ exports.getDeviceToken = async (deviceId, type = "pbx") => {
         );
 
         if (!res.data?.access_token) {
+            console.error(
+                `[getDeviceToken] ${type.toUpperCase()} login failed for device ${deviceIdStr} at ${device.PBX_BASE_URL}`,
+                `| PBX response: errcode=${res.data?.errcode} errmsg=${res.data?.errmsg}`,
+                `| full body:`, JSON.stringify(res.data)
+            );
             throw new Error(
-                `${type.toUpperCase()} login failed`
+                `${type.toUpperCase()} login failed: errcode=${res.data?.errcode ?? "none"} errmsg=${res.data?.errmsg ?? "no message"}`
             );
         }
         return await updateTokenInDb(

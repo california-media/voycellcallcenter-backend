@@ -1,5 +1,6 @@
 const DIDLogicSettings = require("../../models/DIDLogicSettings");
 const DIDAssignment = require("../../models/DIDAssignment");
+const User = require("../../models/userModel");
 const did = require("../../services/didlogicService");
 const { deriveNumberType } = require("../../utils/didCountryData");
 
@@ -143,4 +144,62 @@ const getAccountBalance = async (req, res) => {
   }
 };
 
-module.exports = { getSettings, updateSettings, syncNumbers, getAllNumbers, updateNumberMargin, getCallRecords, getAccountBalance };
+// ── PUT /superAdmin/didlogic/numbers/:id/assign-company ───────────────────────
+// Super admin assigns (or unassigns) a DID directly to a company admin for free.
+// Body: { companyAdminId } — omit or pass null to return number to inventory.
+const assignNumberToCompany = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { companyAdminId } = req.body;
+
+    const record = await DIDAssignment.findById(id);
+    if (!record) return res.status(404).json({ success: false, message: "Number not found." });
+
+    if (!companyAdminId) {
+      await DIDAssignment.findByIdAndUpdate(id, {
+        status: "available",
+        companyAdminId: null,
+        assignedAt: null,
+        assignedAgentId: null,
+        assignedAgentAt: null,
+      });
+      return res.json({ success: true, message: `Number +${record.number} returned to inventory.` });
+    }
+
+    const admin = await User.findOne({ _id: companyAdminId, role: "companyAdmin" })
+      .select("firstname lastname email");
+    if (!admin) return res.status(404).json({ success: false, message: "Company admin not found." });
+
+    await DIDAssignment.findByIdAndUpdate(id, {
+      status: "assigned",
+      companyAdminId,
+      assignedAt: new Date(),
+      assignedAgentId: null,
+      assignedAgentAt: null,
+    });
+
+    res.json({
+      success: true,
+      message: `Number +${record.number} assigned to ${admin.firstname} ${admin.lastname}.`,
+    });
+  } catch (err) {
+    console.error("assignNumberToCompany error:", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── GET /superAdmin/didlogic/company-admins ───────────────────────────────────
+// Returns all company admins for the assignment dropdown.
+const getCompanyAdmins = async (req, res) => {
+  try {
+    const admins = await User.find({ role: "companyAdmin" })
+      .select("firstname lastname email")
+      .sort({ firstname: 1 })
+      .lean();
+    res.json({ success: true, data: admins });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { getSettings, updateSettings, syncNumbers, getAllNumbers, updateNumberMargin, getCallRecords, getAccountBalance, assignNumberToCompany, getCompanyAdmins };

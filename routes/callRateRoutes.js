@@ -5,13 +5,18 @@ const ctrl     = require("../controllers/callRateController");
 const { checkForAuthentication } = require("../middlewares/authentication");
 const checkRole                   = require("../middlewares/roleCheck");
 
+const XLSX_MIMES = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+];
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits:  { fileSize: 5 * 1024 * 1024 },
+  limits:  { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_, file, cb) => {
-    // Accept CSV only — xlsx is not needed (no xlsx dependency in backend)
-    if (file.mimetype === "text/csv" || file.originalname.endsWith(".csv")) cb(null, true);
-    else cb(new Error("Only .csv files are accepted. Please save your spreadsheet as CSV first."));
+    if (XLSX_MIMES.includes(file.mimetype) || file.originalname.endsWith(".xlsx") || file.originalname.endsWith(".xls"))
+      cb(null, true);
+    else
+      cb(new Error("Only .xlsx files are accepted."));
   },
 });
 

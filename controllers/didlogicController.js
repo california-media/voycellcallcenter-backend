@@ -216,6 +216,45 @@ const buyNumber = async (req, res) => {
   }
 };
 
+// ── PATCH /didlogic/numbers/default-caller ────────────────────────────────────
+// Company admin (or agent for their own session) sets the preferred outbound DID.
+// Body: { number } — pass null to clear (fall back to extension telephone).
+const setDefaultCallerDID = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { number } = req.body;
+
+    if (number) {
+      const companyAdminId = await resolveCompanyAdminId(req);
+      const valid = await DIDAssignment.findOne({ companyAdminId, number, status: "assigned" }).lean();
+      if (!valid) return res.status(400).json({ success: false, message: "Number not in your account." });
+    }
+
+    await User.findByIdAndUpdate(userId, { defaultCallerDID: number || null });
+    res.json({ success: true, defaultCallerDID: number || null });
+  } catch (err) {
+    console.error("setDefaultCallerDID error:", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── GET /didlogic/numbers/calling-numbers ─────────────────────────────────────
+// Returns all DID numbers the current user (companyAdmin or agent) can call from.
+// Agents inherit all numbers owned by their company admin.
+const getCallingNumbers = async (req, res) => {
+  try {
+    const companyAdminId = await resolveCompanyAdminId(req);
+    const numbers = await DIDAssignment.find({ companyAdminId, status: "assigned" })
+      .select("number countryName area numberType")
+      .sort({ assignedAt: -1 })
+      .lean();
+    res.json({ success: true, data: numbers });
+  } catch (err) {
+    console.error("getCallingNumbers error:", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ── GET /didlogic/numbers/my ──────────────────────────────────────────────────
 const getMyNumbers = async (req, res) => {
   try {
@@ -250,13 +289,17 @@ const assignNumberToAgent = async (req, res) => {
     const record = await DIDAssignment.findOne({ _id: req.params.id, companyAdminId, status: "assigned" });
     if (!record) return res.status(404).json({ success: false, message: "Number not found in your account." });
 
+    const prevAgentId = record.assignedAgentId;
+
     if (!agentId) {
-      // Unassign from agent
-      await DIDAssignment.findByIdAndUpdate(record._id, {
-        assignedAgentId: null,
-        assignedAgentAt: null,
-      });
-      return res.json({ success: true, message: "Number unassigned from agent." });
+      // Return number to admin pool — remove from previous agent's list
+      await DIDAssignment.findByIdAndUpdate(record._id, { assignedAgentId: null, assignedAgentAt: null });
+      if (prevAgentId) {
+        await User.findByIdAndUpdate(prevAgentId, {
+          $pull: { assignedCallerNumbers: record.number },
+        });
+      }
+      return res.json({ success: true, message: "Number returned to your pool." });
     }
 
     // Verify the agent belongs to this company admin
@@ -264,17 +307,29 @@ const assignNumberToAgent = async (req, res) => {
       _id: agentId,
       createdByWhichCompanyAdmin: companyAdminId,
       role: "user",
-    }).select("firstname lastname email");
+    }).select("firstname lastname email assignedCallerNumbers");
     if (!agent) return res.status(404).json({ success: false, message: "Agent not found." });
+
+    // If number was previously assigned to a different agent, remove it from them
+    if (prevAgentId && String(prevAgentId) !== String(agentId)) {
+      await User.findByIdAndUpdate(prevAgentId, {
+        $pull: { assignedCallerNumbers: record.number },
+      });
+    }
 
     await DIDAssignment.findByIdAndUpdate(record._id, {
       assignedAgentId: agentId,
       assignedAgentAt: new Date(),
     });
 
+    // Add to new agent's list (avoid duplicates)
+    await User.findByIdAndUpdate(agentId, {
+      $addToSet: { assignedCallerNumbers: record.number },
+    });
+
     res.json({
       success: true,
-      message: `Number +${record.number} assigned to ${agent.firstname} ${agent.lastname}.`,
+      message: `Number assigned to ${agent.firstname} ${agent.lastname}.`,
       agent: { _id: agent._id, firstname: agent.firstname, lastname: agent.lastname, email: agent.email },
     });
   } catch (err) {
@@ -371,6 +426,8 @@ const getDIDTransactions = async (req, res) => {
 };
 
 module.exports = {
+  setDefaultCallerDID,
+  getCallingNumbers,
   getAvailableCountries,
   browseNumbers,
   getKYCInfo,

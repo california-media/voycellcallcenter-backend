@@ -4,6 +4,7 @@ const Lead = require("../../models/leadModel");
 const mongoose = require("mongoose");
 const Contact = require("../../models/contactModel");
 const Subscription = require("../../models/Subscription");
+const DIDAssignment = require("../../models/DIDAssignment");
 const { sendVerificationEmail } = require("../../utils/emailUtils");
 const { createTokenforUser } = require("../../services/authentication");
 // const { getConfig } = require("../../utils/getConfig");
@@ -428,5 +429,248 @@ exports.deleteAgent = async (req, res) => {
       message: "Failed to delete agent",
       error: error.message,
     });
+  }
+};
+
+// PUT /admin/user/:id/caller-numbers
+// Company admin assigns specific caller numbers to an agent
+// Assign or remove a single number (extension telephone) from an agent
+exports.toggleAgentCallerNumber = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { number, action } = req.body; // action: "add" | "remove"
+    const companyAdminId = req.user._id;
+
+    if (!number || !["add", "remove"].includes(action)) {
+      return res.status(400).json({ status: "error", message: "number and action (add|remove) are required" });
+    }
+
+    const agent = await User.findOne({ _id: id, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
+    if (!agent) return res.status(404).json({ status: "error", message: "Agent not found or no permission" });
+
+    if (action === "add") {
+      await User.findByIdAndUpdate(id, { $addToSet: { assignedCallerNumbers: String(number).trim() } });
+    } else {
+      const num = String(number).trim();
+      const update = {
+        $pull: {
+          assignedCallerNumbers: num,
+          assignedExtensions: { PBX_TELEPHONE: num }, // always clear from extensions
+        },
+      };
+      // If the removed number is the agent's active top-level telephone, clear PBX fields too
+      if (String(agent.telephone).trim() === num) {
+        update.$set = { telephone: "", extensionNumber: "", assignedDeviceId: null, status: false };
+      }
+      await User.findByIdAndUpdate(id, update);
+    }
+
+    const updated = await User.findById(id).select("assignedCallerNumbers telephone extensionNumber").lean();
+    res.json({ status: "success", assignedCallerNumbers: updated.assignedCallerNumbers });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: "Failed to update caller number", error: error.message });
+  }
+};
+
+// PUT /admin/user/reassign-extension
+// Move an extension between agent and company admin pool.
+// Body: { fromAgentId, toAgentId, extension: { extensionNumber, PBX_TELEPHONE, assignedDeviceId, pbxType, PBX_BASE_URL } }
+//   fromAgentId null  → extension currently in admin pool
+//   toAgentId   null  → return extension to admin pool
+exports.reassignExtension = async (req, res) => {
+  try {
+    const { fromAgentId, toAgentId, extension } = req.body;
+    const companyAdminId = req.user._id;
+
+    const num    = String(extension?.PBX_TELEPHONE || "").trim();
+    const extNum = extension?.extensionNumber ? String(extension.extensionNumber).trim() : null;
+
+    if (!num) {
+      return res.status(400).json({ status: "error", message: "extension.PBX_TELEPHONE is required" });
+    }
+
+    // ── Remove from source agent ──────────────────────────────────────────────
+    if (fromAgentId) {
+      const fromAgent = await User.findOne({ _id: fromAgentId, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
+      if (!fromAgent) return res.status(404).json({ status: "error", message: "Source agent not found or no permission" });
+
+      const pullUpdate = {
+        $pull: {
+          assignedCallerNumbers: num,
+          assignedExtensions: extNum ? { extensionNumber: extNum } : { PBX_TELEPHONE: num },
+        },
+      };
+
+      // Fully revoke if this is the agent's primary extension
+      const primaryTel = String(fromAgent.PBXDetails?.PBX_TELEPHONE || "").trim();
+      const topTel     = String(fromAgent.telephone || "").trim();
+      if (primaryTel === num || topTel === num) {
+        pullUpdate.$set = {
+          telephone: "",
+          extensionNumber: "",
+          assignedDeviceId: null,
+          extensionStatus: false,
+          "PBXDetails.PBX_TELEPHONE": "",
+          "PBXDetails.PBX_EXTENSION_NUMBER": "",
+          "PBXDetails.PBX_EXTENSION_ID": "",
+          "PBXDetails.PBX_SIP_SECRET": "",
+          "PBXDetails.assignedDeviceId": null,
+        };
+      }
+
+      await User.findByIdAndUpdate(fromAgentId, pullUpdate);
+    }
+
+    // ── Add to target agent ───────────────────────────────────────────────────
+    if (toAgentId) {
+      const toAgent = await User.findOne({ _id: toAgentId, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
+      if (!toAgent) return res.status(404).json({ status: "error", message: "Target agent not found or no permission" });
+
+      // Deduplicate: pull any existing entry for this extension first
+      await User.findByIdAndUpdate(toAgentId, {
+        $pull: {
+          assignedExtensions: extNum ? { extensionNumber: extNum } : { PBX_TELEPHONE: num },
+          assignedCallerNumbers: num,
+        },
+      });
+
+      // If the extension entry has no assignedDeviceId (e.g. corrupted by old buildExtList
+      // saving PBXDetails with null deviceId), fall back to the admin's PBXDetails deviceId
+      // for the same extension so the Yeastar signature controller can find the device.
+      let resolvedDeviceId = extension?.assignedDeviceId || null;
+      let resolvedBaseUrl  = extension?.PBX_BASE_URL     || null;
+      if (!resolvedDeviceId) {
+        const adminDoc = await User.findById(companyAdminId).select("PBXDetails").lean();
+        const adminExtNum = adminDoc?.PBXDetails?.PBX_EXTENSION_NUMBER;
+        const adminTel    = adminDoc?.PBXDetails?.PBX_TELEPHONE;
+        if ((extNum && adminExtNum === extNum) || adminTel === num) {
+          resolvedDeviceId = adminDoc.PBXDetails.assignedDeviceId || null;
+          resolvedBaseUrl  = resolvedBaseUrl || adminDoc.PBXDetails.PBX_BASE_URL || null;
+        }
+      }
+
+      const extEntry = {
+        extensionNumber:  extNum || "",
+        PBX_TELEPHONE:    num,
+        PBX_BASE_URL:     resolvedBaseUrl,
+        assignedDeviceId: resolvedDeviceId,
+        pbxType:          extension?.pbxType || "cloud",
+      };
+
+      const setOnAgent = { extensionStatus: true };
+      // If agent has no primary PBXDetails extension, promote this one so the
+      // Yeastar login controller and FloatingDialer init can find it.
+      if (!toAgent.PBXDetails?.PBX_EXTENSION_NUMBER) {
+        setOnAgent["PBXDetails.PBX_EXTENSION_NUMBER"] = extNum || "";
+        setOnAgent["PBXDetails.PBX_TELEPHONE"]        = num;
+        setOnAgent["PBXDetails.assignedDeviceId"]     = resolvedDeviceId;
+        if (resolvedBaseUrl) setOnAgent["PBXDetails.PBX_BASE_URL"] = resolvedBaseUrl;
+        // Top-level fields — FloatingDialer init reads extensionNumber directly
+        setOnAgent.extensionNumber = extNum || "";
+        setOnAgent.telephone       = num;
+      }
+
+      await User.findByIdAndUpdate(toAgentId, {
+        $push:     { assignedExtensions: extEntry },
+        $addToSet: { assignedCallerNumbers: num },
+        $set:      setOnAgent,
+      });
+    }
+
+    // ── Return to admin pool ──────────────────────────────────────────────────
+    if (!toAgentId) {
+      const admin = await User.findById(companyAdminId).select("assignedExtensions").lean();
+      const alreadyInPool = (admin?.assignedExtensions || []).some(
+        (e) => (extNum && e.extensionNumber === extNum) || e.PBX_TELEPHONE === num
+      );
+      if (!alreadyInPool) {
+        await User.findByIdAndUpdate(companyAdminId, {
+          $push: {
+            assignedExtensions: {
+              extensionNumber:  extNum || "",
+              PBX_TELEPHONE:    num,
+              PBX_BASE_URL:     extension?.PBX_BASE_URL     || null,
+              assignedDeviceId: extension?.assignedDeviceId || null,
+              pbxType:          extension?.pbxType          || "cloud",
+            },
+          },
+        });
+      }
+    }
+
+    // ── Remove from admin pool when assigning to agent from pool ─────────────
+    if (toAgentId && !fromAgentId) {
+      const adminDoc = await User.findById(companyAdminId).select("PBXDetails").lean();
+      const adminPrimaryExtNum = adminDoc?.PBXDetails?.PBX_EXTENSION_NUMBER;
+      const adminPrimaryTel    = adminDoc?.PBXDetails?.PBX_TELEPHONE;
+      const isAdminPrimary = (extNum && adminPrimaryExtNum === extNum) || adminPrimaryTel === num;
+
+      const adminUpdate = {
+        $pull: {
+          assignedExtensions: extNum ? { extensionNumber: extNum } : { PBX_TELEPHONE: num },
+        },
+      };
+      if (isAdminPrimary) {
+        // Extension was also the admin's own primary — clear PBXDetails so superadmin UI
+        // doesn't show it under the admin after it has been handed off to the agent.
+        adminUpdate.$set = {
+          "PBXDetails.PBX_EXTENSION_NUMBER": "",
+          "PBXDetails.PBX_TELEPHONE":        "",
+          "PBXDetails.assignedDeviceId":     null,
+        };
+      }
+      await User.findByIdAndUpdate(companyAdminId, adminUpdate);
+    }
+
+    res.json({ status: "success" });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: "Failed to reassign extension", error: error.message });
+  }
+};
+
+exports.assignAgentCallerNumbers = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assignedCallerNumbers } = req.body; // string[]
+    const companyAdminId = req.user._id;
+
+    if (!Array.isArray(assignedCallerNumbers)) {
+      return res.status(400).json({ status: "error", message: "assignedCallerNumbers must be an array" });
+    }
+
+    const agent = await User.findOne({ _id: id, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
+    if (!agent) {
+      return res.status(404).json({ status: "error", message: "Agent not found or no permission" });
+    }
+
+    const cleaned = assignedCallerNumbers.map((n) => String(n).trim()).filter(Boolean);
+    const previouslyAssigned = (agent.assignedCallerNumbers || []).map(String);
+
+    // Numbers being released back to admin pool
+    const toRelease = previouslyAssigned.filter((n) => !cleaned.includes(n));
+    // Numbers being newly assigned to this agent (must be unassigned or already owned by this agent)
+    const toAssign = cleaned.filter((n) => !previouslyAssigned.includes(n));
+
+    if (toRelease.length > 0) {
+      await DIDAssignment.updateMany(
+        { number: { $in: toRelease }, companyAdminId, assignedAgentId: new mongoose.Types.ObjectId(id) },
+        { $set: { assignedAgentId: null, assignedAgentAt: null } }
+      );
+    }
+
+    if (toAssign.length > 0) {
+      // Only assign numbers that are free (not already given to another agent)
+      await DIDAssignment.updateMany(
+        { number: { $in: toAssign }, companyAdminId, $or: [{ assignedAgentId: null }, { assignedAgentId: new mongoose.Types.ObjectId(id) }] },
+        { $set: { assignedAgentId: new mongoose.Types.ObjectId(id), assignedAgentAt: new Date() } }
+      );
+    }
+
+    agent.assignedCallerNumbers = cleaned;
+    await agent.save();
+
+    res.json({ status: "success", assignedCallerNumbers: agent.assignedCallerNumbers });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: "Failed to update caller numbers", error: error.message });
   }
 };

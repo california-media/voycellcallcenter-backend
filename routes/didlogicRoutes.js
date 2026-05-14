@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/didlogicController");
 
+router.get("/numbers/calling-numbers", ctrl.getCallingNumbers);
+router.patch("/numbers/default-caller", ctrl.setDefaultCallerDID);
 router.get("/numbers/countries", ctrl.getAvailableCountries);
 router.get("/numbers/browse", ctrl.browseNumbers);
 router.get("/numbers/kyc-requirements", ctrl.getKYCInfo);

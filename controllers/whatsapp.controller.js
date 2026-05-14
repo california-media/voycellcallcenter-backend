@@ -232,6 +232,13 @@ exports.connectWhatsApp = async (req, res) => {
             phoneNumberId
         } = req.body;
 
+        if (!accessToken || !appId || !wabaId || !phoneNumberId) {
+            return res.status(400).json({
+                status: "error",
+                message: "accessToken, appId, wabaId, and phoneNumberId are all required.",
+            });
+        }
+
         const businessAccountId = appId;
 
         /* ================================
@@ -4553,6 +4560,7 @@ function decodeSignedRequestPayload(signedRequest) {
 }
 
 exports.embeddedSignupExchange = async (req, res) => {
+    
     try {
         const { code, signedRequest } = req.body;
         const userId = req.user._id;
@@ -4575,18 +4583,23 @@ exports.embeddedSignupExchange = async (req, res) => {
         // When sessionInfoVersion:2 is used, Meta encodes these IDs directly in
         // the signedRequest payload so we never need fragile discovery API calls.
         // NOTE: Meta only includes waba_id in app_data on FIRST-TIME setup.
-        //       Re-authorisations return a signedRequest without WABA IDs — use
-        //       the fallback paths below.
+        //       Re-authorisations return a signedRequest without WABA IDs.
         let wabaId, phoneNumberId;
         const srPayload = decodeSignedRequestPayload(signedRequest);
-        const appData   = srPayload?.app_data || {};
+        console.log(`[EmbeddedSignup] Step 1 — decoded signedRequest keys: ${Object.keys(srPayload || {}).join(", ") || "none (decode failed)"}`);
 
-        if (appData.waba_id && appData.phone_number_id) {
-            wabaId        = appData.waba_id;
-            phoneNumberId = appData.phone_number_id;
+        // Meta can put the IDs in app_data OR directly in the top-level payload
+        // depending on the SDK version and whether sessionInfoVersion:2 is honoured.
+        const appData = srPayload?.app_data || {};
+        const srWabaId        = appData.waba_id        || srPayload?.waba_id;
+        const srPhoneNumberId = appData.phone_number_id || srPayload?.phone_number_id;
+
+        if (srWabaId && srPhoneNumberId) {
+            wabaId        = srWabaId;
+            phoneNumberId = srPhoneNumberId;
             console.log(`[EmbeddedSignup] ✅ Step 1 (signedRequest) — wabaId: ${wabaId}, phoneNumberId: ${phoneNumberId}`);
         } else {
-            console.log(`[EmbeddedSignup] Step 1 (signedRequest) — no WABA IDs in app_data (expected for re-connections). app_data keys: ${Object.keys(appData).join(", ") || "none"}`);
+            console.log(`[EmbeddedSignup] Step 1 — no WABA IDs in signedRequest. app_data keys: [${Object.keys(appData).join(", ") || "none"}] | top-level keys: [${Object.keys(srPayload || {}).join(", ") || "none"}]`);
         }
 
         // ── Step 2: Exchange code → user access token (always needed) ─────────
@@ -4698,10 +4711,10 @@ exports.embeddedSignupExchange = async (req, res) => {
         }
 
         if (!wabaId) {
-            console.error(`[EmbeddedSignup] ❌ All WABA discovery steps failed. Check META_SYSTEM_USER_TOKEN validity and BM permissions.`);
+            console.error(`[EmbeddedSignup] ❌ All WABA discovery steps failed — wabaId is undefined. Check META_SYSTEM_USER_TOKEN validity and BM permissions.`);
             return res.status(400).json({
                 status:  "error",
-                message: "Could not determine WhatsApp Business Account. If you previously had a WABA connected, please use the 'Manual Connect' option. Otherwise, check that your Meta System User Token (META_SYSTEM_USER_TOKEN) is still valid in Meta Business Suite.",
+                message: "Could not determine your WhatsApp Business Account. Please use the 'Manual Connect' option and enter your WABA details directly. If the problem persists, ensure your Meta System User Token is still valid in Meta Business Suite.",
             });
         }
 

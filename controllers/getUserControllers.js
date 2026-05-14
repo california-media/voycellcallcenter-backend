@@ -2,6 +2,7 @@ const User = require("../models/userModel");
 const Lead = require("../models/leadModel");
 const Contact = require("../models/contactModel");
 const Subscription = require("../models/Subscription");
+const DIDAssignment = require("../models/DIDAssignment");
 const mongoose = require("mongoose");
 
 // Derive effective planStatus — if the stored value is "cancelled" but the user still
@@ -42,6 +43,15 @@ const getUserData = async (req, res) => {
         .status(404)
         .json({ status: "error", message: "User not found" });
     }
+
+    // Purchased DID numbers for this user:
+    // Company admin → only numbers NOT currently assigned to any agent (free pool)
+    // Agent → numbers assigned specifically to them
+    const isAgent = user.role === "user";
+    const purchasedDIDDocs = isAgent
+      ? await DIDAssignment.find({ assignedAgentId: user._id, status: "assigned" }).select("number -_id").lean()
+      : await DIDAssignment.find({ companyAdminId: user._id, status: "assigned", $or: [{ assignedAgentId: null }, { assignedAgentId: { $exists: false } }] }).select("number -_id").lean();
+    const purchasedDIDNumbers = purchasedDIDDocs.map((d) => d.number);
 
     const ContactCount = await Contact.countDocuments({
       createdBy: new mongoose.Types.ObjectId(req.user._id),
@@ -256,12 +266,16 @@ const getUserData = async (req, res) => {
           extensionNumber: user.PBXDetails?.PBX_EXTENSION_NUMBER || null,
           extensionStatus: user.extensionStatus || null,
           telephone: user.PBXDetails?.PBX_TELEPHONE || "",
+          defaultCallerDID: user.defaultCallerDID || null,
           yeastarExtensionId: user.PBXDetails?.PBX_EXTENSION_ID || null,
-          // sipSecret: user.sipSecret || null,
-          // yeastarProvisionStatus: user.yeastarProvisionStatus || "pending",
-          // yeastarProvisionError: user.yeastarProvisionError || "",
+          assignedExtensions: user.assignedExtensions || [],
+          defaultCallerNumber: user.defaultCallerNumber || null,
+          askBeforeDialing:    user.askBeforeDialing    ?? false,
+          showCallerName:      user.showCallerName      ?? "number",
+          didLabels:           user.didLabels           || [],
+          purchasedDIDNumbers: purchasedDIDNumbers,
+          assignedCallerNumbers: user.assignedCallerNumbers || [],
           createdAt: user.createdAt,
-          // yestarBaseURL: user.PBXDetails.PBX_BASE_URL || null,
           contactStatuses: user.contactStatuses || [],
           leadStatuses: user.leadStatuses || [],
           setupGuideDismissed: user.setupGuideDismissed || false,
@@ -440,9 +454,16 @@ const getUserData = async (req, res) => {
           extensionNumber: user.PBXDetails?.PBX_EXTENSION_NUMBER || null,
           extensionStatus: user.extensionStatus || null,
           telephone: user.PBXDetails?.PBX_TELEPHONE || "",
+          defaultCallerDID: user.defaultCallerDID || null,
           yeastarExtensionId: user.PBXDetails?.PBX_EXTENSION_ID || null,
+          assignedExtensions: user.assignedExtensions || [],
+          defaultCallerNumber: user.defaultCallerNumber || null,
+          askBeforeDialing:    user.askBeforeDialing    ?? false,
+          showCallerName:      user.showCallerName      ?? "number",
+          didLabels:           user.didLabels           || [],
+          purchasedDIDNumbers: purchasedDIDNumbers,
+          assignedCallerNumbers: user.assignedCallerNumbers || [],
           createdAt: user.createdAt,
-          // yestarBaseURL: user.PBXDetails.PBX_BASE_URL || null,
           contactStatuses: user.contactStatuses || [],
           leadStatuses: user.leadStatuses || [],
           setupGuideDismissed: user.setupGuideDismissed || false,
@@ -591,11 +612,16 @@ const getUserData = async (req, res) => {
       // extensionNumber: user.extensionNumber || null,
       extensionStatus: user.extensionStatus || null,
       extensionNumber: user.PBXDetails?.PBX_EXTENSION_NUMBER || null,
-      extensionStatus: user.extensionStatus || null,
       telephone: user.PBXDetails?.PBX_TELEPHONE || "",
       yeastarExtensionId: user.PBXDetails?.PBX_EXTENSION_ID || null,
+      assignedExtensions: user.assignedExtensions || [],
+      defaultCallerNumber: user.defaultCallerNumber || null,
+      askBeforeDialing:    user.askBeforeDialing    ?? false,
+      showCallerName:      user.showCallerName      ?? "number",
+      didLabels:           user.didLabels           || [],
+      purchasedDIDNumbers: purchasedDIDNumbers,
+      assignedCallerNumbers: user.assignedCallerNumbers || [],
       createdAt: user.createdAt,
-      // yestarBaseURL: user.PBXDetails.PBX_BASE_URL || null,
       contactStatuses: user.contactStatuses || [],
       leadStatuses: user.leadStatuses || [],
       accountStatus: user.accountStatus === "active",

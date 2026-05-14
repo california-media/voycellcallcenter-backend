@@ -60,8 +60,8 @@ exports.verifyUser = async (req, res) => {
             });
         }
 
-        // Only mark emailVerified here — isVerified is set separately once mobile is also verified
         user.emailVerified = true;
+        user.isVerified = true;
         user.isActive = true;
         user.emailVerificationToken = null;
         user.password = password;
@@ -97,7 +97,6 @@ exports.verifyUser = async (req, res) => {
         user.activeSessions.push(sessionData);
         user.activeSessionId = newSessionId; // Backward compatibility
 
-        user.markModified("isVerified");
         user.markModified("password");
         // await user.save();
         console.log("Before Save:", {

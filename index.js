@@ -11,6 +11,7 @@ const { execFile } = require("child_process");
 const multer = require("multer");
 
 const { loadConfigPromise } = require("./utils/getConfig");
+const { loadSSMPromise } = require("./utils/ssmLoader");
 
 
 const storage = multer.memoryStorage();
@@ -70,8 +71,9 @@ const addEditTempleteRoutes = require("./routes/addEditTempleteRoutes");
 const whatsappRoutes = require("./routes/whatsapp.routes");
 const hubspotAuthRoutes = require("./routes/hubspot.routes");
 const pipedriveAuthRoutes = require("./routes/pipedrive.routes");
-const billingRoutes  = require("./routes/billingRoutes");
-const creditsRoutes  = require("./routes/creditsRoutes");
+const billingRoutes      = require("./routes/billingRoutes");
+const creditsRoutes      = require("./routes/creditsRoutes");
+const liveBillingRoutes  = require("./routes/liveBillingRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const dashboardStatsRoutes = require("./routes/dashboardStatsRoutes");
 const didlogicRoutes = require("./routes/didlogicRoutes");
@@ -358,6 +360,14 @@ app.post("/cron/backup", (req, res, next) => {
   next();
 }, triggerS3Backup);
 
+// Live billing — pre-call check, per-minute deduction, call-ended (companyAdmin + agents)
+// Must be registered BEFORE the companyAdmin-only /billing block so agents are not
+// blocked by the checkRole(["companyAdmin"]) guard below.
+app.use("/billing", liveBillingRoutes);
+
+// Credits — accessible by companyAdmin (and agents can view balance)
+app.use("/billing/credits", creditsRoutes);
+
 // Billing & subscription (companyAdmin only)
 app.use(
   "/billing",
@@ -365,9 +375,6 @@ app.use(
   checkRole(["companyAdmin"]),
   billingRoutes
 );
-
-// Credits — accessible by companyAdmin (and agents can view balance)
-app.use("/billing/credits", creditsRoutes);
 
 // DIDLogic — phone numbers & calling (companyAdmin + agents)
 app.use("/didlogic", checkForAuthentication(), didlogicRoutes);
@@ -513,6 +520,7 @@ module.exports.handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
 
   try {
+    await loadSSMPromise;
     await connectToDatabase();
 
     /* ================================

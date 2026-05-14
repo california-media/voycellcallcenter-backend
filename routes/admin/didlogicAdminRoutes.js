@@ -13,6 +13,8 @@ router.put("/settings", ctrl.updateSettings);
 router.post("/numbers/sync", ctrl.syncNumbers);
 router.get("/numbers", ctrl.getAllNumbers);
 router.put("/numbers/:id", ctrl.updateNumberMargin);
+router.put("/numbers/:id/assign-company", ctrl.assignNumberToCompany);
+router.get("/company-admins", ctrl.getCompanyAdmins);
 
 // Call records (full account view)
 router.get("/call-records", ctrl.getCallRecords);

@@ -40,6 +40,11 @@ const callHistorySchema = new mongoose.Schema(
     disposition_code: String,
     trunk: String,
 
+    // Billing — populated only for outbound calls from a purchased DID number
+    charges:     { type: Number, default: null }, // USD charged for this call
+    ratePerMin:  { type: Number, default: null }, // $/min rate used
+    billedFrom:  { type: String, default: null }, // purchased DID that triggered billing
+
     // ── Indexed Date version of start_time ────────────────────────────────────
     // Allows fast range queries instead of $expr + $dateFromString (full collection scan).
     // Auto-populated on save from start_time. Existing records are backfilled by

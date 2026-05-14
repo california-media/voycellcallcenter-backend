@@ -23,6 +23,10 @@ const {
   updateUserVerification,
   updateUserContact,
   generateLoginLink,
+  adjustBalance,
+  getCompanyExtensions,
+  setCompanyExtensions,
+  setCallerPreferences,
 } = require("../../controllers/admin/superAdminController");
 
 // Super Admin only
@@ -65,6 +69,12 @@ router.post("/resetUserPassword", resetUserPassword);
 router.put("/updateUserVerification", updateUserVerification);
 router.put("/updateUserContact", updateUserContact);
 router.post("/generateLoginLink", generateLoginLink);
+router.put("/adjustBalance", adjustBalance);
+
+// Company extension management (SuperAdmin)
+router.get("/companies/:userId/extensions", getCompanyExtensions);
+router.put("/companies/:userId/extensions", setCompanyExtensions);
+router.put("/companies/:userId/caller-preferences", setCallerPreferences);
 
 // SuperAdmin WhatsApp campaigns
 const {

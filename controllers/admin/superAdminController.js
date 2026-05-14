@@ -170,7 +170,7 @@ exports.getAllCompanyAdmins = async (req, res) => {
     const [companyAdmins, totalAdmins] = await Promise.all([
       User.find(companyAdminQuery)
         .select(
-          "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialStartedAt trialEndsAt trialDurationDays accessPausedByAdmin accessPausedAt isVerified emailVerified"
+          "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName planStatus trialStartedAt trialEndsAt trialDurationDays accessPausedByAdmin accessPausedAt isVerified emailVerified creditBalance assignedExtensions"
         )
         .skip(skip)
         .limit(limit)
@@ -307,7 +307,7 @@ exports.getAgentsOfCompanyAdmin = async (req, res) => {
       ...searchQuery,
     })
       .select(
-        "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus accountStatus isVerified emailVerified"
+        "_id firstname lastname email createdAt extensionNumber PBXDetails telephone phonenumbers sipSecret createdByWhichCompanyAdmin extensionStatus accountStatus isVerified emailVerified assignedExtensions"
       )
       .skip(skip)
       .limit(limit)
@@ -409,7 +409,7 @@ exports.getCompanyAdminDetails = async (req, res) => {
       role: "companyAdmin",
     })
       .select(
-        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName PBXDetails isVerified emailVerified"
+        "_id firstname lastname email createdAt extensionNumber telephone phonenumbers sipSecret extensionStatus accountStatus userInfo.companyName PBXDetails isVerified emailVerified assignedExtensions"
       )
       .lean();
 
@@ -532,7 +532,7 @@ exports.editCompanyAdminAndAgent = async (req, res) => {
     // =========================================================
     // 🧠 CASE 2 → USER (AGENT) DEVICE AUTO-ASSIGN
     // =========================================================
-    if (isAgentUser) {
+    if (isAgentUser && extensionNumber) {
       // 1️⃣ Find Company Admin
       const companyAdmin = await User.findById(
         user.createdByWhichCompanyAdmin
@@ -987,6 +987,7 @@ exports.addYeastarDeviceBySuperAdmin = async (req, res) => {
       PBX_SDK_ACCESS_ID,
       PBX_SDK_ACCESS_KEY,
       PBX_USER_AGENT,
+      pbxType,
     } = req.body;
 
 
@@ -1053,6 +1054,7 @@ exports.addYeastarDeviceBySuperAdmin = async (req, res) => {
       PBX_SDK_ACCESS_ID,
       PBX_SDK_ACCESS_KEY,
       PBX_USER_AGENT,
+      pbxType: pbxType || "cloud",
     };
 
     // 5️⃣ Save device
@@ -1164,6 +1166,7 @@ exports.updateYeastarDeviceBySuperAdmin = async (req, res) => {
       "PBX_SDK_ACCESS_ID",
       "PBX_SDK_ACCESS_KEY",
       "PBX_USER_AGENT",
+      "pbxType",
       "isActive",
     ];
 
@@ -1710,5 +1713,128 @@ exports.generateLoginLink = async (req, res) => {
   } catch (err) {
     console.error("generateLoginLink error:", err);
     res.status(500).json({ error: "Failed to generate login link" });
+  }
+};
+
+// ── PUT /superAdmin/adjustBalance ─────────────────────────────────────────────
+// Allows superadmin to set or adjust the credit balance of any company admin.
+// Body: { userId, amount, mode }
+//   mode "set"  → creditBalance = amount  (overwrite)
+//   mode "add"  → creditBalance += amount (top-up)
+//   mode "subtract" → creditBalance -= amount (deduct)
+exports.adjustBalance = async (req, res) => {
+  try {
+    const { userId, amount, mode = "set", note = "" } = req.body;
+
+    if (!userId) return res.status(400).json({ error: "userId is required" });
+    if (amount === undefined || amount === null || isNaN(Number(amount))) {
+      return res.status(400).json({ error: "amount must be a valid number" });
+    }
+
+    const numAmount = Number(amount);
+
+    const user = await User.findById(userId).select("role creditBalance email firstname lastname").lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.role !== "companyAdmin") return res.status(400).json({ error: "Target user must be a company admin" });
+
+    let update;
+    let newBalance;
+
+    if (mode === "set") {
+      update = { $set: { creditBalance: numAmount } };
+      newBalance = numAmount;
+    } else if (mode === "add") {
+      update = { $inc: { creditBalance: numAmount } };
+      newBalance = (user.creditBalance || 0) + numAmount;
+    } else if (mode === "subtract") {
+      update = { $inc: { creditBalance: -numAmount } };
+      newBalance = (user.creditBalance || 0) - numAmount;
+    } else {
+      return res.status(400).json({ error: "mode must be 'set', 'add', or 'subtract'" });
+    }
+
+    await User.findByIdAndUpdate(userId, update);
+
+    console.log(`[SuperAdmin Balance] ${mode} $${numAmount} for ${user.email} | old: $${user.creditBalance} | new: $${newBalance}${note ? ` | note: ${note}` : ""}`);
+
+    res.json({
+      success:     true,
+      userId,
+      email:       user.email,
+      previousBalance: user.creditBalance || 0,
+      newBalance,
+      mode,
+      amount:      numAmount,
+    });
+  } catch (err) {
+    console.error("adjustBalance error:", err);
+    res.status(500).json({ error: "Failed to adjust balance" });
+  }
+};
+
+// ── GET /superAdmin/companies/:userId/extensions ──────────────────────────────
+exports.getCompanyExtensions = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId)
+      .select("assignedExtensions firstname lastname email")
+      .lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({ extensions: user.assignedExtensions || [] });
+  } catch (err) {
+    console.error("getCompanyExtensions error:", err);
+    res.status(500).json({ error: "Failed to fetch extensions" });
+  }
+};
+
+// ── PUT /superAdmin/companies/:userId/extensions ──────────────────────────────
+exports.setCompanyExtensions = async (req, res) => {
+  try {
+    const { extensions } = req.body;
+    if (!Array.isArray(extensions)) {
+      return res.status(400).json({ error: "extensions must be an array" });
+    }
+    const cleaned = extensions
+      .filter((e) => e.extensionNumber && e.PBX_TELEPHONE)
+      .map((e) => ({
+        extensionNumber:  String(e.extensionNumber).trim(),
+        PBX_TELEPHONE:    String(e.PBX_TELEPHONE).trim(),
+        PBX_BASE_URL:     e.PBX_BASE_URL     ? String(e.PBX_BASE_URL).trim()     : null,
+        assignedDeviceId: e.assignedDeviceId  ? e.assignedDeviceId                : null,
+        pbxType:          e.pbxType === "local" ? "local" : "cloud",
+        nickname:         e.nickname          ? String(e.nickname).trim()          : null,
+      }));
+
+    const user = await User.findByIdAndUpdate(
+      req.params.userId,
+      { $set: { assignedExtensions: cleaned } },
+      { new: true, select: "assignedExtensions" }
+    );
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({ extensions: user.assignedExtensions });
+  } catch (err) {
+    console.error("setCompanyExtensions error:", err);
+    res.status(500).json({ error: "Failed to update extensions" });
+  }
+};
+
+// ── PUT /superAdmin/companies/:userId/caller-preferences ─────────────────────
+// Sets defaultCallerNumber and askBeforeDialing for a company admin or agent.
+exports.setCallerPreferences = async (req, res) => {
+  try {
+    const { defaultCallerNumber, askBeforeDialing } = req.body;
+    const update = {};
+    if (defaultCallerNumber !== undefined) update.defaultCallerNumber = defaultCallerNumber || null;
+    if (askBeforeDialing    !== undefined) update.askBeforeDialing    = !!askBeforeDialing;
+
+    const user = await User.findByIdAndUpdate(
+      req.params.userId,
+      { $set: update },
+      { new: true, select: "defaultCallerNumber askBeforeDialing" }
+    );
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({ defaultCallerNumber: user.defaultCallerNumber, askBeforeDialing: user.askBeforeDialing });
+  } catch (err) {
+    console.error("setCallerPreferences error:", err);
+    res.status(500).json({ error: "Failed to update caller preferences" });
   }
 };

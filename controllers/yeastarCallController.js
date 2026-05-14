@@ -29,36 +29,32 @@ async function makeCallHandler(req, res) {
 console.log("[MakeCall] PBX token acquired:", token ? "✅ yes" : "❌ null/empty");
 
 const rawNumber = String(mob_number || "");
+console.log("[MakeCall] ── Number normalization ──────────────────────────");
+console.log("[MakeCall]   rawNumber (as received):", rawNumber);
 
 let normalizedNumber = rawNumber.replace(/\D/g, "");
+console.log("[MakeCall]   digits only:", normalizedNumber);
 
 // Remove UAE country code if present
 if (normalizedNumber.startsWith("971")) {
   normalizedNumber = normalizedNumber.slice(3);
+  console.log("[MakeCall]   stripped 971 prefix →", normalizedNumber);
 }
 
 // Ensure leading 0
 if (!normalizedNumber.startsWith("0")) {
   normalizedNumber = "0" + normalizedNumber;
+  console.log("[MakeCall]   added leading 0 →", normalizedNumber);
 }
 
 const normalizedCountryCode = countryCode
   ? String(countryCode).replace(/\D/g, "")
   : "";
 
-// const callee = countryCode
-//   ? `${countryCode}${normalizedNumber}`
-//   : normalizedNumber;
-const callee = normalizedNumber;
+console.log("[MakeCall]   normalizedNumber (final local format):", normalizedNumber);
+console.log("[MakeCall]   normalizedCountryCode:", normalizedCountryCode || "(none)");
 
-console.log("[MakeCall] callee (what PBX will dial):", callee);
-
-console.log(
-  "[MakeCall] normalizedCountryCode:",
-  normalizedCountryCode || "(none)",
-  "| normalizedNumber:",
-  normalizedNumber
-);
+let callee = normalizedNumber; // default; may be overridden after ownerUser is resolved
     // ── START: find owner (user) by extensionNumber
     let ownerUser = null;
     try {
@@ -73,6 +69,22 @@ console.log(
       return res.status(400).json({ status: "error", message: "Caller extension not registered" });
     }
     console.log("[MakeCall] Owner user found:", ownerUser._id.toString());
+
+    // If the caller's PBX telephone is a UAE landline (04XXXXXXXX), the PBX
+    // requires the destination in local format (0XXXXXXXXX) — already set above.
+    // For all other callers, pass the number exactly as received from the client.
+    const pbxTelephone = (ownerUser.PBXDetails?.PBX_TELEPHONE || "").replace(/\D/g, "");
+    const isLandlineCaller = pbxTelephone.startsWith("04");
+    console.log("[MakeCall] ── Caller line check ─────────────────────────");
+    console.log("[MakeCall]   PBX_TELEPHONE (raw):", ownerUser.PBXDetails?.PBX_TELEPHONE || "(not set)");
+    console.log("[MakeCall]   PBX_TELEPHONE (digits):", pbxTelephone || "(not set)");
+    console.log("[MakeCall]   isLandlineCaller (starts with 04):", isLandlineCaller);
+    if (!isLandlineCaller) {
+      callee = rawNumber;
+      console.log("[MakeCall]   → Non-landline caller: using rawNumber as callee:", callee);
+    } else {
+      console.log("[MakeCall]   → Landline caller (04): using local format as callee:", callee);
+    }
 
     // ── START: check existing contact/lead for this owner
     let existingContact = null;
@@ -91,6 +103,8 @@ console.log(
       // let PBX_EXTENSION_NUMBER = ownerUser.PBXDetails.PBX_EXTENSION_NUMBER || "";
       // let PBX_TELEPHONE = ownerUser.PBXDetails.PBX_TELEPHONE || "";
 
+      console.log("[MakeCall] ── DB lookup (countryCode:", normalizedCountryCode || "(none)", "| number:", normalizedNumber, ")");
+
       // look in Contact
       existingContact = await Contact.findOne({
         createdBy: ownerId,
@@ -101,6 +115,7 @@ console.log(
           }
         }
       }).lean();
+      console.log("[MakeCall]   existingContact:", existingContact ? `found (_id: ${existingContact._id})` : "not found");
 
       // look in Lead
       existingLead = await Lead.findOne({
@@ -112,18 +127,20 @@ console.log(
           }
         }
       }).lean();
+      console.log("[MakeCall]   existingLead:", existingLead ? `found (_id: ${existingLead._id})` : "not found");
     }
     // ── END
 
 
     // ── START: create lead if phone not found in either collection
     if (ownerUser && !existingContact && !existingLead) {
+      console.log("[MakeCall]   → No contact/lead found — creating new lead for:", normalizedNumber);
       try {
         const newID = new mongoose.Types.ObjectId();
         const leadPayload = {
           _id: newID,
           contact_id: newID,
-          firstname: "", // optional — you can leave blank or populate if available
+          firstname: "",
           lastname: "",
           phoneNumbers: [
             {
@@ -133,7 +150,6 @@ console.log(
           ],
           status: "interested",
           createdBy: ownerUser._id,
-          // optional: add an activity log entry
           activities: [
             {
               action: "lead_created_via_call_api",
@@ -146,9 +162,12 @@ console.log(
         };
 
         const createdLead = await Lead.create(leadPayload);
+        console.log("[MakeCall]   ✅ Lead created — _id:", createdLead._id.toString());
       } catch (createErr) {
-        console.error("Failed to create lead for number:", createErr);
+        console.error("[MakeCall]   ❌ Failed to create lead:", createErr.message);
       }
+    } else {
+      console.log("[MakeCall]   → Skipping lead creation (contact found:", !!existingContact, "| lead found:", !!existingLead, ")");
     }
     // ── END
 

@@ -263,6 +263,9 @@ const userSchema = new Schema(
     trialStart: { type: Date },
     trialEnd: { type: Date },
 
+    // ─── Calling preference ───────────────────────────────────────────────────
+    defaultCallerDID: { type: String, default: null }, // preferred outbound DID (null = use extension)
+
     // ─── Call Credits ─────────────────────────────────────────────────────────
     creditBalance: { type: Number, default: 0 },     // USD balance (dollars)
     autoRecharge: {
@@ -327,6 +330,12 @@ const userSchema = new Schema(
         PBX_SDK_ACCESS_ID: String,
         PBX_SDK_ACCESS_KEY: String,
         PBX_USER_AGENT: String,
+
+        pbxType: {
+          type: String,
+          enum: ["local", "cloud"],
+          default: "cloud",
+        },
 
         isActive: {
           type: Boolean,
@@ -432,6 +441,39 @@ const userSchema = new Schema(
       default: "",
       trim: true,
     },
+
+    // Superadmin-assigned extension/number pairs for company admins and agents.
+    // Each entry can target a different PBX server (PBX_BASE_URL + assignedDeviceId).
+    // If those are omitted, the user's primary PBXDetails config is used as fallback.
+    assignedExtensions: [
+      {
+        extensionNumber:  { type: String }, // e.g. "1010"
+        PBX_TELEPHONE:    { type: String }, // e.g. "971585990233"
+        PBX_BASE_URL:     { type: String, default: null }, // PBX server for this extension (optional)
+        assignedDeviceId: { type: String, default: null }, // deviceId string matching PBXDevices[].deviceId
+        nickname:         { type: String, default: null }, // friendly label set by company admin
+        pbxType:          { type: String, enum: ["local", "cloud"], default: "cloud" }, // local = on-premise device, cloud = hosted PBX
+        _id: false,
+      },
+    ],
+
+    // Custom labels for purchased DID numbers
+    didLabels: [
+      {
+        number:   { type: String },
+        nickname: { type: String },
+        _id: false,
+      },
+    ],
+
+    // Numbers this agent is allowed to call from (empty = unrestricted, all numbers available)
+    assignedCallerNumbers: [{ type: String }],
+
+    // Controls how numbers are shown in the dialer dropdown: 'number' | 'name' | 'name_number'
+    showCallerName: { type: String, enum: ["number", "name", "name_number"], default: "number" },
+
+    defaultCallerNumber: { type: String, default: null }, // preferred outbound telephone number
+    askBeforeDialing:    { type: Boolean, default: false }, // prompt caller-selection before each external call
 
     otp: { type: String },
     otpExpiresAt: { type: Date },
