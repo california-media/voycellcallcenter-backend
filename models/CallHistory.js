@@ -24,6 +24,7 @@ const callHistorySchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    extensionPhone: { type: String, default: null },
 
     // Yeastar CDR fields
     yeastarId: { type: String, required: true, unique: true }, // cdr.id

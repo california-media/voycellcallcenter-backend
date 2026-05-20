@@ -402,18 +402,22 @@ exports.connectWhatsApp = async (req, res) => {
 exports.resubscribeWabaWebhook = async (req, res) => {
     try {
         const user = await User.findById(req.user._id).lean();
-        const { wabaId } = user?.whatsappWaba || {};
+        const { wabaId, accessToken } = user?.whatsappWaba || {};
 
         if (!wabaId) {
             return res.status(400).json({ success: false, message: "No WABA connected for this account" });
         }
+        if (!accessToken) {
+            return res.status(400).json({ success: false, message: "No access token stored — please reconnect WhatsApp" });
+        }
 
-        // Use app access token — required to subscribe WABA to a specific Meta App's webhook
-        const appAccessToken = `${META_APP_ID}|${META_APP_SECRET}`;
+        // Use the user's stored access token (longLivedToken from embedded signup).
+        // App access token (APP_ID|APP_SECRET) only works for WABAs in Voycell's own BM.
+        // For client WABAs (different BM), the user token with whatsapp_business_management is required.
         const subscribeRes = await axios.post(
             `${META_GRAPH_URL}/${wabaId}/subscribed_apps`,
             {},
-            { headers: { Authorization: `Bearer ${appAccessToken}` } }
+            { headers: { Authorization: `Bearer ${accessToken}` } }
         );
 
         console.log("WABA resubscribe result:", subscribeRes.data);
@@ -462,6 +466,7 @@ exports.getWabaProfile = async (req, res) => {
         }
 
         const { phoneNumberId, accessToken } = user.whatsappWaba;
+        console.log("[getWabaProfile] START — phoneNumberId:", phoneNumberId, "| wabaId (saved):", user.whatsappWaba.wabaId || "NONE", "| token tail:", accessToken ? `...${accessToken.slice(-12)}` : "MISSING");
 
         /* -------------------------------------------------- */
         /* 0️⃣ GET WABA ID (if not saved) */
@@ -470,15 +475,19 @@ exports.getWabaProfile = async (req, res) => {
         let wabaId = user.whatsappWaba.wabaId;
 
         if (!wabaId) {
-            const wabaRes = await axios.get(
-                `${META_GRAPH_URL}/${phoneNumberId}?fields=whatsapp_business_account`,
-                { headers: { Authorization: `Bearer ${accessToken}` } }
-            );
-
-            wabaId =
-                wabaRes.data?.whatsapp_business_account?.id || null;
-
-            user.whatsappWaba.wabaId = wabaId;
+            console.log("[getWabaProfile] wabaId not in DB — fetching from Meta");
+            try {
+                const wabaRes = await axios.get(
+                    `${META_GRAPH_URL}/${phoneNumberId}?fields=whatsapp_business_account`,
+                    { headers: { Authorization: `Bearer ${accessToken}` } }
+                );
+                console.log("[getWabaProfile] waba fetch raw:", JSON.stringify(wabaRes.data));
+                wabaId = wabaRes.data?.whatsapp_business_account?.id || null;
+                user.whatsappWaba.wabaId = wabaId;
+                console.log("[getWabaProfile] resolved wabaId:", wabaId);
+            } catch (e) {
+                console.error("[getWabaProfile] wabaId fetch failed:", e.response?.data?.error || e.message);
+            }
         }
 
         /* -------------------------------------------------- */
@@ -490,11 +499,14 @@ exports.getWabaProfile = async (req, res) => {
             `/whatsapp_business_profile` +
             `?fields=about,address,description,email,profile_picture_url,websites,vertical`;
 
-        const { data: profileRes } = await axios.get(profileUrl, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-        });
-
-        const profile = profileRes.data?.[0] || {};
+        let profile = {};
+        try {
+            const { data: profileRes } = await axios.get(profileUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+            console.log("[getWabaProfile] business profile raw:", JSON.stringify(profileRes));
+            profile = profileRes.data?.[0] || {};
+        } catch (e) {
+            console.warn("[getWabaProfile] business profile fetch failed:", e.response?.data?.error || e.message);
+        }
 
         /* -------------------------------------------------- */
         /* 2️⃣ DISPLAY NAME */
@@ -504,10 +516,14 @@ exports.getWabaProfile = async (req, res) => {
             `${META_GRAPH_URL}/${phoneNumberId}` +
             `?fields=verified_name,name_status`;
 
-        const { data: displayNameRes } = await axios.get(
-            displayNameUrl,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
+        let displayNameRes = {};
+        try {
+            const { data } = await axios.get(displayNameUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+            console.log("[getWabaProfile] display name raw:", JSON.stringify(data));
+            displayNameRes = data;
+        } catch (e) {
+            console.warn("[getWabaProfile] display name fetch failed:", e.response?.data?.error || e.message);
+        }
 
         /* -------------------------------------------------- */
         /* 3️⃣ QUALITY + LIMIT */
@@ -517,9 +533,14 @@ exports.getWabaProfile = async (req, res) => {
             `${META_GRAPH_URL}/${phoneNumberId}` +
             `?fields=messaging_limit_tier,quality_score`;
 
-        const { data: qualityRes } = await axios.get(qualityUrl, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        let qualityRes = {};
+        try {
+            const { data } = await axios.get(qualityUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+            console.log("[getWabaProfile] quality raw:", JSON.stringify(data));
+            qualityRes = data;
+        } catch (e) {
+            console.warn("[getWabaProfile] quality fetch failed:", e.response?.data?.error || e.message);
+        }
 
         /* -------------------------------------------------- */
         /* 4️⃣ ACCOUNT STATUS (WABA LEVEL) */
@@ -531,18 +552,29 @@ exports.getWabaProfile = async (req, res) => {
             const accountUrl =
                 `${META_GRAPH_URL}/${wabaId}` +
                 `?fields=account_review_status,business_verification_status,status`;
-
-            const { data: accountRes } = await axios.get(
-                accountUrl,
-                { headers: { Authorization: `Bearer ${accessToken}` } }
-            );
-
-            accountStatus = accountRes;
+            try {
+                const { data: accountRes } = await axios.get(accountUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+                console.log("[getWabaProfile] account status raw:", JSON.stringify(accountRes));
+                accountStatus = accountRes;
+            } catch (e) {
+                console.warn("[getWabaProfile] account status fetch failed:", e.response?.data?.error || e.message);
+            }
+        } else {
+            console.warn("[getWabaProfile] wabaId still null — skipping account status fetch");
         }
 
         /* -------------------------------------------------- */
         /* SAVE IN DB */
         /* -------------------------------------------------- */
+
+        // quality_score from Meta is an object { score: "GREEN"|"YELLOW"|"RED", date: ... }
+        // Normalise to always store as object so frontend can do qualityRating.score
+        const rawQuality = qualityRes.quality_score;
+        const normalisedQuality = rawQuality && typeof rawQuality === "object"
+            ? rawQuality
+            : { score: typeof rawQuality === "string" ? rawQuality : "N/A" };
+
+        console.log("[getWabaProfile] SAVING — displayName:", displayNameRes.verified_name, "| name_status:", displayNameRes.name_status, "| quality:", JSON.stringify(normalisedQuality), "| messagingLimit:", qualityRes.messaging_limit_tier, "| accountReviewStatus:", accountStatus.account_review_status, "| status:", accountStatus.status);
 
         user.whatsappWaba.profile = {
             displayName: displayNameRes.verified_name || "",
@@ -558,13 +590,10 @@ exports.getWabaProfile = async (req, res) => {
         user.whatsappWaba.displayName =
             displayNameRes.verified_name || "";
 
-        user.whatsappWaba.qualityRating =
-            qualityRes.quality_score || "UNKNOWN";
+        user.whatsappWaba.qualityRating = normalisedQuality;
 
         user.whatsappWaba.messagingLimit =
             qualityRes.messaging_limit_tier || "TIER_1";
-
-        /* 🆕 SAVE ACCOUNT STATUS */
 
         user.whatsappWaba.accountReviewStatus =
             accountStatus.account_review_status || "UNKNOWN";
@@ -576,6 +605,8 @@ exports.getWabaProfile = async (req, res) => {
 
         await user.save();
 
+        console.log("[getWabaProfile] DONE — saved successfully");
+
         /* -------------------------------------------------- */
 
         return res.json({
@@ -585,10 +616,15 @@ exports.getWabaProfile = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch WABA profile",
-        });
+        console.error("[getWabaProfile] FATAL error:", error.response?.data?.error || error.message, error.stack);
+        // Return saved DB data so UI stays connected even when Meta API is unreachable
+        try {
+            const user = await User.findById(req.user._id).lean();
+            if (user?.whatsappWaba?.isConnected) {
+                return res.json({ success: true, message: "WABA profile (from DB)", data: user.whatsappWaba });
+            }
+        } catch (_) {}
+        res.status(500).json({ success: false, message: "Failed to fetch WABA profile" });
     }
 };
 
@@ -690,36 +726,17 @@ exports.updateWabaProfile = async (req, res) => {
            1️⃣ UPDATE TEXT PROFILE
         ───────────────────────────── */
 
-        await axios.post(
-            `${META_GRAPH_URL}/${phoneNumberId}/whatsapp_business_profile`,
-            {
-                messaging_product: "whatsapp",
-                about,
-                address,
-                description,
-                email,
-                vertical,
-                websites,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    "Content-Type": "application/json",
-                },
-            }
-        );
-
-        /* ─────────────────────────────
-   4️⃣ DISPLAY NAME UPDATE REQUEST
-───────────────────────────── */
-
-        if (displayName) {
-            const displayNameRes = await axios.post(
-                `${META_GRAPH_URL}/${phoneNumberId}`,
+        try {
+            await axios.post(
+                `${META_GRAPH_URL}/${phoneNumberId}/whatsapp_business_profile`,
                 {
-                    // messaging_product: "whatsapp",
-                    new_display_name: displayName,
-                    // phone_number_id: phoneNumberId,
+                    messaging_product: "whatsapp",
+                    about,
+                    address,
+                    description,
+                    email,
+                    vertical,
+                    websites,
                 },
                 {
                     headers: {
@@ -728,11 +745,32 @@ exports.updateWabaProfile = async (req, res) => {
                     },
                 }
             );
+            console.log("[updateWabaProfile] ✅ text profile updated on Meta");
+        } catch (e) {
+            console.warn("[updateWabaProfile] ⚠️ text profile Meta update failed (saving locally anyway):", e.response?.data?.error || e.message);
+        }
 
-            /* Save requested name locally */
+        /* ─────────────────────────────
+   4️⃣ DISPLAY NAME UPDATE REQUEST
+───────────────────────────── */
 
-            user.whatsappWaba.displayNameRequested =
-                displayName;
+        if (displayName) {
+            try {
+                await axios.post(
+                    `${META_GRAPH_URL}/${phoneNumberId}`,
+                    { new_display_name: displayName },
+                    {
+                        headers: {
+                            Authorization: `Bearer ${accessToken}`,
+                            "Content-Type": "application/json",
+                        },
+                    }
+                );
+                user.whatsappWaba.displayNameRequested = displayName;
+                console.log("[updateWabaProfile] ✅ display name change requested on Meta");
+            } catch (e) {
+                console.warn("[updateWabaProfile] ⚠️ display name Meta update failed (saving locally anyway):", e.response?.data?.error || e.message);
+            }
         }
 
         /* ─────────────────────────────
@@ -829,9 +867,10 @@ exports.updateWabaProfile = async (req, res) => {
             data: user.whatsappWaba,
         });
     } catch (error) {
+        console.error("[updateWabaProfile] FATAL:", error.response?.data?.error || error.message, error.stack);
         res.status(500).json({
             success: false,
-            message: "Failed to update profile",
+            message: error.response?.data?.error?.message || "Failed to update profile",
         });
     }
 };
@@ -4547,23 +4586,31 @@ exports.manageWabaAssignment = async (req, res) => {
 // Returns the JSON object, or null if decoding fails.
 function decodeSignedRequestPayload(signedRequest) {
     try {
-        if (!signedRequest) return null;
+        if (!signedRequest) {
+            console.log("[decodeSignedRequest] signedRequest is null/undefined");
+            return null;
+        }
+        console.log(`[decodeSignedRequest] raw value (first 120 chars): ${String(signedRequest).slice(0, 120)}`);
         const parts = signedRequest.split(".");
+        console.log(`[decodeSignedRequest] parts count: ${parts.length}`);
         if (parts.length !== 2) return null;
-        // base64url → base64 padding
         const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
         const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
-        return JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
-    } catch (_) {
+        const decoded = JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
+        console.log(`[decodeSignedRequest] ✅ decoded keys: ${Object.keys(decoded).join(", ")}`);
+        return decoded;
+    } catch (err) {
+        console.log(`[decodeSignedRequest] ❌ decode error: ${err.message}`);
         return null;
     }
 }
 
 exports.embeddedSignupExchange = async (req, res) => {
-    
+
     try {
-        const { code, signedRequest } = req.body;
+        const { code, signedRequest, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId } = req.body;
         const userId = req.user._id;
+        console.log(`[EmbeddedSignup] ► Received — code: ${code ? "present" : "MISSING"} | signedRequest: ${signedRequest ? `present (${String(signedRequest).length} chars)` : "MISSING/null"} | bodyWabaId: ${bodyWabaId || "none"} | bodyPhoneNumberId: ${bodyPhoneNumberId || "none"} | userId: ${userId}`);
 
         if (!code) {
             return res.status(400).json({ status: "error", message: "Authorization code is required" });
@@ -4579,27 +4626,27 @@ exports.embeddedSignupExchange = async (req, res) => {
         const GRAPH         = `https://graph.facebook.com/${graphVersion}`;
         const appAccessToken = `${appId}|${appSecret}`;
 
-        // ── Step 1: Try to get waba_id + phone_number_id from signedRequest ────
-        // When sessionInfoVersion:2 is used, Meta encodes these IDs directly in
-        // the signedRequest payload so we never need fragile discovery API calls.
-        // NOTE: Meta only includes waba_id in app_data on FIRST-TIME setup.
-        //       Re-authorisations return a signedRequest without WABA IDs.
-        let wabaId, phoneNumberId;
-        const srPayload = decodeSignedRequestPayload(signedRequest);
-        console.log(`[EmbeddedSignup] Step 1 — decoded signedRequest keys: ${Object.keys(srPayload || {}).join(", ") || "none (decode failed)"}`);
+        // ── Step 1: Get waba_id + phone_number_id ─────────────────────────────
+        // sessionInfoVersion:3 → IDs come via postMessage (frontend captures them
+        // and sends as bodyWabaId / bodyPhoneNumberId). No signedRequest needed.
+        // sessionInfoVersion:2 fallback → decode from signedRequest payload.
+        let wabaId        = bodyWabaId        || null;
+        let phoneNumberId = bodyPhoneNumberId || null;
 
-        // Meta can put the IDs in app_data OR directly in the top-level payload
-        // depending on the SDK version and whether sessionInfoVersion:2 is honoured.
-        const appData = srPayload?.app_data || {};
-        const srWabaId        = appData.waba_id        || srPayload?.waba_id;
-        const srPhoneNumberId = appData.phone_number_id || srPayload?.phone_number_id;
-
-        if (srWabaId && srPhoneNumberId) {
-            wabaId        = srWabaId;
-            phoneNumberId = srPhoneNumberId;
-            console.log(`[EmbeddedSignup] ✅ Step 1 (signedRequest) — wabaId: ${wabaId}, phoneNumberId: ${phoneNumberId}`);
+        if (wabaId && phoneNumberId) {
+            console.log(`[EmbeddedSignup] ✅ Step 1 (postMessage) — wabaId: ${wabaId}, phoneNumberId: ${phoneNumberId}`);
         } else {
-            console.log(`[EmbeddedSignup] Step 1 — no WABA IDs in signedRequest. app_data keys: [${Object.keys(appData).join(", ") || "none"}] | top-level keys: [${Object.keys(srPayload || {}).join(", ") || "none"}]`);
+            // Fallback: try signedRequest (sessionInfoVersion:2)
+            const srPayload = decodeSignedRequestPayload(signedRequest);
+            console.log(`[EmbeddedSignup] Step 1 — decoded signedRequest keys: ${Object.keys(srPayload || {}).join(", ") || "none (decode failed)"}`);
+            const appData = srPayload?.app_data || {};
+            const srWabaId        = appData.waba_id        || srPayload?.waba_id;
+            const srPhoneNumberId = appData.phone_number_id || srPayload?.phone_number_id;
+            if (srWabaId) { wabaId        = srWabaId;        console.log(`[EmbeddedSignup] Step 1 — wabaId from signedRequest: ${wabaId}`); }
+            if (srPhoneNumberId) { phoneNumberId = srPhoneNumberId; console.log(`[EmbeddedSignup] Step 1 — phoneNumberId from signedRequest: ${phoneNumberId}`); }
+            if (!srWabaId && !srPhoneNumberId) {
+                console.log(`[EmbeddedSignup] Step 1 — no IDs in postMessage or signedRequest. Will run discovery.`);
+            }
         }
 
         // ── Step 2: Exchange code → user access token (always needed) ─────────
@@ -4616,18 +4663,38 @@ exports.embeddedSignupExchange = async (req, res) => {
             return res.status(400).json({ status: "error", message: msg });
         }
 
+        // ── Step 2c: Exchange short-lived token → long-lived token (~60 days) ──
+        // The short-lived user token expires in ~1 hour. Exchange it for a long-lived
+        // token so stored credentials remain valid and can query the WABA/phone APIs.
+        let longLivedToken = userAccessToken;
+        try {
+            const llRes = await axios.get(`${GRAPH}/oauth/access_token`, {
+                params: {
+                    grant_type:       "fb_exchange_token",
+                    client_id:        appId,
+                    client_secret:    appSecret,
+                    fb_exchange_token: userAccessToken,
+                },
+            });
+            longLivedToken = llRes.data.access_token;
+            console.log(`[EmbeddedSignup] ✅ Step 2c — long-lived token obtained (expires_in: ${llRes.data.expires_in}s)`);
+        } catch (err) {
+            console.warn(`[EmbeddedSignup] ⚠️ Step 2c — long-lived token exchange failed, falling back to short-lived token: ${err.response?.data?.error?.message || err.message}`);
+        }
+
         // ── Step 2b: Re-connection shortcut ───────────────────────────────────
         // If this user already has a WABA configured in the DB, re-use its ID
         // instead of running the full discovery cascade.  This is the common
         // case when a company admin re-authorises to refresh their session.
+        // NOTE: Never reuse phoneNumberId from DB — user may have selected a
+        // different number in the OAuth flow. Let Step 4 resolve it.
         if (!wabaId) {
             const User = require("../models/userModel");
             const existingUser = await User.findById(userId).select("whatsappWaba").lean();
             const existingWabaId = existingUser?.whatsappWaba?.wabaId;
             if (existingWabaId) {
-                wabaId        = existingWabaId;
-                phoneNumberId = existingUser?.whatsappWaba?.phoneNumberId || null;
-                console.log(`[EmbeddedSignup] ✅ Step 2b (re-connection shortcut) — reusing existing wabaId: ${wabaId}`);
+                wabaId = existingWabaId;
+                console.log(`[EmbeddedSignup] ✅ Step 2b (re-connection shortcut) — reusing existing wabaId: ${wabaId} | phoneNumberId from signedRequest: ${phoneNumberId || "none (will resolve in Step 4)"}`);
             }
         }
 
@@ -4670,43 +4737,42 @@ exports.embeddedSignupExchange = async (req, res) => {
             }
         }
 
-        // Most reliable path for tech providers: list WABAs owned by our BM
-        if (!wabaId && process.env.META_BUSINESS_MANAGER_ID) {
-            try {
-                const bmRes = await axios.get(
-                    `${GRAPH}/${process.env.META_BUSINESS_MANAGER_ID}/owned_whatsapp_business_accounts`,
-                    { params: { access_token: systemToken, fields: "id,name,creation_time", limit: 10 } }
-                );
-                const list = (bmRes.data?.data || [])
-                    .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
-                if (list.length) {
-                    wabaId = list[0].id;
-                    console.log(`[EmbeddedSignup] ✅ Step 3c (BM owned WABAs) — wabaId: ${wabaId}`);
-                } else {
-                    console.log(`[EmbeddedSignup] Step 3c — BM owned_whatsapp_business_accounts returned 0 results`);
-                }
-            } catch (err) {
-                console.warn(`[EmbeddedSignup] Step 3c (BM owned) failed: ${err.response?.data?.error?.message || err.message} — system token may be expired`);
-            }
-        }
-
-        // Final fallback: client WABAs shared into our BM
+        // Step 3c: Client WABAs shared into our BM — try FIRST because connecting
+        // users bring their own WABA as a client, not a BM-owned WABA.
         if (!wabaId && process.env.META_BUSINESS_MANAGER_ID) {
             try {
                 const clientRes = await axios.get(
                     `${GRAPH}/${process.env.META_BUSINESS_MANAGER_ID}/client_whatsapp_business_accounts`,
-                    { params: { access_token: systemToken, fields: "id,name,creation_time", limit: 10 } }
+                    { params: { access_token: systemToken, fields: "id,name,creation_time", limit: 50 } }
                 );
                 const list = (clientRes.data?.data || [])
                     .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
+                console.log(`[EmbeddedSignup] Step 3c (BM client WABAs) — found ${list.length}: ${list.map(w => `${w.id}(${w.name})`).join(", ") || "none"}`);
                 if (list.length) {
                     wabaId = list[0].id;
-                    console.log(`[EmbeddedSignup] ✅ Step 3d (BM client WABAs) — wabaId: ${wabaId}`);
-                } else {
-                    console.log(`[EmbeddedSignup] Step 3d — BM client_whatsapp_business_accounts returned 0 results`);
+                    console.log(`[EmbeddedSignup] ✅ Step 3c — selected wabaId: ${wabaId}`);
                 }
             } catch (err) {
-                console.warn(`[EmbeddedSignup] Step 3d (BM client) failed: ${err.response?.data?.error?.message || err.message} — system token may be expired`);
+                console.warn(`[EmbeddedSignup] Step 3c (BM client) failed: ${err.response?.data?.error?.message || err.message}`);
+            }
+        }
+
+        // Step 3d: WABAs owned by our BM — fallback only (these are internal test/platform WABAs)
+        if (!wabaId && process.env.META_BUSINESS_MANAGER_ID) {
+            try {
+                const bmRes = await axios.get(
+                    `${GRAPH}/${process.env.META_BUSINESS_MANAGER_ID}/owned_whatsapp_business_accounts`,
+                    { params: { access_token: systemToken, fields: "id,name,creation_time", limit: 50 } }
+                );
+                const list = (bmRes.data?.data || [])
+                    .sort((a, b) => new Date(b.creation_time || 0) - new Date(a.creation_time || 0));
+                console.log(`[EmbeddedSignup] Step 3d (BM owned WABAs) — found ${list.length}: ${list.map(w => `${w.id}(${w.name})`).join(", ") || "none"}`);
+                if (list.length) {
+                    wabaId = list[0].id;
+                    console.log(`[EmbeddedSignup] ✅ Step 3d — selected wabaId: ${wabaId}`);
+                }
+            } catch (err) {
+                console.warn(`[EmbeddedSignup] Step 3d (BM owned) failed: ${err.response?.data?.error?.message || err.message} — system token may be expired`);
             }
         }
 
@@ -4718,41 +4784,72 @@ exports.embeddedSignupExchange = async (req, res) => {
             });
         }
 
-        // ── Step 4: Get phone numbers for this WABA ────────────────────────────
+        // ── Step 4: Resolve phone number display string + verified name ──────────
+        // If phoneNumberId came from postMessage, query it directly with the user
+        // access token (system token may not have access to a freshly-onboarded WABA).
+        // Fall back to listing all WABA phone numbers via system token.
         let phoneNumber, verifiedName;
-        try {
-            const phoneRes = await axios.get(`${GRAPH}/${wabaId}/phone_numbers`, {
-                params: {
-                    access_token: systemToken,
-                    fields: "id,display_phone_number,verified_name,status,quality_rating",
-                },
-            });
-            const phones = phoneRes.data?.data || [];
-            if (!phones.length) {
-                return res.status(400).json({
-                    status:  "error",
-                    message: "No phone numbers found on this WhatsApp Business Account.",
+
+        if (phoneNumberId) {
+            // Strategy A: direct lookup by ID using user token
+            try {
+                const directRes = await axios.get(`${GRAPH}/${phoneNumberId}`, {
+                    params: { access_token: userAccessToken, fields: "id,display_phone_number,verified_name,status" },
                 });
+                phoneNumber  = directRes.data?.display_phone_number || "";
+                verifiedName = directRes.data?.verified_name || "";
+                console.log(`[EmbeddedSignup] ✅ Step 4A (direct phone lookup) — id: ${phoneNumberId} | number: ${phoneNumber} | name: ${verifiedName}`);
+            } catch (err) {
+                console.warn(`[EmbeddedSignup] Step 4A failed: ${err.response?.data?.error?.message || err.message} — trying system token`);
+                // Strategy B: same call but system token
+                try {
+                    const sysRes = await axios.get(`${GRAPH}/${phoneNumberId}`, {
+                        params: { access_token: systemToken, fields: "id,display_phone_number,verified_name,status" },
+                    });
+                    phoneNumber  = sysRes.data?.display_phone_number || "";
+                    verifiedName = sysRes.data?.verified_name || "";
+                    console.log(`[EmbeddedSignup] ✅ Step 4B (system token lookup) — number: ${phoneNumber}`);
+                } catch (err2) {
+                    console.warn(`[EmbeddedSignup] Step 4B also failed: ${err2.response?.data?.error?.message || err2.message} — continuing with empty display fields`);
+                    phoneNumber  = "";
+                    verifiedName = "";
+                }
             }
-            const phone   = phones[0];
-            // If phoneNumberId came from signedRequest, keep it; otherwise use API value
-            phoneNumberId = phoneNumberId || phone.id;
-            phoneNumber   = phone.display_phone_number;
-            verifiedName  = phone.verified_name || "";
-        } catch (err) {
-            const msg = err.response?.data?.error?.message || "Failed to retrieve phone numbers";
-            return res.status(400).json({ status: "error", message: msg });
+        } else {
+            // No phoneNumberId — list all phones for WABA, pick first
+            try {
+                const phoneRes = await axios.get(`${GRAPH}/${wabaId}/phone_numbers`, {
+                    params: { access_token: systemToken, fields: "id,display_phone_number,verified_name,status" },
+                });
+                const phones = phoneRes.data?.data || [];
+                console.log(`[EmbeddedSignup] Step 4C — Meta returned ${phones.length} phone(s) for wabaId ${wabaId}:`);
+                phones.forEach((p, i) => console.log(`  [${i}] id: ${p.id} | number: ${p.display_phone_number} | name: ${p.verified_name}`));
+                if (!phones.length) {
+                    return res.status(400).json({ status: "error", message: "No phone numbers found on this WhatsApp Business Account." });
+                }
+                const phone  = phones[0];
+                phoneNumberId = phone.id;
+                phoneNumber   = phone.display_phone_number;
+                verifiedName  = phone.verified_name || "";
+                console.log(`[EmbeddedSignup] ✅ Step 4C — selected: id=${phoneNumberId} | number=${phoneNumber}`);
+            } catch (err) {
+                const msg = err.response?.data?.error?.message || "Failed to retrieve phone numbers";
+                console.error(`[EmbeddedSignup] ❌ Step 4C failed: ${msg}`);
+                return res.status(400).json({ status: "error", message: msg });
+            }
         }
 
         // ── Step 5: Subscribe WABA to our app (enables webhook delivery) ───────
+        // Must use user access token — appAccessToken only works for WABAs in Voycell's own BM.
         try {
             await axios.post(
                 `${GRAPH}/${wabaId}/subscribed_apps`,
                 {},
-                { headers: { Authorization: `Bearer ${appAccessToken}` } }
+                { headers: { Authorization: `Bearer ${longLivedToken}` } }
             );
-        } catch (_) {
-            // Non-fatal — resubscription can be triggered manually from the UI
+            console.log(`[EmbeddedSignup] ✅ Step 5 — WABA subscribed to app webhook`);
+        } catch (subErr) {
+            console.warn(`[EmbeddedSignup] ⚠️ Step 5 — webhook subscription failed (non-fatal): ${subErr?.response?.data?.error?.message || subErr.message}`);
         }
 
         // ── Step 6: Conflict check — same WABA connected to another user? ──────
@@ -4771,6 +4868,10 @@ exports.embeddedSignupExchange = async (req, res) => {
         }
 
         // ── Step 7: Persist credentials ────────────────────────────────────────
+        // Use longLivedToken (from user OAuth flow) — it has proven access to this WABA.
+        // systemToken (Voycell's system user) will only gain access after Step 8 assigns it.
+        // Once Step 8 succeeds on future reconnects, systemToken can be used; for now
+        // longLivedToken (~60 days) ensures all profile/messaging APIs work immediately.
         await User.findByIdAndUpdate(userId, {
             $set: {
                 "whatsappWaba.isConnected":       true,
@@ -4779,11 +4880,29 @@ exports.embeddedSignupExchange = async (req, res) => {
                 "whatsappWaba.phoneNumberId":     phoneNumberId,
                 "whatsappWaba.phoneNumber":       phoneNumber,
                 "whatsappWaba.displayName":       verifiedName,
-                "whatsappWaba.accessToken":       systemToken,
+                "whatsappWaba.accessToken":       longLivedToken,
             },
         });
 
         console.log(`[EmbeddedSignup] ✅ Connected — wabaId: ${wabaId}, phoneNumberId: ${phoneNumberId}`);
+
+        // ── Step 8: Assign system user to new WABA ────────────────────────────
+        // Use userAccessToken (just granted by user) to make the assignment —
+        // systemToken has no access to the WABA until after assignment completes.
+        try {
+            const meRes = await axios.get(`${GRAPH}/me`, { params: { access_token: systemToken } });
+            const systemUserId = meRes.data?.id;
+            if (systemUserId) {
+                await axios.post(
+                    `${GRAPH}/${wabaId}/assigned_users`,
+                    { user: systemUserId, tasks: ["MANAGE", "DEVELOP", "MANAGE_TEMPLATES"] },
+                    { params: { access_token: userAccessToken } }
+                );
+                console.log(`[EmbeddedSignup] ✅ Step 8 — system user ${systemUserId} assigned to wabaId: ${wabaId}`);
+            }
+        } catch (err) {
+            console.warn(`[EmbeddedSignup] ⚠️ Step 8 — failed to assign system user to WABA: ${err.response?.data?.error?.message || err.message}`);
+        }
 
         return res.status(200).json({
             status:  "success",

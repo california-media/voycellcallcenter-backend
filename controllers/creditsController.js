@@ -90,7 +90,6 @@ const getCredits = async (req, res) => {
       .select("creditBalance autoRecharge")
       .lean();
     const ar = user.autoRecharge || { enabled: false, threshold: 5, amount: 100 };
-    console.log(`[Auto-recharge] GET /billing/credits — userId: ${targetId} | enabled: ${ar.enabled ?? false} | threshold: $${ar.threshold ?? 5} | amount: $${ar.amount ?? 100}`);
     res.json({
       success: true,
       creditBalance: user.creditBalance || 0,
@@ -202,7 +201,6 @@ const updateAutoRecharge = async (req, res) => {
       "autoRecharge.threshold": threshold ?? 5,
       "autoRecharge.amount":    amount    ?? 100,
     });
-    console.log(`[Auto-recharge] SAVED — userId: ${req.user._id} | enabled: ${!!enabled} | threshold: $${threshold ?? 5} | amount: $${amount ?? 100}`);
     res.json({ success: true, message: "Auto-recharge settings saved." });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

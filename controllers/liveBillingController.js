@@ -29,8 +29,6 @@ async function resolveBilling(companyAdminId, userId, destination, selectedDIDNu
       status: "assigned",
     }).select("number").lean();
 
-    console.log(`[CALL] Checking DID — sent: "${selectedDIDNumber}" | digits: "${digits}" | matched: ${matchedDID ? matchedDID.number : "none"}`);
-
     if (!matchedDID) return { matchedDID: null, rate: null };
   }
 
@@ -78,11 +76,9 @@ const preCallCheck = async (req, res) => {
     const { matchedDID, rate } = await resolveBilling(companyAdminId, userId, destination, selectedDIDNumber);
 
     if (!matchedDID) {
-      console.log(`[CALL] From: ${selectedDIDNumber || "(auto)"} → To: ${destination} | Billing: No (not a purchased DID)`);
       return res.json({ canCall: true, hasDID: false });
     }
     if (!rate) {
-      console.log(`[CALL] From: ${matchedDID.number} → To: ${destination} | Billing: No (no rate found)`);
       return res.json({ canCall: true, hasDID: true, billing: false });
     }
 
@@ -94,8 +90,6 @@ const preCallCheck = async (req, res) => {
     const threshold           = admin?.autoRecharge?.threshold ?? 5;
     const autoRechargeEnabled = !!(admin?.autoRecharge?.enabled);
     const canCall             = balance >= rate.customerRate;
-
-    console.log(`[CALL] From: ${matchedDID.number} → To: ${destination} | Billing: Yes | Rate: $${rate.customerRate}/min | Balance: $${balance}`);
 
     return res.json({
       canCall,
@@ -173,8 +167,6 @@ const deductLiveMinute = async (req, res) => {
       },
       { upsert: true, new: true }
     );
-
-    console.log(`[CALL] From: ${matchedDID.number} → To: ${destination} | Billing: Yes | Deducted: $${rate.customerRate} | Balance: $${newBalance.toFixed(4)}`);
 
     return res.json({
       success:    true,

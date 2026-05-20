@@ -82,6 +82,7 @@ const kycDocumentRoutes       = require("./routes/kycDocumentRoutes");
 const numberInventoryRoutes   = require("./routes/numberInventoryRoutes");
 const numberCartRoutes         = require("./routes/numberCartRoutes");
 const callRateRoutes           = require("./routes/callRateRoutes");
+const powerDialerRoutes        = require("./routes/powerDialerRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -398,6 +399,9 @@ app.use(
   checkRole(["superadmin"]),
   didlogicAdminRoutes
 );
+
+// Power Dialer — lists, campaigns, sessions, live monitoring
+app.use("/api/power-dialer", checkForAuthentication(), powerDialerRoutes);
 
 app.use(
   "/notifications",

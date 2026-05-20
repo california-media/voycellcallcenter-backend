@@ -33,6 +33,68 @@ function normalizeFullUrl(url = "") {
     .replace(/\/+$/, ""); // remove trailing slash
 }
 
+/**
+ * Resolve PBX details (PBX_BASE_URL, assignedDeviceId) for the extension stored in tokenDoc.
+ * Checks company admin's own extensions first, then falls back to agent extensions.
+ */
+async function resolveActiveExtInfo(user, extensionNumber) {
+  let assignedDeviceId = null;
+  let PBX_BASE_URL = "";
+
+  // 1. Primary extension
+  if (extensionNumber === user.PBXDetails?.PBX_EXTENSION_NUMBER) {
+    assignedDeviceId = user.PBXDetails.assignedDeviceId;
+    PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL || "";
+  } else {
+    // 2. Own pool extensions
+    const ownMatch = (user.assignedExtensions || []).find((e) => e.extensionNumber === extensionNumber);
+    if (ownMatch) {
+      assignedDeviceId = ownMatch.assignedDeviceId;
+      PBX_BASE_URL = ownMatch.PBX_BASE_URL || "";
+    } else {
+      // 3. Agent extensions under this company admin
+      const agents = await User.find({ createdByWhichCompanyAdmin: user._id, role: "user" })
+        .select("PBXDetails assignedExtensions")
+        .lean();
+      let found = false;
+      for (const agent of agents) {
+        if (agent.PBXDetails?.PBX_EXTENSION_NUMBER === extensionNumber) {
+          assignedDeviceId = agent.PBXDetails.assignedDeviceId;
+          PBX_BASE_URL = agent.PBXDetails.PBX_BASE_URL || "";
+          found = true; break;
+        }
+        const agentMatch = (agent.assignedExtensions || []).find((e) => e.extensionNumber === extensionNumber);
+        if (agentMatch) {
+          assignedDeviceId = agentMatch.assignedDeviceId;
+          PBX_BASE_URL = agentMatch.PBX_BASE_URL || "";
+          found = true; break;
+        }
+      }
+      if (!found) {
+        // Fallback to company admin's primary
+        assignedDeviceId = user.PBXDetails?.assignedDeviceId || null;
+        PBX_BASE_URL = user.PBXDetails?.PBX_BASE_URL || "";
+      }
+    }
+  }
+
+  // Always derive PBX_BASE_URL from device record — stored URLs can be stale/wrong
+  if (assignedDeviceId) {
+    const superAdmins = await User.find({ role: "superadmin" }).select("PBXDevices").lean();
+    for (const sa of superAdmins) {
+      const dev = (sa.PBXDevices || []).find(
+        (d) => d.deviceId && d.deviceId.toString() === assignedDeviceId.toString()
+      );
+      if (dev?.PBX_BASE_URL) {
+        PBX_BASE_URL = dev.PBX_BASE_URL;
+        break;
+      }
+    }
+  }
+
+  return { PBX_BASE_URL, assignedDeviceId };
+}
+
 exports.serveCallmeJS = async (req, res) => {
   const { token, fieldName } = req.params;
 
@@ -48,17 +110,18 @@ exports.serveCallmeJS = async (req, res) => {
     return res.status(404).send("// User not found");
   }
 
-  // 3. 🔀 DECISION
+  // 3. Resolve PBX details for the active extension (may be an agent extension)
+  const activeExtInfo = await resolveActiveExtInfo(user, tokenDoc.extensionNumber);
+
+  // 4. 🔀 DECISION
   if (fieldName) {
-    // 👉 load BOTH popup + form
-    return servePopupAndFormScript(req, res, tokenDoc, fieldName, user);
+    return servePopupAndFormScript(req, res, tokenDoc, fieldName, user, activeExtInfo);
   } else {
-    // 👉 popup only
-    return servePopupScript(req, res, tokenDoc, user);
+    return servePopupScript(req, res, tokenDoc, user, activeExtInfo);
   }
 };
 
-async function getPopupJS(req, tokenDoc, user) {
+async function getPopupJS(req, tokenDoc, user, activeExtInfo) {
   // const { API_BASE_URL } = getConfig();
   const {
     themeColor: themeColorQuery = "#4CAF50",
@@ -76,9 +139,8 @@ async function getPopupJS(req, tokenDoc, user) {
   }
 
   const decodedExt = tokenDoc.extensionNumber;
-
-  const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL || "";
-  const assignedDeviceId = user.PBXDetails.assignedDeviceId || null;
+  const PBX_BASE_URL = activeExtInfo?.PBX_BASE_URL || user.PBXDetails?.PBX_BASE_URL || "";
+  const assignedDeviceId = activeExtInfo?.assignedDeviceId || user.PBXDetails?.assignedDeviceId || null;
 
   function normalizeOrigin(origin = "") {
     return origin.toLowerCase().replace(/\/+$/, "");
@@ -561,12 +623,9 @@ if (!digits.startsWith('0')) {
   return js;
 }
 
-async function servePopupAndFormScript(req, res, tokenDoc, fieldName, user) {
-  // Generate popup JS
-  const popupJs = await getPopupJS(req, tokenDoc, user);
-
-  // Generate form JS
-  const formJs = await getFormJS(req, tokenDoc, fieldName, user);
+async function servePopupAndFormScript(req, res, tokenDoc, fieldName, user, activeExtInfo) {
+  const popupJs = await getPopupJS(req, tokenDoc, user, activeExtInfo);
+  const formJs = await getFormJS(req, tokenDoc, fieldName, user, activeExtInfo);
 
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
@@ -578,9 +637,8 @@ async function servePopupAndFormScript(req, res, tokenDoc, fieldName, user) {
   `);
 }
 
-async function servePopupScript(req, res, tokenDoc, user) {
-  // Generate popup JS
-  const popupJs = await getPopupJS(req, tokenDoc, user);
+async function servePopupScript(req, res, tokenDoc, user, activeExtInfo) {
+  const popupJs = await getPopupJS(req, tokenDoc, user, activeExtInfo);
 
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
@@ -591,7 +649,7 @@ async function servePopupScript(req, res, tokenDoc, user) {
   `);
 }
 
-async function getFormJS(req, tokenDoc, fieldName, user) {
+async function getFormJS(req, tokenDoc, fieldName, user, activeExtInfo) {
 // const { API_BASE_URL } = getConfig();
   if (!tokenDoc) {
     return `// Invalid form token`;
@@ -678,12 +736,10 @@ async function getFormJS(req, tokenDoc, fieldName, user) {
     return `// User not found for form script`;
   }
 
-  const assignedDeviceId = user.PBXDetails.assignedDeviceId || null;
-
-  const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL || "";
+  const assignedDeviceId = activeExtInfo?.assignedDeviceId || user.PBXDetails?.assignedDeviceId || null;
+  const PBX_BASE_URL = activeExtInfo?.PBX_BASE_URL || user.PBXDetails?.PBX_BASE_URL || "";
 
   const API_BASE =
-    // process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
     process.env.API_BASE_URL || req.protocol + "://" + req.get("host");
 
   const apiUrl = API_BASE.replace(/\/+$/, "") + "/api/yeastar/make-call";

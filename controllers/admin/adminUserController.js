@@ -50,22 +50,6 @@ exports.adminRegisterUser = async (req, res) => {
       });
     }
 
-    // === BLOCK PUBLIC EMAIL PROVIDERS ===
-    const emailDomain = email.split("@")[1]?.toLowerCase();
-    if (!emailDomain) {
-      return res.status(400).json({
-        status: "error",
-        message: "Invalid email format",
-      });
-    }
-
-    if (disallowedEmailDomains.includes(emailDomain)) {
-      return res.status(400).json({
-        status: "error",
-        message: `Registration using ${emailDomain} is not allowed. Please use your company or custom domain email.`,
-      });
-    }
-
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(409).json({
@@ -489,6 +473,13 @@ exports.reassignExtension = async (req, res) => {
       return res.status(400).json({ status: "error", message: "extension.PBX_TELEPHONE is required" });
     }
 
+    // ── Determine if this is a multi-channel cloud extension ─────────────────
+    const adminDoc = await User.findById(companyAdminId).select("assignedExtensions").lean();
+    const adminExtEntry = (adminDoc?.assignedExtensions || []).find(
+      (e) => (extNum && e.extensionNumber === extNum) || e.PBX_TELEPHONE === num
+    );
+    const isMultiChannelCloud = (adminExtEntry?.pbxType === "cloud") && ((adminExtEntry?.channels || 1) > 1);
+
     // ── Remove from source agent ──────────────────────────────────────────────
     if (fromAgentId) {
       const fromAgent = await User.findOne({ _id: fromAgentId, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
@@ -525,6 +516,26 @@ exports.reassignExtension = async (req, res) => {
     if (toAgentId) {
       const toAgent = await User.findOne({ _id: toAgentId, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
       if (!toAgent) return res.status(404).json({ status: "error", message: "Target agent not found or no permission" });
+
+      // Channel limit check for multi-channel cloud extensions
+      if (isMultiChannelCloud) {
+        const maxChannels = adminExtEntry.channels;
+        const alreadyAssignedCount = await User.countDocuments({
+          createdByWhichCompanyAdmin: companyAdminId,
+          role: "user",
+          $or: [
+            extNum ? { "assignedExtensions.extensionNumber": extNum } : null,
+            { "assignedExtensions.PBX_TELEPHONE": num },
+          ].filter(Boolean),
+        });
+        // +1 for admin who always occupies 1 channel (— Your pool —)
+        if (alreadyAssignedCount + 1 >= maxChannels) {
+          return res.status(400).json({
+            status: "error",
+            message: `Channel limit reached. This extension has ${maxChannels} channels (you count as 1). Currently ${alreadyAssignedCount + 1}/${maxChannels} used.`,
+          });
+        }
+      }
 
       // Deduplicate: pull any existing entry for this extension first
       await User.findByIdAndUpdate(toAgentId, {
@@ -578,7 +589,7 @@ exports.reassignExtension = async (req, res) => {
     }
 
     // ── Return to admin pool ──────────────────────────────────────────────────
-    if (!toAgentId) {
+    if (!toAgentId && !isMultiChannelCloud) {
       const admin = await User.findById(companyAdminId).select("assignedExtensions").lean();
       const alreadyInPool = (admin?.assignedExtensions || []).some(
         (e) => (extNum && e.extensionNumber === extNum) || e.PBX_TELEPHONE === num
@@ -599,7 +610,7 @@ exports.reassignExtension = async (req, res) => {
     }
 
     // ── Remove from admin pool when assigning to agent from pool ─────────────
-    if (toAgentId && !fromAgentId) {
+    if (toAgentId && !fromAgentId && !isMultiChannelCloud) {
       const adminDoc = await User.findById(companyAdminId).select("PBXDetails").lean();
       const adminPrimaryExtNum = adminDoc?.PBXDetails?.PBX_EXTENSION_NUMBER;
       const adminPrimaryTel    = adminDoc?.PBXDetails?.PBX_TELEPHONE;

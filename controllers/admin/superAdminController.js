@@ -1795,6 +1795,7 @@ exports.setCompanyExtensions = async (req, res) => {
         PBX_BASE_URL:     e.PBX_BASE_URL     ? String(e.PBX_BASE_URL).trim()     : null,
         assignedDeviceId: e.assignedDeviceId  ? e.assignedDeviceId                : null,
         pbxType:          e.pbxType === "local" ? "local" : "cloud",
+        channels:         typeof e.channels === "number" ? e.channels : 1,
         nickname:         e.nickname          ? String(e.nickname).trim()          : null,
       }));
 

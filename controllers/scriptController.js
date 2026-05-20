@@ -8,18 +8,59 @@ exports.generateScriptTag = async (req, res) => {
     const userId = req.user._id;
     const user = await User.findById(userId);
 
-    if (!user || !user.PBXDetails.PBX_EXTENSION_NUMBER) {
+    // Build full list of available extensions: own pool + agent extensions
+    const availableExts = [];
+    const seenExts = new Set();
+    const pushExt = (extensionNumber, assignedDeviceId) => {
+      if (!extensionNumber || seenExts.has(extensionNumber)) return;
+      seenExts.add(extensionNumber);
+      availableExts.push({ extensionNumber, assignedDeviceId: assignedDeviceId || null });
+    };
+
+    if (user?.PBXDetails?.PBX_EXTENSION_NUMBER) {
+      pushExt(user.PBXDetails.PBX_EXTENSION_NUMBER, user.PBXDetails.assignedDeviceId);
+    }
+    (user?.assignedExtensions || []).forEach((e) => pushExt(e.extensionNumber, e.assignedDeviceId));
+
+    // Also include extensions assigned to agents under this company admin
+    const agents = await User.find({ createdByWhichCompanyAdmin: user._id, role: "user" })
+      .select("PBXDetails assignedExtensions")
+      .lean();
+    for (const agent of agents) {
+      if (agent.PBXDetails?.PBX_EXTENSION_NUMBER) {
+        pushExt(agent.PBXDetails.PBX_EXTENSION_NUMBER, agent.PBXDetails.assignedDeviceId);
+      }
+      for (const e of agent.assignedExtensions || []) {
+        pushExt(e.extensionNumber, e.assignedDeviceId);
+      }
+    }
+
+    console.log(`[generateScript] userId=${userId} agents=${agents.length} availableExts=${JSON.stringify(availableExts.map(e => e.extensionNumber))} requested=${req.body.selectedExtensionNumber}`);
+
+    if (!user || availableExts.length === 0) {
       return res.status(400).json({ error: "User or extension not found" });
     }
 
-    if (user.extensionStatus === false) {
+    if (user.extensionStatus === false && !(user.assignedExtensions?.length > 0)) {
       return res.status(400).json({
         status: "error",
         message: "Not Activated Calling Facility.",
       });
     }
 
-    const pbxDeviceId = user.PBXDetails.assignedDeviceId || null;
+    // Resolve which extension to use for this script
+    const requestedExt = req.body.selectedExtensionNumber
+      ? String(req.body.selectedExtensionNumber)
+      : null;
+    let activeExt = requestedExt
+      ? availableExts.find((e) => e.extensionNumber === requestedExt)
+      : availableExts[0];
+    console.log(`[generateScript] requestedExt=${requestedExt} activeExt=${activeExt?.extensionNumber || "NOT FOUND"}`);
+    if (!activeExt) {
+      return res.status(400).json({ error: `Extension ${requestedExt} not found. Available: ${availableExts.map(e => e.extensionNumber).join(", ")}` });
+    }
+
+    const pbxDeviceId = activeExt.assignedDeviceId;
 
     // === 1️⃣ Normalize allowedOrigin (remove trailing slash + lowercase) ===
     const allowedOriginPopup = Array.isArray(req.body.allowedOriginPopup)
@@ -93,20 +134,24 @@ exports.generateScriptTag = async (req, res) => {
     if (fieldName) {
       user.popupSettings.fieldName = fieldName;
     }
-    // === 4️⃣ Save user settings ===
+
+    // Persist selected extension so UI can restore it on next load
+    user.popupSettings.selectedExtensionNumber = activeExt.extensionNumber;
+    console.log(`[generateScript] saving user.popupSettings.selectedExtensionNumber=${activeExt.extensionNumber}`);
 
     await user.save();
 
     // === Stable-token policy: one token per user ===
     let tokenDoc = await ScriptToken.findOne({ userId }).sort({ createdAt: -1 });
     let token;
+    console.log(`[generateScript] tokenDoc exists=${!!tokenDoc} tokenDoc.extensionNumber=${tokenDoc?.extensionNumber}`);
 
     if (tokenDoc) {
       token = tokenDoc.token;
 
-      // ✅ Always sync extension number
+      // Always sync to whichever extension the admin selected
       const updatePayload = {
-        extensionNumber: user.PBXDetails.PBX_EXTENSION_NUMBER,
+        extensionNumber: activeExt.extensionNumber,
         assignedDeviceId: pbxDeviceId,
         updatedAt: new Date(),
       };
@@ -136,7 +181,7 @@ exports.generateScriptTag = async (req, res) => {
       await ScriptToken.create({
         token,
         userId,
-        extensionNumber: user.PBXDetails.PBX_EXTENSION_NUMBER,
+        extensionNumber: activeExt.extensionNumber,
         assignedDeviceId: pbxDeviceId,
         allowedOriginPopup: allowedOriginPopup, // ✅ array
         allowedOriginContactForm: allowedOriginContactForm, // ✅ array
@@ -158,6 +203,65 @@ exports.generateScriptTag = async (req, res) => {
     // === 7️⃣ Return <script> tag ===
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(scriptTag);
+  } catch (err) {
+    return res.status(500).json({ error: "Server Error" });
+  }
+};
+
+/**
+ * GET /api/script/managed-extensions
+ * Returns all extensions the company admin can route widget calls to:
+ * their own pool + every extension assigned to agents under them.
+ */
+exports.getManagedExtensions = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const admin = await User.findById(userId).lean();
+    if (!admin) return res.status(404).json({ error: "User not found" });
+
+    const seen = new Set();
+    const extensions = [];
+
+    const addExt = (extensionNumber, telephone, label) => {
+      if (!extensionNumber || seen.has(extensionNumber)) return;
+      seen.add(extensionNumber);
+      extensions.push({ extensionNumber, telephone: telephone || "", label: label || "" });
+    };
+
+    // Own primary extension
+    if (admin.PBXDetails?.PBX_EXTENSION_NUMBER) {
+      addExt(
+        admin.PBXDetails.PBX_EXTENSION_NUMBER,
+        admin.PBXDetails.PBX_TELEPHONE,
+        `Ext ${admin.PBXDetails.PBX_EXTENSION_NUMBER} (You)`
+      );
+    }
+
+    // Own pool extensions
+    for (const e of admin.assignedExtensions || []) {
+      addExt(e.extensionNumber, e.PBX_TELEPHONE, `Ext ${e.extensionNumber} (Pool)`);
+    }
+
+    // Agent extensions
+    const agents = await User.find({ createdByWhichCompanyAdmin: userId, role: "user" })
+      .select("firstname lastname PBXDetails assignedExtensions")
+      .lean();
+
+    for (const agent of agents) {
+      const name = `${agent.firstname || ""} ${agent.lastname || ""}`.trim() || "Agent";
+      if (agent.PBXDetails?.PBX_EXTENSION_NUMBER) {
+        addExt(
+          agent.PBXDetails.PBX_EXTENSION_NUMBER,
+          agent.PBXDetails.PBX_TELEPHONE,
+          `Ext ${agent.PBXDetails.PBX_EXTENSION_NUMBER} (${name})`
+        );
+      }
+      for (const e of agent.assignedExtensions || []) {
+        addExt(e.extensionNumber, e.PBX_TELEPHONE, `Ext ${e.extensionNumber} (${name})`);
+      }
+    }
+
+    return res.status(200).json({ extensions });
   } catch (err) {
     return res.status(500).json({ error: "Server Error" });
   }

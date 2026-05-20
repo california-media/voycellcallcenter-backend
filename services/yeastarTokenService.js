@@ -20,6 +20,7 @@ function isTokenExpiredResponse(data) {
  * Works for PBX + SDK
  */
 exports.getDeviceToken = async (deviceId, type = "pbx") => {
+    if (!deviceId) throw new Error("getDeviceToken called with null/undefined deviceId");
     try {
         const TokenModel =
             type === "sdk" ? YeastarSDKToken : YeastarToken;
@@ -50,17 +51,13 @@ exports.getDeviceToken = async (deviceId, type = "pbx") => {
                 }
 
                 if (isTokenExpiredResponse(test.data)) {
-                } else {
-                    console.log("⚠️ Token invalid, regenerating...");
                 }
 
             } catch (err) {
                 const code = err?.response?.data?.errcode;
 
                 if (code === 10004) {
-                    console.log("🔑 Token expired from catch");
                 } else {
-                    console.log("⚠️ Validation API failed");
                 }
             }
         }
@@ -79,7 +76,7 @@ exports.getDeviceToken = async (deviceId, type = "pbx") => {
 
         for (const admin of superAdmins) {
             const found = (admin.PBXDevices || []).find(
-                (d) => d.deviceId.toString() === deviceIdStr
+                (d) => d.deviceId && d.deviceId.toString() === deviceIdStr
             );
             if (found) {
                 device = found;
@@ -113,9 +110,6 @@ exports.getDeviceToken = async (deviceId, type = "pbx") => {
                     );
                 }
             } catch (refreshErr) {
-                console.log(
-                    "❌ Refresh failed → Full login"
-                );
             }
         }
 

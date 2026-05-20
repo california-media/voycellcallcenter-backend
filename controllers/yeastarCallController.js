@@ -16,6 +16,7 @@ async function makeCallHandler(req, res) {
     console.log("[MakeCall] mob_number:", mob_number);
     console.log("[MakeCall] countryCode:", JSON.stringify(countryCode), "(empty = landline, no prefix)");
     console.log("[MakeCall] assignedDeviceId:", assignedDeviceId);
+    console.log("[MakeCall] pbxBaseUrl:", pbxBaseUrl);
 
     if (!caller_extension || !mob_number) {
       console.error("[MakeCall] ❌ Missing required fields — caller_extension:", caller_extension, "mob_number:", mob_number);
@@ -25,8 +26,75 @@ async function makeCallHandler(req, res) {
       });
     }
 
- const token = await getDeviceToken(assignedDeviceId, "pbx");
-console.log("[MakeCall] PBX token acquired:", token ? "✅ yes" : "❌ null/empty");
+    // ── Find owner user — check primary PBXDetails first, then assignedExtensions[]
+    let ownerUser = null;
+    try {
+      ownerUser = await User.findOne({ "PBXDetails.PBX_EXTENSION_NUMBER": caller_extension })
+        .select("_id PBXDetails assignedExtensions").lean();
+      if (!ownerUser) {
+        ownerUser = await User.findOne({ "assignedExtensions.extensionNumber": caller_extension })
+          .select("_id PBXDetails assignedExtensions").lean();
+        console.log("[MakeCall] Primary lookup missed — found via assignedExtensions:", ownerUser ? ownerUser._id.toString() : "NOT FOUND");
+      }
+    } catch (dbErr) {
+      ownerUser = null;
+    }
+
+    if (!ownerUser) {
+      console.error("[MakeCall] ❌ Owner user not found for extension:", caller_extension);
+      return res.status(400).json({ status: "error", message: "Caller extension not registered" });
+    }
+    console.log("[MakeCall] Owner user found:", ownerUser._id.toString());
+
+    // Resolve which extension entry matches (primary PBXDetails or assignedExtensions[])
+    const matchingExt =
+      ownerUser.PBXDetails?.PBX_EXTENSION_NUMBER === caller_extension
+        ? ownerUser.PBXDetails
+        : (ownerUser.assignedExtensions || []).find(e => e.extensionNumber === caller_extension) || ownerUser.PBXDetails;
+
+    // Resolve deviceId: prefer widget-supplied value, fall back to matching ext, then owner primary
+    const resolvedDeviceId = assignedDeviceId || matchingExt?.assignedDeviceId || ownerUser.PBXDetails?.assignedDeviceId || null;
+    console.log("[MakeCall] resolvedDeviceId:", resolvedDeviceId, "(widget:", assignedDeviceId, "| matchingExt:", matchingExt?.assignedDeviceId, "| primaryFallback:", ownerUser.PBXDetails?.assignedDeviceId, ")");
+
+    let finalDeviceId = resolvedDeviceId;
+
+    // Fallback: if no deviceId but we have a PBX URL, match device by URL from superadmin pool
+    if (!finalDeviceId && pbxBaseUrl) {
+      const normUrl = (u) => (u || "").replace(/\/+$/, "").toLowerCase();
+      const superAdmins = await User.find({ role: "superadmin" }).select("PBXDevices").lean();
+      for (const sa of superAdmins) {
+        const match = (sa.PBXDevices || []).find(
+          (d) => d.PBX_BASE_URL && normUrl(d.PBX_BASE_URL) === normUrl(pbxBaseUrl)
+        );
+        if (match) {
+          finalDeviceId = match.deviceId;
+          console.log("[MakeCall] ℹ️ Recovered deviceId via URL match:", finalDeviceId);
+          break;
+        }
+      }
+    }
+
+    if (!finalDeviceId) {
+      console.error("[MakeCall] ❌ No device ID available for extension:", caller_extension);
+      return res.status(400).json({ status: "error", message: "No PBX device assigned for this extension. Contact administrator." });
+    }
+
+    // Always derive PBX_BASE_URL from device record — widget-supplied URL can be stale/wrong
+    let resolvedPbxBaseUrl = pbxBaseUrl;
+    const superAdminsForUrl = await User.find({ role: "superadmin" }).select("PBXDevices").lean();
+    for (const sa of superAdminsForUrl) {
+      const dev = (sa.PBXDevices || []).find(
+        (d) => d.deviceId && d.deviceId.toString() === finalDeviceId.toString()
+      );
+      if (dev?.PBX_BASE_URL) {
+        resolvedPbxBaseUrl = dev.PBX_BASE_URL;
+        console.log("[MakeCall] ℹ️ Derived PBX_BASE_URL from device record:", resolvedPbxBaseUrl);
+        break;
+      }
+    }
+
+    const token = await getDeviceToken(finalDeviceId, "pbx");
+    console.log("[MakeCall] PBX token acquired:", token ? "✅ yes" : "❌ null/empty");
 
 const rawNumber = String(mob_number || "");
 console.log("[MakeCall] ── Number normalization ──────────────────────────");
@@ -54,29 +122,15 @@ const normalizedCountryCode = countryCode
 console.log("[MakeCall]   normalizedNumber (final local format):", normalizedNumber);
 console.log("[MakeCall]   normalizedCountryCode:", normalizedCountryCode || "(none)");
 
-let callee = normalizedNumber; // default; may be overridden after ownerUser is resolved
-    // ── START: find owner (user) by extensionNumber
-    let ownerUser = null;
-    try {
-      ownerUser = await User.findOne({ "PBXDetails.PBX_EXTENSION_NUMBER": caller_extension }).select("_id PBXDetails").lean();
-    } catch (dbErr) {
-      ownerUser = null;
-    }
-    // ── END
-
-    if (!ownerUser) {
-      console.error("[MakeCall] ❌ Owner user not found for extension:", caller_extension);
-      return res.status(400).json({ status: "error", message: "Caller extension not registered" });
-    }
-    console.log("[MakeCall] Owner user found:", ownerUser._id.toString());
+let callee = normalizedNumber;
 
     // If the caller's PBX telephone is a UAE landline (04XXXXXXXX), the PBX
     // requires the destination in local format (0XXXXXXXXX) — already set above.
     // For all other callers, pass the number exactly as received from the client.
-    const pbxTelephone = (ownerUser.PBXDetails?.PBX_TELEPHONE || "").replace(/\D/g, "");
+    const pbxTelephone = (matchingExt?.PBX_TELEPHONE || ownerUser.PBXDetails?.PBX_TELEPHONE || "").replace(/\D/g, "");
     const isLandlineCaller = pbxTelephone.startsWith("04");
     console.log("[MakeCall] ── Caller line check ─────────────────────────");
-    console.log("[MakeCall]   PBX_TELEPHONE (raw):", ownerUser.PBXDetails?.PBX_TELEPHONE || "(not set)");
+    console.log("[MakeCall]   PBX_TELEPHONE (raw):", matchingExt?.PBX_TELEPHONE || ownerUser.PBXDetails?.PBX_TELEPHONE || "(not set)");
     console.log("[MakeCall]   PBX_TELEPHONE (digits):", pbxTelephone || "(not set)");
     console.log("[MakeCall]   isLandlineCaller (starts with 04):", isLandlineCaller);
     if (!isLandlineCaller) {
@@ -94,12 +148,9 @@ let callee = normalizedNumber; // default; may be overridden after ownerUser is 
 
     if (ownerUser) {
       const ownerId = ownerUser._id;
-      PBX_BASE_URL = ownerUser.PBXDetails.PBX_BASE_URL || "";
-      // let PBX_USERNAME = ownerUser.PBXDetails.PBX_USERNAME || "";
-      // let PBX_PASSWORD = ownerUser.PBXDetails.PBX_PASSWORD || "";
-      // let PBX_SDK_ACCESS_ID = ownerUser.PBXDetails.PBX_SDK_ACCESS_ID || "";
-      // let PBX_SDK_ACCESS_KEY = ownerUser.PBXDetails.PBX_SDK_ACCESS_KEY || "";
-      PBX_USER_AGENT = ownerUser.PBXDetails.PBX_USER_AGENT || "";
+      // Use device-record URL (authoritative) — widget-supplied URL can be stale/wrong
+      PBX_BASE_URL = resolvedPbxBaseUrl || matchingExt?.PBX_BASE_URL || ownerUser.PBXDetails?.PBX_BASE_URL || "";
+      PBX_USER_AGENT = ownerUser.PBXDetails?.PBX_USER_AGENT || "";
       // let PBX_EXTENSION_NUMBER = ownerUser.PBXDetails.PBX_EXTENSION_NUMBER || "";
       // let PBX_TELEPHONE = ownerUser.PBXDetails.PBX_TELEPHONE || "";
 
@@ -202,11 +253,8 @@ let callee = normalizedNumber; // default; may be overridden after ownerUser is 
       // 🔥 If token expired → refresh + retry
       if (data?.errcode === 10004) {
         console.warn("[MakeCall] Token expired (errcode 10004) — refreshing token and retrying...");
-        // 1️⃣ Delete old token
-        await YeastarToken.deleteOne({ deviceId: assignedDeviceId });
-
-        // 2️⃣ Get fresh token
-        const newToken = await getDeviceToken(assignedDeviceId, "pbx");
+        await YeastarToken.deleteOne({ deviceId: finalDeviceId });
+        const newToken = await getDeviceToken(finalDeviceId, "pbx");
         console.log("[MakeCall] New token acquired:", newToken ? "✅" : "❌");
         // 3️⃣ Retry call
         const retryUrl = `/call/dial?access_token=${encodeURIComponent(newToken)}`;

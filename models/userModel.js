@@ -415,6 +415,7 @@ const userSchema = new Schema(
         default: [],
       },
       fieldName: { type: String, default: "phone" },
+      selectedExtensionNumber: { type: String, default: null },
     },
 
     extensionNumber: { type: String, default: null },
@@ -453,6 +454,7 @@ const userSchema = new Schema(
         assignedDeviceId: { type: String, default: null }, // deviceId string matching PBXDevices[].deviceId
         nickname:         { type: String, default: null }, // friendly label set by company admin
         pbxType:          { type: String, enum: ["local", "cloud"], default: "cloud" }, // local = on-premise device, cloud = hosted PBX
+        channels:         { type: Number, default: 1 }, // max concurrent agents (cloud only; local always 1)
         _id: false,
       },
     ],

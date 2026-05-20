@@ -1,7 +1,8 @@
 const path = require("path");
 const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const s3 = require("./s3");
-// const { getConfig } = require("./getConfig");
+
+const WABA_BUCKET = process.env.AWS_BUCKET_NAME_WABA || process.env.AWS_BUCKET_NAME;
 
 const MEDIA_FOLDER_MAP = {
   image: "images",
@@ -35,16 +36,16 @@ async function uploadWhatsAppMediaToS3({
 
   await s3.send(
     new PutObjectCommand({
-      // Bucket: process.env.AWS_BUCKET_NAME_WABA,
-      Bucket: process.env.AWS_BUCKET_NAME_WABA,
+      // Bucket: WABA_BUCKET,
+      Bucket: WABA_BUCKET,
       Key: key,
       Body: buffer,
       ContentType: mimeType
     })
   );
 
-  return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-  // return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  return `https://${WABA_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  // return `https://${WABA_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
 async function uploadWhatsAppMediaTemplateToS3({
@@ -61,16 +62,16 @@ async function uploadWhatsAppMediaTemplateToS3({
 
   await s3.send(
     new PutObjectCommand({
-      // Bucket: process.env.AWS_BUCKET_NAME_WABA,
-      Bucket: process.env.AWS_BUCKET_NAME_WABA,
+      // Bucket: WABA_BUCKET,
+      Bucket: WABA_BUCKET,
       Key: key,
       Body: buffer,
       ContentType: mimeType
     })
   );
 
-  // return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-  return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  // return `https://${WABA_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  return `https://${WABA_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
 async function uploadWhatsAppMediaProfileToS3({
@@ -86,16 +87,16 @@ async function uploadWhatsAppMediaProfileToS3({
 
   await s3.send(
     new PutObjectCommand({
-      // Bucket: process.env.AWS_BUCKET_NAME_WABA,
-      Bucket: process.env.AWS_BUCKET_NAME_WABA,
+      // Bucket: WABA_BUCKET,
+      Bucket: WABA_BUCKET,
       Key: key,
       Body: buffer,
       ContentType: mimeType
     })
   );
 
-  // return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-  return `https://${process.env.AWS_BUCKET_NAME_WABA}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  // return `https://${WABA_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  return `https://${WABA_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
 

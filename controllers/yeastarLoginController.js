@@ -14,8 +14,6 @@ async function getYeastarLoginSignature(req, res) {
     const userId = req.user._id;
     const { extensionNumber: requestedExtension } = req.body || {};
 
-    console.log(`${tag} userId=${userId} requestedExt=${requestedExtension || "(primary)"}`);
-
     const user = await User.findById(userId).select(
       "firstname lastname email extensionStatus PBXDetails assignedExtensions createdByWhichCompanyAdmin"
     );
@@ -24,15 +22,10 @@ async function getYeastarLoginSignature(req, res) {
     const hasAssignedExts  = !!(user?.assignedExtensions?.length);
 
     if (!user || (!hasPrimaryExt && !hasAssignedExts)) {
-      console.log(`${tag} ❌ User or PBX extension not configured`);
       return res.status(400).json({ status: "error", message: "User/Extension not configured" });
     }
 
-    console.log(`${tag} primaryExt=${user.PBXDetails?.PBX_EXTENSION_NUMBER} primaryUrl=${user.PBXDetails?.PBX_BASE_URL} primaryDevice=${user.PBXDetails?.assignedDeviceId}`);
-    console.log(`${tag} assignedExtensions=${JSON.stringify(user.assignedExtensions || [])}`);
-
     if (user.extensionStatus !== true && !hasAssignedExts) {
-      console.log(`${tag} ❌ Extension is disabled`);
       return res.status(400).json({ status: "error", message: "Your extension is disabled!" });
     }
 
@@ -48,40 +41,33 @@ async function getYeastarLoginSignature(req, res) {
       extensionNumber = first.extensionNumber;
       if (first.PBX_BASE_URL)     pbxBaseUrl = first.PBX_BASE_URL;
       if (first.assignedDeviceId) deviceId   = first.assignedDeviceId;
-      console.log(`${tag} ℹ️ Using assignedExtensions[0] as primary: ext=${extensionNumber} deviceId=${deviceId}`);
     }
 
     if (requestedExtension && requestedExtension !== extensionNumber) {
       const assigned = (user.assignedExtensions || []).find(
         (e) => e.extensionNumber === String(requestedExtension)
       );
-      console.log(`${tag} Lookup assigned ext "${requestedExtension}":`, assigned || "NOT FOUND in assignedExtensions");
       if (assigned) {
         extensionNumber = assigned.extensionNumber;
         if (assigned.PBX_BASE_URL)     pbxBaseUrl = assigned.PBX_BASE_URL;
         if (assigned.assignedDeviceId) deviceId   = assigned.assignedDeviceId;
-      } else {
-        console.log(`${tag} ⚠️  Extension "${requestedExtension}" not found in assignedExtensions — using primary config`);
       }
     }
 
-    // Derive pbxBaseUrl from device record when: different device than primary, OR pbxBaseUrl is null.
-    const primaryDeviceId = (user.PBXDetails?.assignedDeviceId || "").toString();
-    if (deviceId && (!pbxBaseUrl || deviceId.toString() !== primaryDeviceId)) {
+    // Always derive pbxBaseUrl from device record — it's the authoritative source.
+    // PBXDetails.PBX_BASE_URL can be stale/wrong if device was moved or re-assigned.
+    if (deviceId) {
       const superAdmins = await User.find({ role: "superadmin" }).select("PBXDevices");
       for (const admin of superAdmins) {
         const dev = (admin.PBXDevices || []).find(
-          (d) => d.deviceId.toString() === deviceId.toString()
+          (d) => d.deviceId && d.deviceId.toString() === deviceId.toString()
         );
         if (dev?.PBX_BASE_URL) {
           pbxBaseUrl = dev.PBX_BASE_URL;
-          console.log(`${tag} ℹ️ Derived pbxBaseUrl from device record: ${pbxBaseUrl}`);
           break;
         }
       }
     }
-
-    console.log(`${tag} Resolved → ext=${extensionNumber} url=${pbxBaseUrl} deviceId=${deviceId}`);
 
     // If the target extension is on a different PBX URL but has no explicit deviceId,
     // we cannot safely guess which device credentials to use — require explicit assignment.
@@ -92,7 +78,6 @@ async function getYeastarLoginSignature(req, res) {
       normUrl(pbxBaseUrl) !== normUrl(user.PBXDetails.PBX_BASE_URL) &&
       !deviceId
     ) {
-      console.log(`${tag} ❌ Different PBX URL but no deviceId assigned`);
       return res.status(400).json({
         status: "error",
         message: `Extension ${extensionNumber} is on a different PBX but has no device assigned. Ask your administrator to assign a device to this extension in company settings.`,
@@ -108,7 +93,6 @@ async function getYeastarLoginSignature(req, res) {
         );
         if (match) {
           deviceId = match.deviceId;
-          console.log(`${tag} ℹ️ Recovered deviceId via URL match: ${deviceId}`);
           break;
         }
       }
@@ -118,7 +102,6 @@ async function getYeastarLoginSignature(req, res) {
       // Fallback 3: try every registered PBX device — use the first one that can actually
       // sign for this extension. Return immediately with the working signature to avoid
       // a second sign call (which can fail with 10004 on some PBX setups).
-      console.log(`${tag} ℹ️ Trying all superadmin devices to find one that signs ext ${extensionNumber}`);
       const superAdmins = await User.find({ role: "superadmin" }).select("PBXDevices").lean();
       for (const sa of superAdmins) {
         for (const dev of (sa.PBXDevices || [])) {
@@ -132,7 +115,6 @@ async function getYeastarLoginSignature(req, res) {
             if (testRes.data.errcode === 0) {
               const signature = testRes.data.data?.sign;
               const pbxURL    = dev.PBX_BASE_URL.replace(/\/openapi\/v[0-9.]+$/i, "");
-              console.log(`${tag} ✅ Device discovered + signature obtained for ext ${extensionNumber} via device ${dev.deviceId}`);
               return res.status(200).json({
                 status: "success",
                 data: {
@@ -148,34 +130,28 @@ async function getYeastarLoginSignature(req, res) {
                 },
               });
             }
-            console.log(`${tag} device ${dev.deviceId} rejected ext ${extensionNumber}: errcode=${testRes.data.errcode}`);
           } catch (devErr) {
-            console.log(`${tag} device ${dev.deviceId} error: ${devErr.message}`);
+            // device unavailable — try next
           }
         }
       }
     }
 
     if (!deviceId) {
-      console.log(`${tag} ❌ deviceId is null — no device found for ext ${extensionNumber}`);
       return res.status(400).json({
         status: "error",
         message: "No PBX device assigned. Please contact your administrator.",
       });
     }
 
-    console.log(`${tag} Fetching SDK token for deviceId=${deviceId} ...`);
     let accessToken;
     try {
       accessToken = await getDeviceToken(deviceId, "sdk");
-      console.log(`${tag} Got access token: ${accessToken ? accessToken.slice(0, 12) + "..." : "null"}`);
     } catch (tokenErr) {
-      console.error(`${tag} ❌ getDeviceToken failed:`, tokenErr.message);
       throw tokenErr;
     }
 
     const signatureUrl = `${pbxBaseUrl}/sign/create?access_token=${accessToken}`;
-    console.log(`${tag} Calling PBX sign URL: ${pbxBaseUrl}/sign/create (token hidden)`);
 
     let signResponse;
     try {
@@ -184,15 +160,16 @@ async function getYeastarLoginSignature(req, res) {
         sign_type: "sdk",
         expire_time: 0,
       });
-      console.log(`${tag} PBX sign response errcode=${signResponse.data?.errcode} errmsg=${signResponse.data?.errmsg}`);
 
       if (signResponse.data.errcode === 10004) {
-        console.log(`${tag} Token expired (10004), refreshing...`);
         const YeastarSDKToken = require("../models/YeastarSDKToken");
-        await YeastarSDKToken.deleteOne({ deviceId });
+        // Expire the access_token but KEEP refresh_token so getDeviceToken uses refresh path (not full login)
+        await YeastarSDKToken.updateOne(
+          { deviceId },
+          { $set: { access_token: null, expires_at: new Date(0) } }
+        );
 
         accessToken = await getDeviceToken(deviceId, "sdk");
-        console.log(`${tag} Retrying with new token...`);
 
         const retryUrl = `${pbxBaseUrl}/sign/create?access_token=${accessToken}`;
         signResponse = await axios.post(retryUrl, {
@@ -200,23 +177,53 @@ async function getYeastarLoginSignature(req, res) {
           sign_type: "sdk",
           expire_time: 0,
         });
-        console.log(`${tag} Retry sign response errcode=${signResponse.data?.errcode}`);
       }
     } catch (apiErr) {
-      console.error(`${tag} ❌ PBX sign API call failed:`, apiErr.message, "status:", apiErr.response?.status, "data:", JSON.stringify(apiErr.response?.data || {}));
       throw apiErr;
     }
 
     const signData = signResponse.data;
     if (signData.errcode !== 0) {
-      console.error(`${tag} ❌ PBX returned error: errcode=${signData.errcode} errmsg=${signData.errmsg}`);
+      // Primary device failed even after token refresh — try every registered PBX device
+      const superAdmins2 = await User.find({ role: "superadmin" }).select("PBXDevices").lean();
+      for (const sa of superAdmins2) {
+        for (const dev of (sa.PBXDevices || [])) {
+          if (!dev.PBX_BASE_URL || !dev.deviceId) continue;
+          if (dev.deviceId.toString() === (deviceId || "").toString()) continue; // already tried
+          try {
+            const testToken = await getDeviceToken(dev.deviceId.toString(), "sdk");
+            const testRes = await axios.post(
+              `${dev.PBX_BASE_URL}/sign/create?access_token=${testToken}`,
+              { username: extensionNumber, sign_type: "sdk", expire_time: 0 }
+            );
+            if (testRes.data.errcode === 0) {
+              const signature = testRes.data.data?.sign;
+              const pbxURL2 = dev.PBX_BASE_URL.replace(/\/openapi\/v[0-9.]+$/i, "");
+              return res.status(200).json({
+                status: "success",
+                data: {
+                  username: extensionNumber,
+                  secret: signature,
+                  pbxURL: pbxURL2,
+                  userInfo: {
+                    firstname: user.firstname,
+                    lastname: user.lastname,
+                    email: user.email,
+                    extensionNumber,
+                  },
+                },
+              });
+            }
+          } catch (devErr) {
+            // device unavailable — try next
+          }
+        }
+      }
       throw new Error(signData.errmsg || "Failed to create login signature");
     }
 
     const signature = signData.data?.sign;
     const pbxURL = (pbxBaseUrl || "").replace(/\/openapi\/v[0-9.]+$/i, "");
-
-    console.log(`${tag} ✅ Signature obtained. pbxURL=${pbxURL} ext=${extensionNumber}`);
 
     return res.status(200).json({
       status: "success",
@@ -234,7 +241,6 @@ async function getYeastarLoginSignature(req, res) {
     });
 
   } catch (err) {
-    console.error(`${tag} ❌ Unhandled error:`, err.message, err.stack?.split("\n")[1]);
     return res.status(500).json({ status: "error", message: err.message });
   }
 }

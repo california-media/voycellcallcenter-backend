@@ -139,7 +139,6 @@ const getDashboardQuickStats = async (req, res) => {
       comapnyAdminId = user.createdByWhichCompanyAdmin;
     }
 
-    console.log(`Dashboard stats requested by user ${userId} (${user.role}) for companyAdmin ${comapnyAdminId || userId}`);
     // ── Date range ──────────────────────────────────────────────
     const todayStr = new Date().toISOString().slice(0, 10);
     const startStr = req.query.startDate || todayStr;

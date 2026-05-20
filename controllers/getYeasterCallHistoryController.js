@@ -2,6 +2,7 @@ const axios = require("axios");
 // const moment = require("moment");
 const mongoose = require("mongoose");
 const { getDeviceToken } = require("../services/yeastarTokenService");
+const YeastarToken = require("../models/YeastarToken");
 const User = require("../models/userModel"); // make sure to import
 const CallHistory = require("../models/CallHistory");
 const moment = require("moment-timezone");
@@ -25,18 +26,7 @@ function isRealDID(number) {
 }
 
 async function calculateAndBill({ companyAdminId, userId, call_from, call_to, talk_time, yeastarId, startTime }) {
-  console.log(`\n[BILLING] ══════════════════════════════════════════`);
-  console.log(`[BILLING] Checking billing for outbound call`);
-  console.log(`[BILLING]   companyAdminId : ${companyAdminId}`);
-  console.log(`[BILLING]   userId         : ${userId}`);
-  console.log(`[BILLING]   call_from      : ${call_from}`);
-  console.log(`[BILLING]   call_to        : ${call_to}`);
-  console.log(`[BILLING]   talk_time      : ${talk_time}s (${(talk_time / 60).toFixed(4)} min)`);
-  console.log(`[BILLING]   yeastarId      : ${yeastarId}`);
-  console.log(`[BILLING]   startTime      : ${startTime}`);
-
   if (!companyAdminId || !userId || !call_to || !talk_time) {
-    console.log(`[BILLING] ✗ Skipped — missing required field(s)`);
     return null;
   }
 
@@ -62,8 +52,6 @@ async function calculateAndBill({ companyAdminId, userId, call_from, call_to, ta
     }
   }
   if (liveBill && liveBill.billedMinutes > 0) {
-    console.log(`[BILLING] ✓ Live billing record found — billedMinutes: ${liveBill.billedMinutes} | totalCharged: $${liveBill.totalCharged} | skipping CDR deduction`);
-    console.log(`[BILLING] ══════════════════════════════════════════\n`);
     return {
       charges:    Number(liveBill.totalCharged.toFixed(6)),
       ratePerMin: liveBill.ratePerMin,
@@ -77,58 +65,34 @@ async function calculateAndBill({ companyAdminId, userId, call_from, call_to, ta
   const callFromDigits = normalizeDigits(call_from || "");
 
   if (!isRealDID(callFromDigits)) {
-    console.log(`[BILLING] ✗ call_from "${call_from}" is a PBX extension (not a real phone number) and no live billing record found → no CDR charge`);
-    console.log(`[BILLING] ══════════════════════════════════════════\n`);
     return null;
   }
 
   // PATH A: call_from is a real phone number → check directly against admin's purchased DIDs
-  console.log(`[BILLING]   call_from "${callFromDigits}" looks like a real number — checking purchase list`);
   const allCompanyDIDs = await DIDAssignment.find({ companyAdminId, status: "assigned" })
     .select("number").lean();
-  console.log(`[BILLING]   Company purchased DIDs (${allCompanyDIDs.length}): ${JSON.stringify(allCompanyDIDs.map(d => normalizeDigits(d.number)))}`);
 
   const matchedDID = allCompanyDIDs.find(d => normalizeDigits(d.number) === callFromDigits) || null;
 
   if (!matchedDID) {
-    console.log(`[BILLING] ✗ call_from "${callFromDigits}" is NOT in admin's purchased DID list → no charge`);
-    console.log(`[BILLING] ══════════════════════════════════════════\n`);
     return null;
   }
 
-  console.log(`[BILLING] ✓ call_from "${callFromDigits}" IS in purchase list (DID: "${matchedDID.number}") → will bill`);
-
   // LPM lookup on destination
-  console.log(`[BILLING]   Running LPM on destination: ${call_to}`);
   const rate = await findCallRateByLPM(call_to);
 
   if (!rate) {
-    console.log(`[BILLING] ✗ No call rate found for destination "${call_to}" → no charge`);
-    console.log(`[BILLING] ══════════════════════════════════════════\n`);
     return null;
   }
-  console.log(`[BILLING] ✓ Rate found — country: ${rate.country} | prefix: ${rate.prefix} | standardRate: $${rate.standardRate}/min | customerRate: $${rate.customerRate}/min`);
 
   const billedMinutes = Math.ceil(talk_time / 60);
   const charges       = Number((billedMinutes * rate.customerRate).toFixed(6));
 
   if (charges <= 0) {
-    console.log(`[BILLING] ✗ Calculated charges = $${charges} (zero or negative) → no charge`);
-    console.log(`[BILLING] ══════════════════════════════════════════\n`);
     return null;
   }
-  console.log(`[BILLING] ✓ Charges = ${billedMinutes} billed min (${talk_time}s actual) × $${rate.customerRate}/min = $${charges}`);
-
-  const userBefore = await User.findById(companyAdminId).select("creditBalance email").lean();
-  console.log(`[BILLING]   Balance BEFORE : $${userBefore?.creditBalance?.toFixed(6) ?? "N/A"} (${userBefore?.email})`);
 
   await User.findByIdAndUpdate(companyAdminId, { $inc: { creditBalance: -charges } });
-
-  const userAfter = await User.findById(companyAdminId).select("creditBalance").lean();
-  console.log(`[BILLING]   Balance AFTER  : $${userAfter?.creditBalance?.toFixed(6) ?? "N/A"}`);
-  console.log(`[BILLING]   Deducted       : $${charges}`);
-  console.log(`[BILLING] ✓ Balance deducted successfully`);
-  console.log(`[BILLING] ══════════════════════════════════════════\n`);
 
   return { charges, ratePerMin: rate.customerRate, billedFrom: matchedDID.number };
 }
@@ -278,156 +242,118 @@ async function findRecord(details, allowedUserIds) {
   return lead || null;
 }
 
-exports.fetchAndStoreCallHistory = async (req, res) => {
-  // const {YEASTAR_TZ} = getConfig()
-  try {
-    const userId = req.user._id;
+async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedByIds, TZ, encodedStart, encodedEnd, startTime, endTime }) {
+  const agentId = agent._id;
+  const performerName = `${agent.firstname} ${agent.lastname}`;
 
-    const user = await User.findById(userId);
-    if (!user || !user.PBXDetails.PBX_EXTENSION_NUMBER) {
-      return res.status(400).json({
-        success: false,
-        message: "User extension not found",
-      });
-    }
+  const extensions = (agent.assignedExtensions || []).filter(
+    (e) => e.extensionNumber && e.assignedDeviceId
+  );
 
-    const ext = user.PBXDetails.PBX_EXTENSION_NUMBER;
-    const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL;
-    const deviceId = user.PBXDetails.assignedDeviceId;
-    const token = await getDeviceToken(deviceId, "pbx");
-    // Always use Yeastar PBX timezone
-    const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
-    // const TZ = YEASTAR_TZ || "Asia/Dubai";
+  if (!extensions.length) {
+    return 0;
+  }
 
-    // Build time window in Yeastar timezone
-    const endMoment = moment().tz(TZ);
-    const startMoment = endMoment.clone().subtract(24, "hours");
+  const httpsAgent = new (require("https").Agent)({ rejectUnauthorized: false });
+  // tokenCache: deviceKey → { token, baseUrl }
+  const tokenCache = {};
+  // callMap: call.id → { call, extensionNumber }
+  const callMap = new Map();
 
-    // Yeastar required format
-    const startTime = startMoment.format("MM/DD/YYYY HH:mm:ss");
-    const endTime = endMoment.format("MM/DD/YYYY HH:mm:ss");
-
-    const encodedStart = encodeURIComponent(startTime);
-    const encodedEnd = encodeURIComponent(endTime);
-
-    console.log(`\n========================================`);
-    console.log(`[fetch-and-store] User: ${user.firstname} ${user.lastname} | Ext: ${ext}`);
-    console.log(`[fetch-and-store] Time window: ${startTime}  →  ${endTime} (${TZ})`);
-    console.log(`========================================`);
-
-    // -------- OUTBOUND --------
-    const urlFrom = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
-    console.log(`\n[fetch-and-store] OUTBOUND URL → ${PBX_BASE_URL}/cdr/search?call_from=${ext}&start_time=${startTime}&end_time=${endTime}`);
-    const respFrom = await axios.get(urlFrom, {
-      httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
-    });
-
-    // -------- INBOUND --------
-    const urlTo = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
-    console.log(`\n[fetch-and-store] INBOUND  URL → ${PBX_BASE_URL}/cdr/search?call_to=${ext}&start_time=${startTime}&end_time=${endTime}`);
-    const respTo = await axios.get(urlTo, {
-      httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
-    });
-    console.log(`[fetch-and-store] INBOUND  Yeastar raw:\n${JSON.stringify(respTo.data, null, 2)}`);
-
-    const fromList = Array.isArray(respFrom.data?.data)
-      ? respFrom.data.data
-      : [];
-    const toList = Array.isArray(respTo.data?.data) ? respTo.data.data : [];
-
-    let finalList = [...fromList, ...toList];
-
-    // Remove duplicates
-    const map = new Map();
-    finalList.forEach((c) => map.set(c.id, c));
-    finalList = [...map.values()];
-    console.log(`\n[fetch-and-store] ${finalList.length} unique call(s) after dedup`);
-
-    // ==========================================
-    // 🔐 Identify Company Users for Duplicate Check
-    // ==========================================
-    let allowedCreatedByIds = [userId];
-    if (user.role === "companyAdmin") {
-      const agents = await User.find({
-        createdByWhichCompanyAdmin: userId,
-        role: "user",
-      }).select("_id");
-      allowedCreatedByIds.push(...agents.map((a) => a._id));
-    } else if (user.createdByWhichCompanyAdmin) {
-      const adminId = user.createdByWhichCompanyAdmin;
-      const agents = await User.find({
-        createdByWhichCompanyAdmin: adminId,
-        role: "user",
-      }).select("_id");
-      allowedCreatedByIds = [adminId, ...agents.map((a) => a._id)];
-    }
-
-    let inserted = 0;
-    const performerName = `${user.firstname} ${user.lastname}`;
-
-    for (const call of finalList) {
-      const exists = await CallHistory.findOne({ yeastarId: call.id });
-      if (exists) {
-        // Backfill talk_time for records stored before the talk_time field was added
-        if (exists.talk_time == null) {
-          await CallHistory.updateOne(
-            { yeastarId: call.id },
-            { $set: { talk_time: call.talk_duration ?? 0 } }
-          );
+  for (const extEntry of extensions) {
+    const { extensionNumber, assignedDeviceId, PBX_BASE_URL } = extEntry;
+    try {
+      const deviceKey = assignedDeviceId.toString();
+      if (!tokenCache[deviceKey]) {
+        const token = await getDeviceToken(assignedDeviceId, "pbx");
+        let baseUrl = PBX_BASE_URL || null;
+        if (!baseUrl) {
+          const tokenDoc = await YeastarToken.findOne({ deviceId: assignedDeviceId }).select("base_url").lean();
+          baseUrl = tokenDoc?.base_url || null;
         }
+        tokenCache[deviceKey] = { token, baseUrl };
+      }
+      const { token, baseUrl } = tokenCache[deviceKey];
+
+      if (!baseUrl) {
         continue;
       }
 
-      const from_number = normalizeNumber(call.call_from_number);
-      const to_number = normalizeNumber(call.call_to_number);
+      const urlFrom = `${baseUrl}/cdr/search?access_token=${token}&call_from=${extensionNumber}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+      const urlTo   = `${baseUrl}/cdr/search?access_token=${token}&call_to=${extensionNumber}&start_time=${encodedStart}&end_time=${encodedEnd}`;
 
-      // ==========================================
-      // 📞 Parse FROM & TO numbers
-      // ==========================================
-      const fromDetails = extractNumberDetails(from_number);
-      const toDetails = extractNumberDetails(to_number);
+      const [respFrom, respTo] = await Promise.all([
+        axios.get(urlFrom, { httpsAgent }),
+        axios.get(urlTo,   { httpsAgent }),
+      ]);
 
-      // ==========================================
-      // 🔍 Find matching records (Entire Company)
-      // ==========================================
-      let fromRecord = await findRecord(fromDetails, allowedCreatedByIds);
-      let toRecord = await findRecord(toDetails, allowedCreatedByIds);
+      const fromList = Array.isArray(respFrom.data?.data) ? respFrom.data.data : [];
+      const toList   = Array.isArray(respTo.data?.data)   ? respTo.data.data   : [];
 
-      const dubaiFormatted = moment
-        .tz(call.time, "MM/DD/YYYY HH:mm:ss", TZ)
-        .format("MM/DD/YYYY HH:mm:ss");
+      const extensionPhone = extEntry.PBX_TELEPHONE || null;
+      [...fromList, ...toList].forEach((c) => {
+        if (c.id == null) return;
+        if (!callMap.has(c.id)) {
+          callMap.set(c.id, { call: c, extensionNumber, extensionPhone });
+        }
+      });
+    } catch (extErr) {
+      // skip extension on error
+    }
+  }
 
-      // ==========================================
-      // 🆕 AUTOMATED LEAD CREATION (NO ANSWER)
-      // ==========================================
-      if (call.disposition === "NO ANSWER") {
-        // If it's Inbound and the caller (FROM) is not in DB -> Create Lead
-        if (call.call_type === "Inbound" && !fromRecord) {
-          // Double check to ensure no last-second race condition if multiple calls sync
-          const doubleCheck = await findRecord(
-            fromDetails,
-            allowedCreatedByIds,
-          );
-          const newID = new mongoose.Types.ObjectId();
-          if (!doubleCheck) {
-            fromRecord = await Lead.create({
-              _id: newID,
-              contact_id: newID,
-              firstname: "Unknown",
-              lastname: "Caller",
-              phoneNumbers: [
-                {
-                  countryCode: fromDetails.countryCode || "971",
-                  number: fromDetails.number,
-                },
-              ],
-              status: "noAnswer",
-              createdBy: userId,
-              activities: [
-                {
-                  action: "Lead Created",
-                  type: "lead",
-                  title: "Automated Lead Creation",
+  let finalList = [...callMap.values()];
+
+  let inserted = 0;
+
+  for (const { call, extensionNumber, extensionPhone } of finalList) {
+    if (!call.id) continue;
+    const exists = await CallHistory.findOne({ yeastarId: call.id });
+    if (exists) {
+      if (exists.talk_time == null) {
+        await CallHistory.updateOne(
+          { yeastarId: call.id },
+          { $set: { talk_time: call.talk_duration ?? 0 } }
+        );
+      }
+      continue;
+    }
+
+    const from_number = normalizeNumber(call.call_from_number);
+    const to_number = normalizeNumber(call.call_to_number);
+    const fromDetails = extractNumberDetails(from_number);
+    const toDetails = extractNumberDetails(to_number);
+
+    let fromRecord = await findRecord(fromDetails, allowedCreatedByIds);
+    let toRecord = await findRecord(toDetails, allowedCreatedByIds);
+
+    const dubaiFormatted = moment
+      .tz(call.time, "MM/DD/YYYY HH:mm:ss", TZ)
+      .format("MM/DD/YYYY HH:mm:ss");
+
+    if (call.disposition === "NO ANSWER") {
+      if (call.call_type === "Inbound" && !fromRecord) {
+        const doubleCheck = await findRecord(fromDetails, allowedCreatedByIds);
+        const newID = new mongoose.Types.ObjectId();
+        if (!doubleCheck) {
+          fromRecord = await Lead.create({
+            _id: newID,
+            contact_id: newID,
+            firstname: "Unknown",
+            lastname: "Caller",
+            phoneNumbers: [
+              {
+                countryCode: fromDetails.countryCode || "971",
+                number: fromDetails.number,
+              },
+            ],
+            status: "noAnswer",
+            createdBy: agentId,
+            activities: [
+              {
+                action: "Lead Created",
+                type: "lead",
+                title: "Automated Lead Creation",
                   description: `Lead created from unanswered call (by ${performerName})`,
                   timestamp: dubaiFormatted,
                 },
@@ -438,7 +364,6 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
           }
         }
 
-        // If records exist, update status to "no answer"
         if (fromRecord) {
           fromRecord.status = "noAnswer";
           await fromRecord.save();
@@ -451,49 +376,27 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
 
       const talkTime = call.talk_duration ?? 0;
 
-      // ── Billing (outbound ANSWERED calls from a purchased DID only) ───────
-      const companyAdminId =
-        user.role === "companyAdmin"
-          ? userId
-          : user.createdByWhichCompanyAdmin || null;
-
-      // Log the raw Yeastar CDR fields so we can see exactly what Yeastar reports
-      console.log(`[CDR-RAW] yeastarId: ${call.id} | call_type: ${call.call_type} | disposition: ${call.disposition} | talkTime: ${talkTime}s`);
-      console.log(`[CDR-RAW]   call.call_from_number (raw from Yeastar): "${call.call_from_number}"`);
-      console.log(`[CDR-RAW]   call.call_to_number   (raw from Yeastar): "${call.call_to_number}"`);
-      console.log(`[CDR-RAW]   from_number (after normalizeNumber)     : "${from_number}"`);
-      console.log(`[CDR-RAW]   to_number   (after normalizeNumber)     : "${to_number}"`);
-      console.log(`[CDR-RAW]   ext (extension making the call)         : "${ext}"`);
-      console.log(`[CDR-RAW]   companyAdminId: ${companyAdminId} | userId: ${userId}`);
-
       let billingResult = null;
       if (call.call_type === "Outbound" && call.disposition === "ANSWERED" && talkTime > 0) {
-        console.log(`[BILLING] >>> Outbound ANSWERED call — triggering calculateAndBill for yeastarId: ${call.id} | ext: ${ext} | from: ${from_number}`);
         try {
           billingResult = await calculateAndBill({
             companyAdminId,
-            userId,
+            userId: agentId,
             call_from:  from_number,
             call_to:    to_number,
             talk_time:  talkTime,
             yeastarId:  call.id,
             startTime:  dubaiFormatted,
           });
-          if (billingResult) {
-            console.log(`[BILLING] ✓ Call billed — yeastarId: ${call.id} | charges: $${billingResult.charges} | rate: $${billingResult.ratePerMin}/min | DID: ${billingResult.billedFrom}`);
-          } else {
-            console.log(`[BILLING] — Call NOT billed — yeastarId: ${call.id} | no DID assigned or no matching rate`);
-          }
         } catch (billingErr) {
-          console.error(`[BILLING] ✗ Error billing yeastarId ${call.id}:`, billingErr.message);
+          // billing error — non-fatal
         }
-      } else {
-        console.log(`[BILLING] Skipping — not (Outbound + ANSWERED + talkTime>0) | yeastarId: ${call.id} | direction: ${call.call_type} | status: ${call.disposition} | talkTime: ${talkTime}s`);
       }
 
       const dbPayload = {
-        userId,
-        extensionNumber:  ext,
+        userId: agentId,
+        extensionNumber:  extensionNumber,
+        extensionPhone:   extensionPhone || null,
         yeastarId:        call.id,
         call_from:        from_number,
         call_to:          to_number,
@@ -512,50 +415,35 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         billedFrom:       billingResult?.billedFrom ?? null,
       };
 
-      console.log(`\n[fetch-and-store] ── SAVING TO DB (yeastarId: ${call.id}) ──`);
-      console.log(`[fetch-and-store] Yeastar → duration:${call.duration} | talk_duration:${call.talk_duration} | ring_duration:${call.ring_duration} | disposition:${call.disposition}`);
-      console.log(`[fetch-and-store] DB save → duration:${dbPayload.duration} | talk_time:${dbPayload.talk_time} | ring_time:${dbPayload.ring_time} | status:${dbPayload.status} | charges:${dbPayload.charges}`);
-
       await CallHistory.create(dbPayload);
 
-      // ==========================================
-      // 🔔 Missed call notification
-      // ==========================================
       if (call.disposition === "NO ANSWER" && call.call_type === "Inbound") {
         const callerDisplay = from_number || "Unknown";
-        // Determine who to notify: the agent who owns this extension, and their companyAdmin
-        const notifyIds = [userId];
-        if (user.role === "user" && user.createdByWhichCompanyAdmin) {
-          notifyIds.push(user.createdByWhichCompanyAdmin);
+        const notifyIds = [agentId];
+        if (agent.createdByWhichCompanyAdmin) {
+          notifyIds.push(agent.createdByWhichCompanyAdmin);
         }
         const missedNotifDocs = notifyIds.map((uid) => ({
           userId: uid,
-          companyId: user.role === "companyAdmin" ? userId : user.createdByWhichCompanyAdmin,
+          companyId: companyAdminId,
           title: "Missed Call",
           description: `You missed an incoming call from ${callerDisplay}.`,
           body: "",
           attachments: [],
           category: "missed_call",
-          createdBy: userId,
+          createdBy: agentId,
         }));
         await Notification.insertMany(missedNotifDocs);
       }
 
-      // ==========================================
-      // 📝 Prepare Activity
-      // ==========================================
       const baseActivity = {
         action: "Call activity",
         type: "call",
-        title:
-          call.call_type === "Outbound" ? "Outgoing Call" : "Incoming Call",
+        title: call.call_type === "Outbound" ? "Outgoing Call" : "Incoming Call",
         description: `Call ${call.disposition} | Duration: ${call.duration}s (by ${performerName})`,
         timestamp: dubaiFormatted,
       };
 
-      // ==========================================
-      // 💾 Store activity
-      // ==========================================
       if (fromRecord) {
         fromRecord.activities.push({
           ...baseActivity,
@@ -575,12 +463,99 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
       inserted++;
     }
 
+  return inserted;
+}
+
+exports.fetchAndStoreCallHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: "User not found" });
+    }
+
+    const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
+    const endMoment = moment().tz(TZ);
+    const startMoment = endMoment.clone().subtract(24, "hours");
+    const startTime = startMoment.format("MM/DD/YYYY HH:mm:ss");
+    const endTime = endMoment.format("MM/DD/YYYY HH:mm:ss");
+    const encodedStart = encodeURIComponent(startTime);
+    const encodedEnd = encodeURIComponent(endTime);
+
+    if (user.role === "companyAdmin") {
+      const agents = await User.find({
+        createdByWhichCompanyAdmin: userId,
+        role: "user",
+      });
+
+      // Include the admin themselves alongside agents
+      const usersToFetch = [user, ...agents].filter(
+        (u) => (u.assignedExtensions || []).some(e => e.assignedDeviceId && e.extensionNumber)
+      );
+
+      if (!usersToFetch.length) {
+        return res.json({ status: "success", message: "No users with PBX extensions found", newInserted: 0 });
+      }
+
+      const allowedCreatedByIds = [userId, ...agents.map((a) => a._id)];
+      let totalInserted = 0;
+
+      for (const person of usersToFetch) {
+        try {
+          totalInserted += await fetchAndStoreForAgent({
+            agent: person,
+            companyAdminId: userId,
+            allowedCreatedByIds,
+            TZ,
+            encodedStart,
+            encodedEnd,
+            startTime,
+            endTime,
+          });
+        } catch (agentErr) {
+          // skip agent on error
+        }
+      }
+
+      return res.json({
+        status: "success",
+        message: `Stored ${totalInserted} new call records across ${usersToFetch.length} users`,
+        newInserted: totalInserted,
+      });
+    }
+
+    const hasAnyExtension =
+      user.PBXDetails?.PBX_EXTENSION_NUMBER ||
+      (user.assignedExtensions || []).some((e) => e.extensionNumber);
+
+    if (!hasAnyExtension) {
+      return res.status(400).json({ success: false, message: "User extension not found" });
+    }
+
+    const companyAdminId = user.createdByWhichCompanyAdmin || null;
+    let allowedCreatedByIds = [userId];
+    if (companyAdminId) {
+      const siblings = await User.find({ createdByWhichCompanyAdmin: companyAdminId, role: "user" }).select("_id");
+      allowedCreatedByIds = [companyAdminId, ...siblings.map((a) => a._id)];
+    }
+
+    const inserted = await fetchAndStoreForAgent({
+      agent: user,
+      companyAdminId,
+      allowedCreatedByIds,
+      TZ,
+      encodedStart,
+      encodedEnd,
+      startTime,
+      endTime,
+    });
+
     return res.json({
       status: "success",
       userId,
-      extension: ext,
+      extension: user.PBXDetails?.PBX_EXTENSION_NUMBER || null,
       time_window: { startTime, endTime },
-      totalFetched: finalList.length,
       newInserted: inserted,
       message: `Stored ${inserted} new call records`,
     });
@@ -594,299 +569,94 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
 };
 
 exports.fetchAndStoreCall10DaysHistory = async (req, res) => {
-  // const {YEASTAR_TZ} = getConfig()
   try {
     const userId = req.user._id;
-
     const user = await User.findById(userId);
-    if (!user || !user.PBXDetails.PBX_EXTENSION_NUMBER) {
-      return res.status(400).json({
-        success: false,
-        message: "User extension not found",
-      });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: "User not found" });
     }
 
-    const ext = user.PBXDetails.PBX_EXTENSION_NUMBER;
-    const PBX_BASE_URL = user.PBXDetails.PBX_BASE_URL;
-    const deviceId = user.PBXDetails.assignedDeviceId;
-    const token = await getDeviceToken(deviceId, "pbx");
-    // Always use Yeastar PBX timezone
     const TZ = process.env.YEASTAR_TZ || "Asia/Dubai";
-    // const TZ = YEASTAR_TZ || "Asia/Dubai";
-
-    // Build time window in Yeastar timezone
     const endMoment = moment().tz(TZ);
     const startMoment = endMoment.clone().subtract(10, "days");
-
-    // Yeastar required format
     const startTime = startMoment.format("MM/DD/YYYY HH:mm:ss");
     const endTime = endMoment.format("MM/DD/YYYY HH:mm:ss");
-
     const encodedStart = encodeURIComponent(startTime);
     const encodedEnd = encodeURIComponent(endTime);
 
-    // -------- OUTBOUND --------
-    const urlFrom = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_from=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
-    const respFrom = await axios.get(urlFrom, {
-      httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
-    });
-
-    // -------- INBOUND --------
-    const urlTo = `${PBX_BASE_URL}/cdr/search?access_token=${token}&call_to=${ext}&start_time=${encodedStart}&end_time=${encodedEnd}`;
-    const respTo = await axios.get(urlTo, {
-      httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
-    });
-
-    const fromList = Array.isArray(respFrom.data?.data)
-      ? respFrom.data.data
-      : [];
-    const toList = Array.isArray(respTo.data?.data) ? respTo.data.data : [];
-
-    let finalList = [...fromList, ...toList];
-
-    // Remove duplicates
-    const map = new Map();
-    finalList.forEach((c) => map.set(c.id, c));
-    finalList = [...map.values()];
-
-    // ==========================================
-    // 🔐 Identify Company Users for Duplicate Check
-    // ==========================================
-    let allowedCreatedByIds = [userId];
     if (user.role === "companyAdmin") {
       const agents = await User.find({
         createdByWhichCompanyAdmin: userId,
         role: "user",
-      }).select("_id");
-      allowedCreatedByIds.push(...agents.map((a) => a._id));
-    } else if (user.createdByWhichCompanyAdmin) {
-      const adminId = user.createdByWhichCompanyAdmin;
-      const agents = await User.find({
-        createdByWhichCompanyAdmin: adminId,
-        role: "user",
-      }).select("_id");
-      allowedCreatedByIds = [adminId, ...agents.map((a) => a._id)];
-    }
+      });
 
-    let inserted = 0;
-    const performerName = `${user.firstname} ${user.lastname}`;
+      const usersToFetch = [user, ...agents].filter(
+        (u) => (u.assignedExtensions || []).some(e => e.assignedDeviceId && e.extensionNumber)
+      );
 
-    for (const call of finalList) {
-      const exists = await CallHistory.findOne({ yeastarId: call.id });
-      if (exists) {
-        // Backfill talk_time for records stored before the talk_time field was added
-        if (exists.talk_time == null) {
-          await CallHistory.updateOne(
-            { yeastarId: call.id },
-            { $set: { talk_time: call.talk_duration ?? 0 } }
-          );
-        }
-        continue;
+      if (!usersToFetch.length) {
+        return res.json({ status: "success", message: "No users with PBX extensions found", newInserted: 0 });
       }
 
-      const from_number = normalizeNumber(call.call_from_number);
-      const to_number = normalizeNumber(call.call_to_number);
+      const allowedCreatedByIds = [userId, ...agents.map((a) => a._id)];
+      let totalInserted = 0;
 
-      // ==========================================
-      // 📞 Parse FROM & TO numbers
-      // ==========================================
-      const fromDetails = extractNumberDetails(from_number);
-      const toDetails = extractNumberDetails(to_number);
-
-      // ==========================================
-      // 🔍 Find matching records (Entire Company)
-      // ==========================================
-      let fromRecord = await findRecord(fromDetails, allowedCreatedByIds);
-      let toRecord = await findRecord(toDetails, allowedCreatedByIds);
-
-      const dubaiFormatted = moment
-        .tz(call.time, "MM/DD/YYYY HH:mm:ss", TZ)
-        .format("MM/DD/YYYY HH:mm:ss");
-
-      // ==========================================
-      // 🆕 AUTOMATED LEAD CREATION (NO ANSWER)
-      // ==========================================
-      if (call.disposition === "NO ANSWER") {
-        // If it's Inbound and the caller (FROM) is not in DB -> Create Lead
-        if (call.call_type === "Inbound" && !fromRecord) {
-          // Double check to ensure no last-second race condition if multiple calls sync
-          const doubleCheck = await findRecord(
-            fromDetails,
-            allowedCreatedByIds,
-          );
-          const newID = new mongoose.Types.ObjectId();
-          if (!doubleCheck) {
-            fromRecord = await Lead.create({
-              _id: newID,
-              contact_id: newID,
-              firstname: "Unknown",
-              lastname: "Caller",
-              phoneNumbers: [
-                {
-                  countryCode: fromDetails.countryCode || "971",
-                  number: fromDetails.number,
-                },
-              ],
-              status: "noAnswer",
-              createdBy: userId,
-              activities: [
-                {
-                  action: "Lead Created",
-                  type: "lead",
-                  title: "Automated Lead Creation",
-                  description: `Lead created from unanswered call (by ${performerName})`,
-                  timestamp: dubaiFormatted,
-                },
-              ],
-            });
-          } else {
-            fromRecord = doubleCheck;
-          }
-        }
-
-        // If records exist, update status to "no answer"
-        if (fromRecord) {
-          fromRecord.status = "noAnswer";
-          await fromRecord.save();
-        }
-        if (toRecord) {
-          toRecord.status = "noAnswer";
-          await toRecord.save();
-        }
-      }
-
-      const talkTime = call.talk_duration ?? 0;
-
-      // ── Billing (outbound ANSWERED calls from a purchased DID only) ───────
-      const companyAdminId =
-        user.role === "companyAdmin"
-          ? userId
-          : user.createdByWhichCompanyAdmin || null;
-
-      // Log the raw Yeastar CDR fields so we can see exactly what Yeastar reports
-      console.log(`[CDR-RAW] yeastarId: ${call.id} | call_type: ${call.call_type} | disposition: ${call.disposition} | talkTime: ${talkTime}s`);
-      console.log(`[CDR-RAW]   call.call_from_number (raw from Yeastar): "${call.call_from_number}"`);
-      console.log(`[CDR-RAW]   call.call_to_number   (raw from Yeastar): "${call.call_to_number}"`);
-      console.log(`[CDR-RAW]   from_number (after normalizeNumber)     : "${from_number}"`);
-      console.log(`[CDR-RAW]   to_number   (after normalizeNumber)     : "${to_number}"`);
-      console.log(`[CDR-RAW]   ext (extension making the call)         : "${ext}"`);
-      console.log(`[CDR-RAW]   companyAdminId: ${companyAdminId} | userId: ${userId}`);
-
-      let billingResult = null;
-      if (call.call_type === "Outbound" && call.disposition === "ANSWERED" && talkTime > 0) {
-        console.log(`[BILLING] >>> Outbound ANSWERED call — triggering calculateAndBill for yeastarId: ${call.id} | ext: ${ext} | from: ${from_number}`);
+      for (const person of usersToFetch) {
         try {
-          billingResult = await calculateAndBill({
-            companyAdminId,
-            userId,
-            call_from:  from_number,
-            call_to:    to_number,
-            talk_time:  talkTime,
-            yeastarId:  call.id,
-            startTime:  dubaiFormatted,
+          totalInserted += await fetchAndStoreForAgent({
+            agent: person,
+            companyAdminId: userId,
+            allowedCreatedByIds,
+            TZ,
+            encodedStart,
+            encodedEnd,
+            startTime,
+            endTime,
           });
-          if (billingResult) {
-            console.log(`[BILLING] ✓ Call billed — yeastarId: ${call.id} | charges: $${billingResult.charges} | rate: $${billingResult.ratePerMin}/min | DID: ${billingResult.billedFrom}`);
-          } else {
-            console.log(`[BILLING] — Call NOT billed — yeastarId: ${call.id} | no DID assigned or no matching rate`);
-          }
-        } catch (billingErr) {
-          console.error(`[BILLING] ✗ Error billing yeastarId ${call.id}:`, billingErr.message);
+        } catch (agentErr) {
+          console.error(`[fetch-and-store-10d] Error for user ${person._id}:`, agentErr.message);
         }
-      } else {
-        console.log(`[BILLING] Skipping — not (Outbound + ANSWERED + talkTime>0) | yeastarId: ${call.id} | direction: ${call.call_type} | status: ${call.disposition} | talkTime: ${talkTime}s`);
       }
 
-      const dbPayload = {
-        userId,
-        extensionNumber:  ext,
-        yeastarId:        call.id,
-        call_from:        from_number,
-        call_to:          to_number,
-        talk_time:        talkTime,
-        ring_time:        call.ring_duration  ?? 0,
-        duration:         call.duration       ?? 0,
-        direction:        call.call_type,
-        status:           call.disposition,
-        start_time:       dubaiFormatted,
-        end_time:         dubaiFormatted,
-        record_file:      call.record_file,
-        disposition_code: call.reason,
-        trunk:            call.dst_trunk,
-        charges:          billingResult?.charges    ?? null,
-        ratePerMin:       billingResult?.ratePerMin ?? null,
-        billedFrom:       billingResult?.billedFrom ?? null,
-      };
-
-      console.log(`\n[fetch-and-store] ── SAVING TO DB (yeastarId: ${call.id}) ──`);
-      console.log(`[fetch-and-store] Yeastar → duration:${call.duration} | talk_duration:${call.talk_duration} | ring_duration:${call.ring_duration} | disposition:${call.disposition}`);
-      console.log(`[fetch-and-store] DB save → duration:${dbPayload.duration} | talk_time:${dbPayload.talk_time} | ring_time:${dbPayload.ring_time} | status:${dbPayload.status} | charges:${dbPayload.charges}`);
-
-      await CallHistory.create(dbPayload);
-
-      // ==========================================
-      // 🔔 Missed call notification
-      // ==========================================
-      if (call.disposition === "NO ANSWER" && call.call_type === "Inbound") {
-        const callerDisplay = from_number || "Unknown";
-        // Determine who to notify: the agent who owns this extension, and their companyAdmin
-        const notifyIds = [userId];
-        if (user.role === "user" && user.createdByWhichCompanyAdmin) {
-          notifyIds.push(user.createdByWhichCompanyAdmin);
-        }
-        const missedNotifDocs = notifyIds.map((uid) => ({
-          userId: uid,
-          companyId: user.role === "companyAdmin" ? userId : user.createdByWhichCompanyAdmin,
-          title: "Missed Call",
-          description: `You missed an incoming call from ${callerDisplay}.`,
-          body: "",
-          attachments: [],
-          category: "missed_call",
-          createdBy: userId,
-        }));
-        await Notification.insertMany(missedNotifDocs);
-      }
-
-      // ==========================================
-      // 📝 Prepare Activity
-      // ==========================================
-      const baseActivity = {
-        action: "Call activity",
-        type: "call",
-        title:
-          call.call_type === "Outbound" ? "Outgoing Call" : "Incoming Call",
-        description: `Call ${call.disposition} | Duration: ${call.duration}s (by ${performerName})`,
-        timestamp: dubaiFormatted,
-      };
-
-      // ==========================================
-      // 💾 Store activity
-      // ==========================================
-      if (fromRecord) {
-        fromRecord.activities.push({
-          ...baseActivity,
-          description: `Call with ${to_number} | ${call.disposition} (by ${performerName})`,
-        });
-        await fromRecord.save();
-      }
-
-      if (toRecord) {
-        toRecord.activities.push({
-          ...baseActivity,
-          description: `Call with ${from_number} | ${call.disposition} (by ${performerName})`,
-        });
-        await toRecord.save();
-      }
-
-      inserted++;
+      return res.json({
+        status: "success",
+        message: `Stored ${totalInserted} new call records across ${usersToFetch.length} users`,
+        newInserted: totalInserted,
+      });
     }
+
+    const hasAnyExtension =
+      user.PBXDetails?.PBX_EXTENSION_NUMBER ||
+      (user.assignedExtensions || []).some((e) => e.extensionNumber);
+
+    if (!hasAnyExtension) {
+      return res.status(400).json({ success: false, message: "User extension not found" });
+    }
+
+    const companyAdminId = user.createdByWhichCompanyAdmin || null;
+    let allowedCreatedByIds = [userId];
+    if (companyAdminId) {
+      const siblings = await User.find({ createdByWhichCompanyAdmin: companyAdminId, role: "user" }).select("_id");
+      allowedCreatedByIds = [companyAdminId, ...siblings.map((a) => a._id)];
+    }
+
+    const inserted = await fetchAndStoreForAgent({
+      agent: user,
+      companyAdminId,
+      allowedCreatedByIds,
+      TZ,
+      encodedStart,
+      encodedEnd,
+      startTime,
+      endTime,
+    });
 
     return res.json({
       status: "success",
       userId,
-      extension: ext,
+      extension: user.PBXDetails?.PBX_EXTENSION_NUMBER || null,
       time_window: { startTime, endTime },
-      totalFetched: finalList.length,
       newInserted: inserted,
       message: `Stored ${inserted} new call records`,
     });

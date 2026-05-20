@@ -14,8 +14,6 @@ const SSM_PARAMS = [
 const client = new SSMClient({ region: "eu-north-1" });
 
 async function _load() {
-  console.log("[SSM] Loading parameters from AWS SSM Parameter Store...");
-
   for (const param of SSM_PARAMS) {
     try {
       const response = await client.send(
@@ -24,17 +22,11 @@ async function _load() {
       const value = response.Parameter?.Value;
       if (value) {
         process.env[param.envKey] = value;
-        console.log(`[SSM] ✅ ${param.name} → process.env.${param.envKey}`);
-      } else {
-        console.warn(`[SSM] ⚠️  ${param.name} returned an empty value`);
       }
     } catch (err) {
-      console.error(`[SSM] ❌ Failed to load ${param.name}:`, err.message);
       throw err;
     }
   }
-
-  console.log("[SSM] ✅ All SSM parameters loaded");
 }
 
 // Start fetching immediately on module load (cold start).
