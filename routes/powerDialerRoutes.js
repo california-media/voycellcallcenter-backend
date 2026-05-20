@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const checkRole = require("../middlewares/roleCheck");
 
-const { createList, getLists, deleteList, assignList, resetList, getListContacts } = require("../controllers/powerDialerListController");
+const { createList, getLists, deleteList, updateList, assignList, resetList, getListContacts } = require("../controllers/powerDialerListController");
 const { createCampaign, getCampaigns, updateCampaign, deleteCampaign, updateCampaignStatus } = require("../controllers/powerDialerCampaignController");
 const { startSession, getActiveSession, pauseSession, resumeSession, stopSession, nextContact, getLiveStats } = require("../controllers/powerDialerSessionController");
 
@@ -11,6 +11,7 @@ const { startSession, getActiveSession, pauseSession, resumeSession, stopSession
 router.post("/lists", createList);
 router.get("/lists", getLists);
 router.delete("/lists/:id", deleteList);
+router.put("/lists/:id", checkRole(["companyAdmin"]), updateList);
 router.post("/lists/:id/assign", checkRole(["companyAdmin"]), assignList);
 router.get("/lists/:id/contacts", getListContacts);
 router.put("/lists/:id/reset", checkRole(["companyAdmin"]), resetList);

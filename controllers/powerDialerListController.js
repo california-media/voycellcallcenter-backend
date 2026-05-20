@@ -242,6 +242,30 @@ const getListContacts = async (req, res) => {
   }
 };
 
+// PUT /api/power-dialer/lists/:id — update list name
+const updateList = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+    const company_id = getCompanyId(req.user);
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ status: "error", message: "List name required" });
+    }
+
+    const list = await PowerDialerList.findOneAndUpdate(
+      { _id: id, company_id },
+      { name: name.trim() },
+      { new: true }
+    );
+    if (!list) return res.status(404).json({ status: "error", message: "List not found" });
+
+    return res.status(200).json({ status: "success", data: list });
+  } catch (err) {
+    return res.status(500).json({ status: "error", message: err.message });
+  }
+};
+
 // PUT /api/power-dialer/lists/:id/reset — reset all contacts back to pending
 const resetList = async (req, res) => {
   try {
@@ -262,4 +286,4 @@ const resetList = async (req, res) => {
   }
 };
 
-module.exports = { createList, getLists, deleteList, assignList, resetList, getListContacts };
+module.exports = { createList, getLists, deleteList, updateList, assignList, resetList, getListContacts };

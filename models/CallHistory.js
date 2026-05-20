@@ -27,7 +27,7 @@ const callHistorySchema = new mongoose.Schema(
     extensionPhone: { type: String, default: null },
 
     // Yeastar CDR fields
-    yeastarId: { type: String, required: true, unique: true }, // cdr.id
+    yeastarId: { type: String, required: true }, // cdr.id — uniqueness enforced by compound index below
     call_from: String,
     call_to: String,
     talk_time: Number,
@@ -61,6 +61,8 @@ const callHistorySchema = new mongoose.Schema(
 callHistorySchema.index({ userId: 1, startTimeParsed: 1 });
 // Standalone index so queries filtering only by userId (e.g. count queries) are fast too.
 callHistorySchema.index({ userId: 1 });
+// Unique per PBX device — two different PBX systems can have the same integer call ID
+callHistorySchema.index({ yeastarId: 1, extensionNumber: 1 }, { unique: true });
 
 // ── Pre-save hook ─────────────────────────────────────────────────────────────
 // Automatically populates startTimeParsed whenever a record is created or updated.

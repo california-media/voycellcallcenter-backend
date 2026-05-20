@@ -250,7 +250,13 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
     (e) => e.extensionNumber && e.assignedDeviceId
   );
 
+  console.log(`[CDR-FETCH] agent=${performerName} | assignedExtensions total=${(agent.assignedExtensions||[]).length} | valid (has ext+device)=${extensions.length}`);
+  (agent.assignedExtensions || []).forEach((e, i) => {
+    console.log(`[CDR-FETCH]   ext[${i}]: extensionNumber=${e.extensionNumber} assignedDeviceId=${e.assignedDeviceId} PBX_BASE_URL=${e.PBX_BASE_URL || "(none)"}`);
+  });
+
   if (!extensions.length) {
+    console.log(`[CDR-FETCH] agent=${performerName} → SKIPPED (no valid extensions)`);
     return 0;
   }
 
@@ -271,16 +277,20 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
           const tokenDoc = await YeastarToken.findOne({ deviceId: assignedDeviceId }).select("base_url").lean();
           baseUrl = tokenDoc?.base_url || null;
         }
+        console.log(`[CDR-FETCH]   deviceId=${deviceKey} → token=${token ? "OK" : "MISSING"} baseUrl=${baseUrl || "MISSING"}`);
         tokenCache[deviceKey] = { token, baseUrl };
       }
       const { token, baseUrl } = tokenCache[deviceKey];
 
       if (!baseUrl) {
+        console.log(`[CDR-FETCH]   ext=${extensionNumber} deviceId=${deviceKey} → SKIPPED (no baseUrl)`);
         continue;
       }
 
       const urlFrom = `${baseUrl}/cdr/search?access_token=${token}&call_from=${extensionNumber}&start_time=${encodedStart}&end_time=${encodedEnd}`;
       const urlTo   = `${baseUrl}/cdr/search?access_token=${token}&call_to=${extensionNumber}&start_time=${encodedStart}&end_time=${encodedEnd}`;
+
+      console.log(`[CDR-FETCH]   ext=${extensionNumber} → fetching CDR from baseUrl=${baseUrl}`);
 
       const [respFrom, respTo] = await Promise.all([
         axios.get(urlFrom, { httpsAgent }),
@@ -290,34 +300,48 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
       const fromList = Array.isArray(respFrom.data?.data) ? respFrom.data.data : [];
       const toList   = Array.isArray(respTo.data?.data)   ? respTo.data.data   : [];
 
+      console.log(`[CDR-FETCH]   ext=${extensionNumber} → from_calls=${fromList.length} to_calls=${toList.length}`);
+
       const extensionPhone = extEntry.PBX_TELEPHONE || null;
       [...fromList, ...toList].forEach((c) => {
-        if (c.id == null) return;
-        if (!callMap.has(c.id)) {
-          callMap.set(c.id, { call: c, extensionNumber, extensionPhone });
+        const callId = c.id ?? c.call_id;
+        if (callId == null) return;
+        const mapKey = `${deviceKey}:${callId}`;
+        if (!callMap.has(mapKey)) {
+          callMap.set(mapKey, { call: c, callId: String(callId), extensionNumber, extensionPhone });
         }
       });
     } catch (extErr) {
-      // skip extension on error
+      console.log(`[CDR-FETCH]   ext=${extensionNumber} → ERROR: ${extErr.message}`);
     }
   }
 
   let finalList = [...callMap.values()];
 
-  let inserted = 0;
+  // log breakdown by extension so we can verify cross-device dedup is working
+  const byExt = {};
+  finalList.forEach(({ extensionNumber: en }) => { byExt[en] = (byExt[en] || 0) + 1; });
+  console.log(`[CDR-INSERT] agent=${performerName} | callMap size=${callMap.size} | breakdown: ${JSON.stringify(byExt)}`);
 
-  for (const { call, extensionNumber, extensionPhone } of finalList) {
-    if (!call.id) continue;
-    const exists = await CallHistory.findOne({ yeastarId: call.id });
+  let inserted = 0;
+  let skippedDuplicate = 0;
+
+  console.log(`[CDR-INSERT] agent=${performerName} | total unique calls to process=${finalList.length}`);
+
+  for (const { call, callId, extensionNumber, extensionPhone } of finalList) {
+    if (!callId) continue;
+    const exists = await CallHistory.findOne({ yeastarId: callId, extensionNumber });
     if (exists) {
+      skippedDuplicate++;
       if (exists.talk_time == null) {
         await CallHistory.updateOne(
-          { yeastarId: call.id },
+          { yeastarId: callId, extensionNumber },
           { $set: { talk_time: call.talk_duration ?? 0 } }
         );
       }
       continue;
     }
+    console.log(`[CDR-INSERT] NEW call | ext=${extensionNumber} | id=${callId} | type=${call.call_type} | disposition=${call.disposition} | from=${call.call_from_number} | to=${call.call_to_number}`);
 
     const from_number = normalizeNumber(call.call_from_number);
     const to_number = normalizeNumber(call.call_to_number);
@@ -385,7 +409,7 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
             call_from:  from_number,
             call_to:    to_number,
             talk_time:  talkTime,
-            yeastarId:  call.id,
+            yeastarId:  callId,
             startTime:  dubaiFormatted,
           });
         } catch (billingErr) {
@@ -397,7 +421,7 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
         userId: agentId,
         extensionNumber:  extensionNumber,
         extensionPhone:   extensionPhone || null,
-        yeastarId:        call.id,
+        yeastarId:        callId,
         call_from:        from_number,
         call_to:          to_number,
         talk_time:        talkTime,
@@ -415,7 +439,13 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
         billedFrom:       billingResult?.billedFrom ?? null,
       };
 
-      await CallHistory.create(dbPayload);
+      try {
+        await CallHistory.create(dbPayload);
+        inserted++;
+        console.log(`[CDR-INSERT] ✓ saved | ext=${extensionNumber} | id=${callId} | userId=${agentId} | direction=${call.call_type}`);
+      } catch (createErr) {
+        console.log(`[CDR-INSERT] ✗ FAILED to save | ext=${extensionNumber} | id=${callId} | error=${createErr.message}`);
+      }
 
       if (call.disposition === "NO ANSWER" && call.call_type === "Inbound") {
         const callerDisplay = from_number || "Unknown";
@@ -459,10 +489,9 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
         });
         await toRecord.save();
       }
-
-      inserted++;
     }
 
+  console.log(`[CDR-INSERT] agent=${performerName} | DONE | inserted=${inserted} skipped(duplicate)=${skippedDuplicate}`);
   return inserted;
 }
 
@@ -494,6 +523,16 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
         (u) => (u.assignedExtensions || []).some(e => e.assignedDeviceId && e.extensionNumber)
       );
 
+      console.log(`[CDR-FETCH] companyAdmin=${userId} | total agents=${agents.length} | users with valid extensions=${usersToFetch.length}`);
+      [user, ...agents].forEach((u) => {
+        const exts = (u.assignedExtensions || []);
+        const validExts = exts.filter(e => e.assignedDeviceId && e.extensionNumber);
+        console.log(`[CDR-FETCH]   user=${u.firstname} ${u.lastname} (${u._id}) | assignedExtensions=${exts.length} valid=${validExts.length}`);
+        exts.forEach((e, i) => {
+          console.log(`[CDR-FETCH]     ext[${i}]: extensionNumber=${e.extensionNumber} assignedDeviceId=${e.assignedDeviceId} PBX_BASE_URL=${e.PBX_BASE_URL || "MISSING"}`);
+        });
+      });
+
       if (!usersToFetch.length) {
         return res.json({ status: "success", message: "No users with PBX extensions found", newInserted: 0 });
       }
@@ -514,7 +553,7 @@ exports.fetchAndStoreCallHistory = async (req, res) => {
             endTime,
           });
         } catch (agentErr) {
-          // skip agent on error
+          console.log(`[CDR-FETCH] ERROR for user ${person.firstname} ${person.lastname}: ${agentErr.message}`);
         }
       }
 
@@ -876,7 +915,21 @@ exports.getCompanyCallHistory = async (req, res) => {
       },
     ];
 
+    // --- diagnostic: raw DB counts for 2010 extension ---
+    const raw2010Count    = await CallHistory.countDocuments({ extensionNumber: "2010" });
+    const raw2010Internal = await CallHistory.countDocuments({ extensionNumber: "2010", direction: "Internal" });
+    const raw2010Outbound = await CallHistory.countDocuments({ extensionNumber: "2010", direction: "Outbound" });
+    const raw2010Inbound  = await CallHistory.countDocuments({ extensionNumber: "2010", direction: "Inbound" });
+    const raw2010UserId   = await CallHistory.distinct("userId", { extensionNumber: "2010" });
+    console.log(`[CDR-QUERY] ext=2010 in DB | total=${raw2010Count} internal=${raw2010Internal} outbound=${raw2010Outbound} inbound=${raw2010Inbound}`);
+    console.log(`[CDR-QUERY] ext=2010 userIds in DB: ${JSON.stringify(raw2010UserId)}`);
+    console.log(`[CDR-QUERY] allUserIds in query: ${JSON.stringify(allUserIds)}`);
+    console.log(`[CDR-QUERY] recordMatch: ${JSON.stringify(recordMatch)}`);
+    // ---
+
     const recordResult = await CallHistory.aggregate(recordsPipeline);
+    const aggregateTotal = recordResult[0]?.total?.[0]?.count || 0;
+    console.log(`[CDR-QUERY] aggregate returned total=${aggregateTotal} records (page size=${page_size})`);
 
     const callRecords = recordResult[0]?.records || [];
 
@@ -1049,7 +1102,7 @@ exports.getAgentCallHistory = async (req, res) => {
       });
     }
 
-    const agentExtension = agent.PBXDetails.PBX_EXTENSION_NUMBER;
+    const agentExtension = agent.PBXDetails?.PBX_EXTENSION_NUMBER;
 
     // 2️⃣ Request filters
     const {
