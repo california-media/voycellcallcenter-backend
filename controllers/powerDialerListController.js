@@ -60,6 +60,7 @@ const createList = async (req, res) => {
           company_id,
           name: String(c.name || `${c.firstname || ""} ${c.lastname || ""}`.trim() || "").trim(),
           phone: rawPhone,
+          notes: String(c.notes || ""),
           status: "pending",
           order: i,
         });
@@ -94,6 +95,7 @@ const createList = async (req, res) => {
               lastname,
               phoneNumbers: [phoneObj],
               emailAddresses: [],
+              notes: String(c.notes || ""),
               isLead: false,
               activities: [{ action: "contact_created", type: "contact", title: "Contact Imported via Power Dialer", description: `${firstname} ${lastname}`.trim() }],
               createdBy: req.user._id,

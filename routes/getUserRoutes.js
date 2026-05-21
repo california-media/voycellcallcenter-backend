@@ -1,5 +1,5 @@
 const { Router } = require("express");
-const { getUserData } = require("../controllers/getUserControllers");
+const { getUserData, getAgents } = require("../controllers/getUserControllers");
 const { checkForAuthentication } = require("../middlewares/authentication");
 const checkAccountStatus = require("../middlewares/checkAccountStatus")
 
@@ -17,5 +17,6 @@ const router = Router();
  */
 
 router.post("/", checkAccountStatus,checkForAuthentication(), getUserData);
+router.get("/getAgents", checkAccountStatus, getAgents);
 
 module.exports = router;

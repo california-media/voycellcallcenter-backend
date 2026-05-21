@@ -706,4 +706,30 @@ const getUserData = async (req, res) => {
   }
 };
 
-module.exports = { getUserData };
+const getAgents = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const loggedInUser = await User.findById(userId).lean();
+    if (!loggedInUser) return res.status(401).json({ status: "error", message: "Unauthorized" });
+
+    let companyAdminId;
+    if (loggedInUser.role === "companyAdmin") {
+      companyAdminId = loggedInUser._id;
+    } else if (loggedInUser.createdByWhichCompanyAdmin) {
+      companyAdminId = loggedInUser.createdByWhichCompanyAdmin;
+    } else {
+      companyAdminId = loggedInUser._id;
+    }
+
+    const agents = await User.find(
+      { createdByWhichCompanyAdmin: companyAdminId, role: "user" },
+      "firstname lastname email _id"
+    ).lean();
+
+    return res.json({ status: "success", users: agents });
+  } catch (error) {
+    return res.status(500).json({ status: "error", message: "Internal server error" });
+  }
+};
+
+module.exports = { getUserData, getAgents };

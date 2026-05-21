@@ -161,14 +161,22 @@ const saveBulkContacts = async (req, res) => {
       "emailAddresses",
       "phoneNumbers",
       "status",
+      "notes",
     ];
 
     const newContacts = [];
     const skippedContacts = [];
 
     // preprocess contact: normalize keys to schema names: emailAddresses, phoneNumbers
-    const preprocessContact = (contact) => {
-      const invalidKeys = Object.keys(contact).filter((key) => !allowedFields.includes(key));
+    const preprocessContact = (rawContact) => {
+      // Normalize keys: lowercase, strip __EMPTY* spurious xlsx columns, handle "Notes"→"notes"
+      const contact = {};
+      for (const [k, v] of Object.entries(rawContact)) {
+        if (/^__EMPTY/i.test(k) || v === undefined || v === null) continue;
+        contact[k.toLowerCase()] = v;
+      }
+
+      const invalidKeys = Object.keys(contact).filter((key) => !allowedFields.map(f => f.toLowerCase()).includes(key));
       if (invalidKeys.length > 0) {
         throw new Error(`Invalid columns: ${invalidKeys.join(", ")}`);
       }
@@ -184,21 +192,12 @@ const saveBulkContacts = async (req, res) => {
         twitter = "",
         facebook = "",
         status = "",
+        notes = "",
       } = contact;
 
-      // Accept both shapes: contact.phoneNumbers (camel) or contact.phonenumbers (lowercase)
-      const incomingPhoneField = Array.isArray(contact.phoneNumbers)
-        ? contact.phoneNumbers
-        : Array.isArray(contact.phonenumbers)
-          ? contact.phonenumbers
-          : contact.phoneNumbers || contact.phonenumbers || [];
-
-      // Accept both shapes for emails
-      const incomingEmailField = Array.isArray(contact.emailAddresses)
-        ? contact.emailAddresses
-        : Array.isArray(contact.emailaddresses)
-          ? contact.emailaddresses
-          : contact.emailAddresses || contact.emailaddresses || [];
+      // All keys are already lowercased above — use lowercase variants directly
+      const incomingPhoneField = contact.phonenumbers || [];
+      const incomingEmailField = contact.emailaddresses || [];
 
       // Build normalized phoneNumbers array of objects { countryCode, number }
       let phoneList = [];
@@ -245,13 +244,12 @@ const saveBulkContacts = async (req, res) => {
           ? [String(incomingEmailField).toLowerCase()]
           : [];
 
-      // Validate status if provided
-      if (status && status.trim() !== "") {
-        if (!validStatuses.includes(status)) {
-          const categoryName = shouldBeLeads ? "lead" : "contact";
-          throw new Error(`Invalid ${categoryName} status: "${status}".`);
-        }
-      }
+      // Normalize status: use provided if valid, else fall back to category default
+      let resolvedStatus = status && status.trim() !== "" && validStatuses.includes(status)
+        ? status
+        : shouldBeLeads
+          ? "interested"
+          : (validStatuses[0] || "");
 
       return {
         raw: contact,
@@ -267,7 +265,8 @@ const saveBulkContacts = async (req, res) => {
           facebook,
           emailAddresses: emailList,
           phoneNumbers: phoneList,
-          status,
+          status: resolvedStatus,
+          notes: notes || "",
         },
       };
     };
@@ -300,6 +299,7 @@ const saveBulkContacts = async (req, res) => {
           emailAddresses,
           phoneNumbers,
           status,
+          notes,
         } = normalized;
 
         // --- company-wide duplicate checks ---
@@ -348,6 +348,16 @@ const saveBulkContacts = async (req, res) => {
 
         // Not a duplicate -> prepare insert
         const generatedId = new mongoose.Types.ObjectId();
+        const importedTasks = notes
+          ? [{
+              task_id: new mongoose.Types.ObjectId(),
+              taskDescription: notes,
+              taskDueDate: null,
+              taskDueTime: null,
+              taskIsCompleted: false,
+              createdAt: new Date(),
+            }]
+          : [];
         const newContact = {
           _id: generatedId,
           contact_id: generatedId,
@@ -363,8 +373,10 @@ const saveBulkContacts = async (req, res) => {
           emailAddresses,
           phoneNumbers,
           status,
+          notes: notes || "",
           isLead: shouldBeLeads,
           tags: baseContactTags.map(t => ({ ...t })),
+          tasks: importedTasks,
           activities: [
             {
               action: shouldBeLeads ? "lead_created" : "contact_created",
