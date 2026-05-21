@@ -591,17 +591,35 @@ const deleteContactOrLead = async (req, res) => {
       allowedUserIds = [req.user._id, ...agentIds];
     }
 
+    // Agents cannot delete assigned contacts — only ones they created
+    if (user.role === "user") {
+      const isLeadReq = category && category.toLowerCase() === "lead";
+      const models = category ? [isLeadReq ? Lead : Contact] : [Contact, Lead];
+      let existing = null;
+      for (const Model of models) {
+        existing = await Model.findById(contact_id).lean();
+        if (existing) break;
+      }
+      if (!existing) {
+        return res.status(404).json({ status: "error", message: "Record not found" });
+      }
+      if (String(existing.createdBy) !== String(userId)) {
+        return res.status(403).json({
+          status: "error",
+          message: "You cannot delete contacts assigned to you. Only contacts you created can be deleted.",
+        });
+      }
+    }
+
     // If category is not provided, try both models
     if (!category) {
       const record =
         (await Contact.findOneAndDelete({
           _id: contact_id,
-          // createdBy: userId,
           createdBy: { $in: allowedUserIds },
         })) ||
         (await Lead.findOneAndDelete({
           _id: contact_id,
-          // createdBy: userId,
           createdBy: { $in: allowedUserIds },
         }));
 
@@ -626,10 +644,7 @@ const deleteContactOrLead = async (req, res) => {
     // Find and delete record
     const record = await currentModel.findOneAndDelete({
       _id: contact_id,
-      $or: [
-        { createdBy: { $in: allowedUserIds } },
-        { assignedTo: req.user._id }
-      ]
+      createdBy: { $in: allowedUserIds },
     });
 
     if (!record) {
@@ -870,20 +885,26 @@ const batchDeleteContacts = async (req, res) => {
       allowedUserIds = [req.user._id, ...agentIds];
     }
 
-    // Delete records that belong to this user
+    // Delete records that belong to this user (assigned-only contacts are skipped)
     const result = await currentModel.deleteMany({
       _id: { $in: contact_ids },
-      // createdBy: req.user._id,
-      createdBy: { $in: allowedUserIds }
+      createdBy: { $in: allowedUserIds },
     });
 
     const itemType = isLeadReq ? "lead" : "contact";
+    const skippedCount = contact_ids.length - result.deletedCount;
+
+    let message = `${result.deletedCount} ${itemType}(s) deleted successfully.`;
+    if (skippedCount > 0) {
+      message += ` ${skippedCount} ${itemType}(s) skipped — you can only delete contacts you created.`;
+    }
 
     res.status(200).json({
       status: "success",
-      message: `${result.deletedCount} ${itemType}(s) deleted successfully`,
+      message,
       data: {
         deletedCount: result.deletedCount,
+        skippedCount,
       },
     });
   } catch (error) {

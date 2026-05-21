@@ -60,6 +60,7 @@ const createList = async (req, res) => {
           company_id,
           name: String(c.name || `${c.firstname || ""} ${c.lastname || ""}`.trim() || "").trim(),
           phone: rawPhone,
+          email: String(c.email || ""),
           notes: String(c.notes || ""),
           status: "pending",
           order: i,
@@ -86,6 +87,7 @@ const createList = async (req, res) => {
         const firstname = String(c.firstname || (c.name ? c.name.split(" ")[0] : "") || "").trim();
         const lastname  = String(c.lastname  || (c.name ? c.name.split(" ").slice(1).join(" ") : "") || "").trim();
         const id = new mongoose.Types.ObjectId();
+        const noteText = String(c.notes || "").trim();
         contactBulkOps.push({
           insertOne: {
             document: {
@@ -94,9 +96,18 @@ const createList = async (req, res) => {
               firstname,
               lastname,
               phoneNumbers: [phoneObj],
-              emailAddresses: [],
-              notes: String(c.notes || ""),
+              emailAddresses: c.email ? [String(c.email).toLowerCase().trim()] : [],
+              notes: noteText,
+              status: "",
               isLead: false,
+              tasks: noteText ? [{
+                task_id: new mongoose.Types.ObjectId(),
+                taskDescription: noteText,
+                taskDueDate: null,
+                taskDueTime: null,
+                taskIsCompleted: false,
+                createdAt: new Date(),
+              }] : [],
               activities: [{ action: "contact_created", type: "contact", title: "Contact Imported via Power Dialer", description: `${firstname} ${lastname}`.trim() }],
               createdBy: req.user._id,
             },

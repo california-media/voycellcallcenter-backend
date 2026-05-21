@@ -6,75 +6,52 @@ const PowerDialerContact = require("../models/PowerDialerContact");
 const Contact = require("../models/contactModel");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 
-// Transfer all contacts in a campaign's list to each assignee's Contact database
-// and remove those phone numbers from the company admin's Contact records.
-const transferContactsToAssignees = async (campaign, assigneeIds) => {
+// Assign contacts in a campaign's list to each assignee (adds to assignedTo, no deletion)
+const assignContactsToAssignees = async (campaign, assigneeIds) => {
   if (!assigneeIds || assigneeIds.length === 0) return;
 
   const dialerContacts = await PowerDialerContact.find({ list_id: campaign.list_id }).lean();
   if (dialerContacts.length === 0) return;
 
-  const phones = dialerContacts.map((c) => c.phone).filter(Boolean);
-
-  for (const agentId of assigneeIds) {
-    for (const dc of dialerContacts) {
-      const rawPhone = String(dc.phone || "").replace(/\s/g, "");
-      if (!rawPhone) continue;
-
-      let phoneObj = { countryCode: "", number: "" };
-      const parsed = parsePhoneNumberFromString(`+${rawPhone}`) || parsePhoneNumberFromString(rawPhone);
-      if (parsed && parsed.nationalNumber) {
-        phoneObj.countryCode = String(parsed.countryCallingCode || "");
-        phoneObj.number = String(parsed.nationalNumber);
-      } else {
-        phoneObj.number = rawPhone.replace(/\D/g, "");
-      }
-      if (!phoneObj.number) continue;
-
-      const nameParts = (dc.name || "").split(" ");
-      const firstname = nameParts[0] || "";
-      const lastname = nameParts.slice(1).join(" ") || "";
-
-      const id = new mongoose.Types.ObjectId();
-      await Contact.findOneAndUpdate(
-        { createdBy: agentId, "phoneNumbers.number": phoneObj.number },
-        {
-          $setOnInsert: {
-            _id: id,
-            contact_id: id,
-            firstname,
-            lastname,
-            phoneNumbers: [phoneObj],
-            emailAddresses: [],
-            notes: dc.notes || "",
-            isLead: false,
-            activities: [{
-              action: "contact_created",
-              type: "import",
-              title: "Imported via Power Dialer Campaign",
-              description: `Campaign: ${campaign.name}`,
-              timestamp: new Date(),
-            }],
-            createdBy: agentId,
-          },
-        },
-        { upsert: true }
-      );
-    }
-  }
-
-  // Remove those phone numbers from company admin's Contact records
-  const allNumbers = dialerContacts
+  const nationalNumbers = dialerContacts
     .map((dc) => {
-      const parsed = parsePhoneNumberFromString(`+${dc.phone}`) || parsePhoneNumberFromString(dc.phone);
-      return parsed?.nationalNumber ? String(parsed.nationalNumber) : dc.phone.replace(/\D/g, "");
+      const raw = String(dc.phone || "").replace(/\s/g, "");
+      if (!raw) return null;
+      const parsed = parsePhoneNumberFromString(`+${raw}`) || parsePhoneNumberFromString(raw);
+      return parsed?.nationalNumber ? String(parsed.nationalNumber) : raw.replace(/\D/g, "");
     })
     .filter(Boolean);
 
-  await Contact.deleteMany({
+  if (nationalNumbers.length === 0) return;
+
+  // Find matching contacts/leads owned by the company admin
+  const Lead = require("../models/leadModel");
+  const matchingContacts = await Contact.find({
     createdBy: campaign.company_id,
-    "phoneNumbers.number": { $in: allNumbers },
-  });
+    "phoneNumbers.number": { $in: nationalNumbers },
+  }).select("_id").lean();
+
+  const matchingLeads = await Lead.find({
+    createdBy: campaign.company_id,
+    "phoneNumbers.number": { $in: nationalNumbers },
+  }).select("_id").lean();
+
+  const contactIds = matchingContacts.map((c) => c._id);
+  const leadIds = matchingLeads.map((l) => l._id);
+
+  if (contactIds.length > 0) {
+    await Contact.updateMany(
+      { _id: { $in: contactIds } },
+      { $addToSet: { assignedTo: { $each: assigneeIds } } }
+    );
+  }
+
+  if (leadIds.length > 0) {
+    await Lead.updateMany(
+      { _id: { $in: leadIds } },
+      { $addToSet: { assignedTo: { $each: assigneeIds } } }
+    );
+  }
 };
 
 const getCompanyId = (user) => {
@@ -119,7 +96,7 @@ const createCampaign = async (req, res) => {
     });
 
     if (assignees && assignees.length > 0) {
-      await transferContactsToAssignees(campaign, assignees);
+      await assignContactsToAssignees(campaign, assignees);
     }
 
     return res.status(201).json({ status: "success", data: campaign });
@@ -175,7 +152,7 @@ const updateCampaign = async (req, res) => {
       const newAssignees = (req.body.assignees || []).map(String);
       const addedAssignees = newAssignees.filter((id) => !prevAssignees.includes(id));
       if (addedAssignees.length > 0) {
-        await transferContactsToAssignees(campaign, addedAssignees);
+        await assignContactsToAssignees(campaign, addedAssignees);
       }
     }
 

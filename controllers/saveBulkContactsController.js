@@ -249,7 +249,7 @@ const saveBulkContacts = async (req, res) => {
         ? status
         : shouldBeLeads
           ? "interested"
-          : (validStatuses[0] || "");
+          : "";
 
       return {
         raw: contact,

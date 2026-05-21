@@ -11,6 +11,7 @@ const PowerDialerContactSchema = new Schema({
     default: "pending",
   },
   disposition: { type: String, default: "" },
+  email: { type: String, default: "" },
   notes: { type: String, default: "" },
   attempt_count: { type: Number, default: 0 },
   last_called_at: { type: Date },
