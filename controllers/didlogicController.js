@@ -302,13 +302,16 @@ const assignNumberToAgent = async (req, res) => {
       return res.json({ success: true, message: "Number returned to your pool." });
     }
 
-    // Verify the agent belongs to this company admin
-    const agent = await User.findOne({
-      _id: agentId,
-      createdByWhichCompanyAdmin: companyAdminId,
-      role: "user",
-    }).select("firstname lastname email assignedCallerNumbers");
-    if (!agent) return res.status(404).json({ success: false, message: "Agent not found." });
+    // Verify the target user belongs to this company (agent or admin themselves)
+    const isAssigningToAdmin = String(agentId) === String(companyAdminId);
+    const agent = isAssigningToAdmin
+      ? await User.findById(companyAdminId).select("firstname lastname email assignedCallerNumbers")
+      : await User.findOne({
+          _id: agentId,
+          createdByWhichCompanyAdmin: companyAdminId,
+          role: "user",
+        }).select("firstname lastname email assignedCallerNumbers");
+    if (!agent) return res.status(404).json({ success: false, message: "User not found." });
 
     // If number was previously assigned to a different agent, remove it from them
     if (prevAgentId && String(prevAgentId) !== String(agentId)) {
