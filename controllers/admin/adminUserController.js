@@ -590,6 +590,7 @@ exports.reassignExtension = async (req, res) => {
         PBX_BASE_URL:     resolvedBaseUrl,
         assignedDeviceId: resolvedDeviceId,
         pbxType:          extension?.pbxType || "cloud",
+        channels:         passedChannels,
       };
 
       const setOnAgent = isAddingAdmin ? {} : { extensionStatus: true };
