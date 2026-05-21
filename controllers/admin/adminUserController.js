@@ -474,53 +474,75 @@ exports.reassignExtension = async (req, res) => {
     }
 
     // ── Determine if this is a multi-channel cloud extension ─────────────────
-    const adminDoc = await User.findById(companyAdminId).select("assignedExtensions").lean();
+    // Use channels passed from frontend so this works even after admin removes
+    // themselves from the extension.
+    const passedChannels = parseInt(extension?.channels, 10) || 1;
+    const isMultiChannelCloud = (extension?.pbxType === "cloud") && passedChannels > 1;
+
+    const adminDoc = await User.findById(companyAdminId).select("assignedExtensions PBXDetails").lean();
     const adminExtEntry = (adminDoc?.assignedExtensions || []).find(
       (e) => (extNum && e.extensionNumber === extNum) || e.PBX_TELEPHONE === num
     );
-    const isMultiChannelCloud = (adminExtEntry?.pbxType === "cloud") && ((adminExtEntry?.channels || 1) > 1);
 
-    // ── Remove from source agent ──────────────────────────────────────────────
+    // ── Remove from source (agent or company admin) ───────────────────────────
     if (fromAgentId) {
-      const fromAgent = await User.findOne({ _id: fromAgentId, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
-      if (!fromAgent) return res.status(404).json({ status: "error", message: "Source agent not found or no permission" });
+      const fromIdStr  = String(fromAgentId);
+      const adminIdStr = String(companyAdminId);
 
-      const pullUpdate = {
-        $pull: {
-          assignedCallerNumbers: num,
-          assignedExtensions: extNum ? { extensionNumber: extNum } : { PBX_TELEPHONE: num },
-        },
-      };
+      if (fromIdStr === adminIdStr) {
+        // Removing the company admin from this extension
+        await User.findByIdAndUpdate(companyAdminId, {
+          $pull: {
+            assignedCallerNumbers: num,
+            assignedExtensions: extNum ? { extensionNumber: extNum } : { PBX_TELEPHONE: num },
+          },
+        });
+      } else {
+        const fromAgent = await User.findOne({ _id: fromAgentId, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
+        if (!fromAgent) return res.status(404).json({ status: "error", message: "Source agent not found or no permission" });
 
-      // Fully revoke if this is the agent's primary extension
-      const primaryTel = String(fromAgent.PBXDetails?.PBX_TELEPHONE || "").trim();
-      const topTel     = String(fromAgent.telephone || "").trim();
-      if (primaryTel === num || topTel === num) {
-        pullUpdate.$set = {
-          telephone: "",
-          extensionNumber: "",
-          assignedDeviceId: null,
-          extensionStatus: false,
-          "PBXDetails.PBX_TELEPHONE": "",
-          "PBXDetails.PBX_EXTENSION_NUMBER": "",
-          "PBXDetails.PBX_EXTENSION_ID": "",
-          "PBXDetails.PBX_SIP_SECRET": "",
-          "PBXDetails.assignedDeviceId": null,
+        const pullUpdate = {
+          $pull: {
+            assignedCallerNumbers: num,
+            assignedExtensions: extNum ? { extensionNumber: extNum } : { PBX_TELEPHONE: num },
+          },
         };
-      }
 
-      await User.findByIdAndUpdate(fromAgentId, pullUpdate);
+        const primaryTel = String(fromAgent.PBXDetails?.PBX_TELEPHONE || "").trim();
+        const topTel     = String(fromAgent.telephone || "").trim();
+        if (primaryTel === num || topTel === num) {
+          pullUpdate.$set = {
+            telephone: "",
+            extensionNumber: "",
+            assignedDeviceId: null,
+            extensionStatus: false,
+            "PBXDetails.PBX_TELEPHONE": "",
+            "PBXDetails.PBX_EXTENSION_NUMBER": "",
+            "PBXDetails.PBX_EXTENSION_ID": "",
+            "PBXDetails.PBX_SIP_SECRET": "",
+            "PBXDetails.assignedDeviceId": null,
+          };
+        }
+
+        await User.findByIdAndUpdate(fromAgentId, pullUpdate);
+      }
     }
 
-    // ── Add to target agent ───────────────────────────────────────────────────
+    // ── Add to target (agent or company admin) ────────────────────────────────
     if (toAgentId) {
-      const toAgent = await User.findOne({ _id: toAgentId, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
-      if (!toAgent) return res.status(404).json({ status: "error", message: "Target agent not found or no permission" });
+      const toIdStr       = String(toAgentId);
+      const adminIdStr    = String(companyAdminId);
+      const isAddingAdmin = toIdStr === adminIdStr;
+
+      const toAgent = isAddingAdmin
+        ? adminDoc  // already fetched above
+        : await User.findOne({ _id: toAgentId, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
+      if (!toAgent) return res.status(404).json({ status: "error", message: "Target user not found or no permission" });
 
       // Channel limit check for multi-channel cloud extensions
       if (isMultiChannelCloud) {
-        const maxChannels = adminExtEntry.channels;
-        const alreadyAssignedCount = await User.countDocuments({
+        const maxChannels = passedChannels;
+        const agentCount  = await User.countDocuments({
           createdByWhichCompanyAdmin: companyAdminId,
           role: "user",
           $or: [
@@ -528,11 +550,13 @@ exports.reassignExtension = async (req, res) => {
             { "assignedExtensions.PBX_TELEPHONE": num },
           ].filter(Boolean),
         });
-        // +1 for admin who always occupies 1 channel (— Your pool —)
-        if (alreadyAssignedCount + 1 >= maxChannels) {
+        // Count admin only if they currently have the extension
+        const adminHasExt = !!adminExtEntry;
+        const totalUsed   = agentCount + (adminHasExt ? 1 : 0);
+        if (totalUsed >= maxChannels) {
           return res.status(400).json({
             status: "error",
-            message: `Channel limit reached. This extension has ${maxChannels} channels (you count as 1). Currently ${alreadyAssignedCount + 1}/${maxChannels} used.`,
+            message: `Channel limit reached. This extension has ${maxChannels} channels. Currently ${totalUsed}/${maxChannels} used.`,
           });
         }
       }
@@ -568,10 +592,10 @@ exports.reassignExtension = async (req, res) => {
         pbxType:          extension?.pbxType || "cloud",
       };
 
-      const setOnAgent = { extensionStatus: true };
+      const setOnAgent = isAddingAdmin ? {} : { extensionStatus: true };
       // If agent has no primary PBXDetails extension, promote this one so the
       // Yeastar login controller and FloatingDialer init can find it.
-      if (!toAgent.PBXDetails?.PBX_EXTENSION_NUMBER) {
+      if (!isAddingAdmin && !toAgent.PBXDetails?.PBX_EXTENSION_NUMBER) {
         setOnAgent["PBXDetails.PBX_EXTENSION_NUMBER"] = extNum || "";
         setOnAgent["PBXDetails.PBX_TELEPHONE"]        = num;
         setOnAgent["PBXDetails.assignedDeviceId"]     = resolvedDeviceId;
@@ -610,7 +634,8 @@ exports.reassignExtension = async (req, res) => {
     }
 
     // ── Remove from admin pool when assigning to agent from pool ─────────────
-    if (toAgentId && !fromAgentId && !isMultiChannelCloud) {
+    // Skip: multichannel (admin keeps their channel), or when admin is the target (no self-pull).
+    if (toAgentId && !fromAgentId && !isMultiChannelCloud && String(toAgentId) !== String(companyAdminId)) {
       const adminDoc = await User.findById(companyAdminId).select("PBXDetails").lean();
       const adminPrimaryExtNum = adminDoc?.PBXDetails?.PBX_EXTENSION_NUMBER;
       const adminPrimaryTel    = adminDoc?.PBXDetails?.PBX_TELEPHONE;
