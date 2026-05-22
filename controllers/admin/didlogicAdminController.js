@@ -87,14 +87,16 @@ const syncNumbers = async (req, res) => {
 
 const getAllNumbers = async (req, res) => {
   try {
-    const { page = 1, limit = 50, status } = req.query;
+    const { page = 1, limit = 50, status, companyAdminId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const filter = {};
     if (status) filter.status = status;
+    if (companyAdminId) filter.companyAdminId = companyAdminId;
 
     const [numbers, total] = await Promise.all([
       DIDAssignment.find(filter)
         .populate("companyAdminId", "firstname lastname email")
+        .populate("assignedAgentId", "firstname lastname email")
         .sort({ countryName: 1, number: 1 })
         .skip(skip)
         .limit(parseInt(limit))

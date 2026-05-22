@@ -494,7 +494,7 @@ exports.reassignExtension = async (req, res) => {
         await User.findByIdAndUpdate(companyAdminId, {
           $pull: {
             assignedCallerNumbers: num,
-            assignedExtensions: extNum ? { extensionNumber: extNum } : { PBX_TELEPHONE: num },
+            assignedExtensions: { PBX_TELEPHONE: num },
           },
         });
       } else {
@@ -504,7 +504,7 @@ exports.reassignExtension = async (req, res) => {
         const pullUpdate = {
           $pull: {
             assignedCallerNumbers: num,
-            assignedExtensions: extNum ? { extensionNumber: extNum } : { PBX_TELEPHONE: num },
+            assignedExtensions: { PBX_TELEPHONE: num },
           },
         };
 
@@ -614,7 +614,11 @@ exports.reassignExtension = async (req, res) => {
     }
 
     // ── Return to admin pool ──────────────────────────────────────────────────
-    if (!toAgentId && !isMultiChannelCloud) {
+    // Single-channel: always return when no target.
+    // Multichannel: return only when an AGENT (not admin) is the source — ensures ext stays
+    // visible in the table after all channels are freed; admin self-removal stays excluded.
+    const fromIsAgent = fromAgentId && String(fromAgentId) !== String(companyAdminId);
+    if (!toAgentId && (!isMultiChannelCloud || fromIsAgent)) {
       const admin = await User.findById(companyAdminId).select("assignedExtensions").lean();
       const alreadyInPool = (admin?.assignedExtensions || []).some(
         (e) => (extNum && e.extensionNumber === extNum) || e.PBX_TELEPHONE === num
@@ -628,8 +632,16 @@ exports.reassignExtension = async (req, res) => {
               PBX_BASE_URL:     extension?.PBX_BASE_URL     || null,
               assignedDeviceId: extension?.assignedDeviceId || null,
               pbxType:          extension?.pbxType          || "cloud",
+              channels:         passedChannels,
             },
           },
+        });
+      }
+      // Clean up any accidental assignedCallerNumbers entry for multichannel ext.
+      // assignedCallerNumbers on admin is a restriction list — should not contain ext telephones.
+      if (isMultiChannelCloud) {
+        await User.findByIdAndUpdate(companyAdminId, {
+          $pull: { assignedCallerNumbers: num },
         });
       }
     }
