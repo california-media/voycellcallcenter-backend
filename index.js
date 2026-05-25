@@ -85,6 +85,7 @@ const numberCartRoutes         = require("./routes/numberCartRoutes");
 const callRateRoutes           = require("./routes/callRateRoutes");
 const powerDialerRoutes        = require("./routes/powerDialerRoutes");
 const systemEmailRoutes        = require("./routes/admin/systemEmailRoutes");
+const activationEmailConfigRoutes = require("./routes/admin/activationEmailConfigRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -298,6 +299,12 @@ app.use(
   checkForAuthentication(),
   checkRole(["superadmin"]),
   systemEmailRoutes
+);
+app.use(
+  "/admin/activation-email-config",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  activationEmailConfigRoutes
 );
 
 // AI proxy — generate-content requires superadmin; transcribe-and-summarize requires any authenticated user
