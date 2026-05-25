@@ -31,6 +31,11 @@ const runActivationReminderJob = async () => {
       `${user.firstname || ""} ${user.lastname || ""}`.trim() ||
       user.email;
 
+    if (!user.emailVerifiedAt) {
+      await User.findByIdAndUpdate(user._id, { nextActivationEmailAt: null });
+      continue;
+    }
+
     const lastEmailDay   = emails[total - 1].delayDays;
     const suspensionDate = new Date(
       user.emailVerifiedAt.getTime() +
@@ -66,11 +71,15 @@ const runActivationReminderJob = async () => {
         console.error(`Activation reminder email failed for ${user.email}:`, err.message);
       }
     } else {
-      await User.findByIdAndUpdate(user._id, {
-        accountStatus:         "suspended",
-        nextActivationEmailAt: null,
-      });
-      accountsSuspended++;
+      try {
+        await User.findByIdAndUpdate(user._id, {
+          accountStatus:         "suspended",
+          nextActivationEmailAt: null,
+        });
+        accountsSuspended++;
+      } catch (err) {
+        console.error(`Activation suspension failed for ${user.email}:`, err.message);
+      }
     }
   }
 
