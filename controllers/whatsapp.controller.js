@@ -2692,7 +2692,9 @@ const extractNumbersWithNames = (records, type = "contact") => {
                     name,
                     firstName,
                     lastName,
-                    company: r.company || ""
+                    company: r.company || "",
+                    email: r.emailAddresses?.[0] || "",
+                    phone: `${p.countryCode || ""}${p.number}`,
                 });
             }
         });
@@ -2723,6 +2725,18 @@ const resolveDynamicParams = (params = {}, recipient) => {
             }
 
             if (p === "{{company}}") {
+                return recipient.company || "";
+            }
+
+            if (p === "{{phone}}") {
+                return recipient.phone || "";
+            }
+
+            if (p === "{{email}}") {
+                return recipient.email || "";
+            }
+
+            if (p === "{{company_name}}") {
                 return recipient.company || "";
             }
 
