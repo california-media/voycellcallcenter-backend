@@ -507,10 +507,18 @@ exports.editTemplate = async (req, res) => {
 
       // ===== BODY =====
       if (comp.type === "BODY") {
-        processedComponents.push({
-          type: "BODY",
-          text: comp.text,
-        });
+        const text = comp.text || "";
+        const matches = [...text.matchAll(/{{(\w+)}}/g)];
+        const bodyObj = { type: "BODY", text };
+        if (matches.length > 0) {
+          bodyObj.example = {
+            body_text_named_params: matches.map((m) => ({
+              param_name: m[1],
+              example: generateExampleForParam(m[1]),
+            })),
+          };
+        }
+        processedComponents.push(bodyObj);
       }
 
       // ===== FOOTER =====
@@ -556,6 +564,7 @@ exports.editTemplate = async (req, res) => {
         {
           category: template.category,
           language: template.language,
+          parameter_format: "named",
           components: metaComponents,
         },
         {
@@ -578,6 +587,7 @@ exports.editTemplate = async (req, res) => {
           name: newName,
           category: template.category,
           language: template.language,
+          parameter_format: "named",
           components: metaComponents,
         },
         {
@@ -598,6 +608,7 @@ exports.editTemplate = async (req, res) => {
     // -----------------------------------
     template.category = template.category;
     template.language = template.language;
+    template.parameter_format = "named";
     template.components = processedComponents;
 
     await template.save();
