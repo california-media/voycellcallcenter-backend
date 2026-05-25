@@ -57,6 +57,9 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    emailVerified: { type: Boolean, default: false },
+    emailVerifiedAt: { type: Date, default: null },
+    activationRemindersSent: { type: Number, default: 0 },
 
     signupMethod: {
       type: String,

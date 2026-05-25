@@ -1,5 +1,5 @@
 const { Router } = require("express")
-const { deleteUser, activateUser, suspendUser } = require("../controllers/deleteUserControllers")
+const { deleteUser, activateUser, suspendUser, bulkDeleteCompanies } = require("../controllers/deleteUserControllers")
 const checkRole = require("../middlewares/roleCheck")
 const checkAccountStatus = require("../middlewares/checkAccountStatus")
 const router = Router()
@@ -21,6 +21,8 @@ router.delete("/", checkAccountStatus, deleteUser)
 router.post("/activate", checkAccountStatus, checkRole(["superadmin"]), activateUser)
 
 router.post("/suspend", checkAccountStatus, checkRole(["superadmin"]), suspendUser)
+
+router.delete("/bulk", checkAccountStatus, checkRole(["superadmin"]), bulkDeleteCompanies)
 
 
 module.exports = router

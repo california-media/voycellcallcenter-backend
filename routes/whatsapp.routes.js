@@ -68,4 +68,11 @@ router.delete("/delete/campaigns", checkForAuthentication(), deleteCampaign);
 router.post("/conversations", checkForAuthentication(), getWhatsappConversations);
 router.post("/messages", checkForAuthentication(), getWhatsappMessages);
 router.post("/send-message", checkForAuthentication(), upload.single("file"), sendMessage);
+
+const WsConnection = require("../models/wsConnection");
+router.get("/debug/ws-connections", checkForAuthentication(), async (req, res) => {
+    const connections = await WsConnection.find({ userId: req.user._id });
+    res.json({ userId: req.user._id, count: connections.length, connections });
+});
+
 module.exports = router;

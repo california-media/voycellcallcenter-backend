@@ -444,6 +444,20 @@ const getHelpSupportStats = async (req, res) => {
   }
 };
 
+const bulkDeleteHelpSupportTickets = async (req, res) => {
+  try {
+    const { ticketIds } = req.body;
+    if (!Array.isArray(ticketIds) || ticketIds.length === 0) {
+      return res.status(400).json({ status: "error", message: "ticketIds array required" });
+    }
+    const result = await HelpSupport.deleteMany({ _id: { $in: ticketIds } });
+    res.json({ status: "success", message: `${result.deletedCount} tickets deleted` });
+  } catch (err) {
+    console.error("bulkDeleteHelpSupportTickets error:", err);
+    res.status(500).json({ status: "error", message: err.message });
+  }
+};
+
 module.exports = {
   getAllHelpSupportTickets,
   getHelpSupportTicketById,
@@ -451,4 +465,5 @@ module.exports = {
   deleteHelpSupportTicket,
   closeHelpSupportTicket,
   getHelpSupportStats,
+  bulkDeleteHelpSupportTickets,
 };

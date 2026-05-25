@@ -27,6 +27,7 @@ const checkRole = require("./middlewares/roleCheck");
 const { error } = require("console");
 const PORT = process.env.PORT || 3003;
 const userRoutes = require("./routes/companyAdminAuthRoutes");
+const authUnlockRoutes = require("./routes/authUnlockRoutes");
 const yeastarRoutes = require("./routes/yeastarRoutes");
 ////for linkux web UI login signature
 const deleteTemplateRoutes = require("./routes/deleteTemplateRoutes");
@@ -83,6 +84,7 @@ const numberInventoryRoutes   = require("./routes/numberInventoryRoutes");
 const numberCartRoutes         = require("./routes/numberCartRoutes");
 const callRateRoutes           = require("./routes/callRateRoutes");
 const powerDialerRoutes        = require("./routes/powerDialerRoutes");
+const systemEmailRoutes        = require("./routes/admin/systemEmailRoutes");
 
 //for admin routes
 const getAdminDetailsRoutes = require("./routes/admin/getAdminDetailsRoutes");
@@ -104,6 +106,7 @@ const { savePageView } = require("./controllers/admin/userActivityController");
 const { downloadBackup, listCollections, downloadCollection, downloadMongodump, triggerS3Backup, listS3Backups } = require("./controllers/admin/backupController");
 // backupScheduler exports runBackup and listBackups — scheduling is handled externally via cron-job.org
 const apiLoggerMiddleware = require("./middlewares/apiLogger");
+const { runActivationReminderJob } = require("./utils/activationReminderJob");
 // const chatAgentRoutes = require("./routes/chatAgentRoutes");
 // const initGraphQL = require("./graphql");
 
@@ -128,6 +131,7 @@ app.use(apiLoggerMiddleware);
 
 app.use(express.static(path.resolve("./public")));
 app.use("/user", userRoutes);
+app.use("/auth", authUnlockRoutes); // account unlock via magic link (no auth — token is the auth)
 // app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 // ✅ NOW mount GraphQL
 
@@ -289,6 +293,12 @@ app.use(
   checkRole(["superadmin"]),
   adminHelpSupportRoutes
 );
+app.use(
+  "/admin/system-email-templates",
+  checkForAuthentication(),
+  checkRole(["superadmin"]),
+  systemEmailRoutes
+);
 
 // AI proxy — generate-content requires superadmin; transcribe-and-summarize requires any authenticated user
 app.use("/ai", checkForAuthentication(), aiRoutes);
@@ -350,6 +360,20 @@ app.get("/superAdmin/backup/collection/:name",   checkForAuthentication(), check
 // S3 cloud backups (superAdmin dashboard)
 app.post("/superAdmin/backup/s3",               checkForAuthentication(), checkRole(["superadmin"]), triggerS3Backup);
 app.get("/superAdmin/backup/s3",                checkForAuthentication(), checkRole(["superadmin"]), listS3Backups);
+
+// Activation reminder job — also callable externally via cron-job.org
+app.post("/cron/activation-reminders", async (req, res) => {
+  const secret = req.headers["x-cron-secret"];
+  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+  try {
+    const result = await runActivationReminderJob();
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // Automated backup trigger — called by external cron (cron-job.org every 2h).
 // Protected by BACKUP_CRON_SECRET header instead of JWT.
@@ -460,6 +484,7 @@ const http = require("http");
       );
 
       // Backup scheduling is handled by cron-job.org calling POST /cron/backup every 2 hours
+      // Activation reminders triggered by AWS EventBridge → Lambda (voycell-daily-cron)
     }
   } catch (err) {
     console.error("Startup Error:", err);

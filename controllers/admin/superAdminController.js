@@ -1797,6 +1797,7 @@ exports.setCompanyExtensions = async (req, res) => {
         pbxType:          e.pbxType === "local" ? "local" : "cloud",
         channels:         typeof e.channels === "number" ? e.channels : 1,
         nickname:         e.nickname          ? String(e.nickname).trim()          : null,
+        ...(e.inAdminPool === false ? { inAdminPool: false } : {}),
       }));
 
     const user = await User.findByIdAndUpdate(

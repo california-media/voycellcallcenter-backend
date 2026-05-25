@@ -235,4 +235,27 @@ const activateUser = async (req, res) => {
 };
 
 
-module.exports = { deleteUser, activateUser, suspendUser };
+const bulkDeleteCompanies = async (req, res) => {
+  try {
+    const { companyIds } = req.body;
+    if (!Array.isArray(companyIds) || companyIds.length === 0) {
+      return res.status(400).json({ status: "error", message: "companyIds array required" });
+    }
+    let deletedCount = 0;
+    for (const id of companyIds) {
+      try {
+        const user = await User.findById(id);
+        if (user && user.accountStatus === 'suspended') {
+          await User.findByIdAndUpdate(id, { accountStatus: 'deactivated' });
+          deletedCount++;
+        }
+      } catch (_) {}
+    }
+    res.json({ status: "success", message: `${deletedCount} companies deleted` });
+  } catch (err) {
+    console.error("bulkDeleteCompanies error:", err);
+    res.status(500).json({ status: "error", message: err.message });
+  }
+};
+
+module.exports = { deleteUser, activateUser, suspendUser, bulkDeleteCompanies };

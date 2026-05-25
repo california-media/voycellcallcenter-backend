@@ -1560,6 +1560,11 @@ function getAttachmentName(msg, mimeType) {
 
 exports.webhookReceive = async (req, res) => {
 
+    console.log("============================================");
+    console.log("[WEBHOOK] HIT — Meta called local backend");
+    console.log("[WEBHOOK] body:", JSON.stringify(req.body, null, 2));
+    console.log("============================================");
+
     try {
         const entry = req.body.entry?.[0];
         const change = entry?.changes?.[0];
@@ -1642,6 +1647,8 @@ exports.webhookReceive = async (req, res) => {
                     userId: { $in: allUserIds }
                 });
 
+                console.log(`[webhook:status] metaMessageId=${metaMessageId} status=${status} connections=${connections.length}`);
+
                 if (connections.length > 0) {
 
                     const eventPayload = {
@@ -1657,11 +1664,19 @@ exports.webhookReceive = async (req, res) => {
                         }))
                     };
 
-                    await lambdaClient.send(new InvokeCommand({
-                        FunctionName: "waba-webhook",
-                        InvocationType: "RequestResponse",
-                        Payload: JSON.stringify(eventPayload)
-                    }));
+                    try {
+                        const lambdaRes = await lambdaClient.send(new InvokeCommand({
+                            FunctionName: "waba-webhook",
+                            InvocationType: "RequestResponse",
+                            Payload: JSON.stringify(eventPayload)
+                        }));
+                        const lambdaBody = lambdaRes.Payload ? JSON.parse(Buffer.from(lambdaRes.Payload).toString()) : null;
+                        console.log(`[webhook:status] lambda invoke statusCode=${lambdaRes.StatusCode} FunctionError=${lambdaRes.FunctionError || "none"} body=`, lambdaBody);
+                    } catch (lambdaErr) {
+                        console.error("[webhook:status] lambda invoke failed:", lambdaErr.message);
+                    }
+                } else {
+                    console.log(`[webhook:status] NO active WsConnections for phoneNumberId=${updated.phoneNumberId} — status update not pushed real-time`);
                 }
             }
 
@@ -1738,6 +1753,13 @@ exports.webhookReceive = async (req, res) => {
             userId: { $in: allUserIds }
         });
 
+        console.log(`[WEBHOOK] WsConnections found: ${connections.length} for userIds: ${allUserIds.join(",")}`);
+        if (connections.length === 0) {
+            console.log("[WEBHOOK] ⚠️  NO active WebSocket connections — real-time push SKIPPED");
+        } else {
+            console.log("[WEBHOOK] Active connectionIds:", connections.map(c => c.connectionId));
+        }
+
         for (const msg of value.messages || []) {
             const { messageType, content } = parseWhatsAppMessage(msg);
             let s3dataurl = "";
@@ -1801,6 +1823,8 @@ exports.webhookReceive = async (req, res) => {
                 timestamp: new Date(msg.timestamp * 1000)
             });
 
+            console.log(`[webhook:msg] from=${msg.from} type=${messageType} connections=${connections.length}`);
+
             // Only push real-time event if users are connected via WebSocket
             if (connections.length > 0) {
                 const eventPayload = {
@@ -1814,15 +1838,24 @@ exports.webhookReceive = async (req, res) => {
                     }))
                 };
 
-                await lambdaClient.send(new InvokeCommand({
-                    FunctionName: "waba-webhook",
-                    InvocationType: "RequestResponse",
-                    Payload: JSON.stringify(eventPayload)
-                }));
+                try {
+                    const lambdaRes = await lambdaClient.send(new InvokeCommand({
+                        FunctionName: "waba-webhook",
+                        InvocationType: "RequestResponse",
+                        Payload: JSON.stringify(eventPayload)
+                    }));
+                    const lambdaBody = lambdaRes.Payload ? JSON.parse(Buffer.from(lambdaRes.Payload).toString()) : null;
+                    console.log(`[webhook:msg] lambda invoke statusCode=${lambdaRes.StatusCode} FunctionError=${lambdaRes.FunctionError || "none"} body=`, lambdaBody);
+                } catch (lambdaErr) {
+                    console.error("[webhook:msg] lambda invoke failed:", lambdaErr.message);
+                }
+            } else {
+                console.log(`[webhook:msg] NO active WsConnections for users=${allUserIds.join(",")} — message not pushed real-time`);
             }
         }
         res.status(200).send("EVENT_RECEIVED");
     } catch (err) {
+        console.error("[webhook:receive] unhandled error:", err.message, err.stack);
         res.sendStatus(200);
     }
 };
@@ -2514,6 +2547,9 @@ exports.sendTemplateMessage = async (req, res) => {
         };
 
         console.dir(payload, { depth: null });
+        console.log("[send-template] phoneNumberId:", phoneNumberId);
+        console.log("[send-template] accessToken (first 20):", accessToken?.substring(0, 20) + "...");
+        console.log("[send-template] companyAdminId:", companyAdminId);
 
         /* ───────── SEND ───────── */
         const { data } = await axios.post(

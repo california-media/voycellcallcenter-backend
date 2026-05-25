@@ -3,8 +3,81 @@ console.log("Environment Variables Loaded");
 
 const mongoose = require("mongoose");
 const Stripe   = require("stripe");
+const nodemailer = require("nodemailer");
 const HelpSupport = require("./models/helpSupportModel");
 const User        = require("./models/userModel");
+
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const SUSPENSION_DAY = 24;
+
+const ACTIVATION_EMAILS = [
+  { number: 1, dayThreshold: 0,  subject: "Welcome to VOYCELL – Complete your account activation",        body: `<p>Hi {{companyName}},</p><p>Thank you for registering! Please <a href="${FRONTEND_URL}">log in</a> and verify your phone number to activate your account.</p><p>— The VOYCELL Team</p>` },
+  { number: 2, dayThreshold: 7,  subject: "Reminder: Your VOYCELL account is waiting for activation",     body: `<p>Hi {{companyName}},</p><p>It's been a week. <a href="${FRONTEND_URL}">Log in now</a> and verify your phone number to get started.</p><p>— The VOYCELL Team</p>` },
+  { number: 3, dayThreshold: 14, subject: "Action needed: Activate your VOYCELL account",                 body: `<p>Hi {{companyName}},</p><p>Your account is still inactive. Please <a href="${FRONTEND_URL}">activate it now</a> to avoid suspension.</p><p>— The VOYCELL Team</p>` },
+  { number: 4, dayThreshold: 21, subject: "⚠️ Your VOYCELL account will be suspended in 3 days",         body: `<p>Hi {{companyName}},</p><p><strong>Your account will be suspended on {{suspensionDate}}.</strong> <a href="${FRONTEND_URL}">Activate now</a> to prevent this.</p><p>— The VOYCELL Team</p>` },
+];
+
+const getMailTransporter = () => nodemailer.createTransport({
+  service: "smtp",
+  host: process.env.MAIL_HOST,
+  port: Number(process.env.MAIL_PORT),
+  secure: Number(process.env.MAIL_PORT) === 465,
+  auth: { user: process.env.MAIL_USERNAME, pass: process.env.MAIL_PASSWORD },
+  tls: { rejectUnauthorized: false },
+});
+
+const interpolate = (str, vars) =>
+  str.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+
+const runActivationReminderJob = async () => {
+  const now = new Date();
+  let emailsSent = 0, accountsSuspended = 0;
+
+  const candidates = await User.find({
+    role: "companyAdmin",
+    emailVerified: true,
+    isVerified: false,
+    accountStatus: { $ne: "suspended" },
+    emailVerifiedAt: { $ne: null },
+  }).select("email firstname lastname userInfo emailVerifiedAt activationRemindersSent");
+
+  const transporter = getMailTransporter();
+
+  for (const user of candidates) {
+    const daysSince = Math.floor((now - user.emailVerifiedAt) / 86400000);
+    const companyName = user.userInfo?.companyName || `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email;
+
+    if (daysSince >= SUSPENSION_DAY && user.activationRemindersSent >= 4) {
+      await User.findByIdAndUpdate(user._id, { accountStatus: "suspended" });
+      accountsSuspended++;
+      continue;
+    }
+
+    const nextEmail = ACTIVATION_EMAILS.find(
+      (e) => e.number === user.activationRemindersSent + 1 && daysSince >= e.dayThreshold
+    );
+    if (!nextEmail) continue;
+
+    const suspensionDate = new Date(user.emailVerifiedAt);
+    suspensionDate.setDate(suspensionDate.getDate() + SUSPENSION_DAY);
+
+    try {
+      await transporter.sendMail({
+        from: '"VOYCELL" <noreply@voycell.com>',
+        to: user.email,
+        subject: interpolate(nextEmail.subject, { companyName }),
+        html: interpolate(nextEmail.body, { companyName, suspensionDate: suspensionDate.toDateString() }),
+      });
+      await User.findByIdAndUpdate(user._id, { $inc: { activationRemindersSent: 1 } });
+      emailsSent++;
+    } catch (err) {
+      console.error(`Activation reminder failed for ${user.email}:`, err.message);
+    }
+  }
+
+  console.log(`Activation reminders: ${emailsSent} sent, ${accountsSuspended} suspended`);
+  return { emailsSent, accountsSuspended };
+};
 
 // ------------------- TICKET AUTO-CLOSE FUNCTION -------------------
 /**
@@ -177,6 +250,10 @@ module.exports.handler = async (event, context) => {
     console.log("💳 Running auto-recharge job...");
     const rechargeResult = await runAutoRechargeJob();
 
+    // Execute activation reminder emails + suspension
+    console.log("📧 Running activation reminder job...");
+    const activationResult = await runActivationReminderJob();
+
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -184,6 +261,8 @@ module.exports.handler = async (event, context) => {
         message: "Daily jobs completed successfully",
         ticketsClosed: result.closedCount,
         autoRecharged: rechargeResult.recharged,
+        activationEmailsSent: activationResult.emailsSent,
+        accountsSuspended: activationResult.accountsSuspended,
       }),
     };
   } catch (error) {

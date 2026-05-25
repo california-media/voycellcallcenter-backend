@@ -862,6 +862,9 @@ const sendAdminBroadcastEmail = async ({ to, subject, title, body, fromEmail, fr
   return { info, sesMessageId };
 };
 
+const interpolateTemplate = (template, vars) =>
+  template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+
 module.exports = {
   sendVerificationEmail,
   //   sendHelpSupportReply,
@@ -871,4 +874,5 @@ module.exports = {
   sendMagicLinkEmail,
   sendAdminBroadcastEmail,
   getTransporter,
+  interpolateTemplate,
 };

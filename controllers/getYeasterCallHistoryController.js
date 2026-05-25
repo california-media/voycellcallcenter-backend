@@ -321,12 +321,12 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
   // log breakdown by extension so we can verify cross-device dedup is working
   const byExt = {};
   finalList.forEach(({ extensionNumber: en }) => { byExt[en] = (byExt[en] || 0) + 1; });
-  console.log(`[CDR-INSERT] agent=${performerName} | callMap size=${callMap.size} | breakdown: ${JSON.stringify(byExt)}`);
+
 
   let inserted = 0;
   let skippedDuplicate = 0;
 
-  console.log(`[CDR-INSERT] agent=${performerName} | total unique calls to process=${finalList.length}`);
+
 
   for (const { call, callId, extensionNumber, extensionPhone } of finalList) {
     if (!callId) continue;
@@ -341,7 +341,7 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
       }
       continue;
     }
-    console.log(`[CDR-INSERT] NEW call | ext=${extensionNumber} | id=${callId} | type=${call.call_type} | disposition=${call.disposition} | from=${call.call_from_number} | to=${call.call_to_number}`);
+   
 
     const from_number = normalizeNumber(call.call_from_number);
     const to_number = normalizeNumber(call.call_to_number);
@@ -442,7 +442,7 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
       try {
         await CallHistory.create(dbPayload);
         inserted++;
-        console.log(`[CDR-INSERT] ✓ saved | ext=${extensionNumber} | id=${callId} | userId=${agentId} | direction=${call.call_type}`);
+
       } catch (createErr) {
         console.log(`[CDR-INSERT] ✗ FAILED to save | ext=${extensionNumber} | id=${callId} | error=${createErr.message}`);
       }
@@ -491,7 +491,6 @@ async function fetchAndStoreForAgent({ agent, companyAdminId, allowedCreatedById
       }
     }
 
-  console.log(`[CDR-INSERT] agent=${performerName} | DONE | inserted=${inserted} skipped(duplicate)=${skippedDuplicate}`);
   return inserted;
 }
 

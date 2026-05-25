@@ -477,7 +477,7 @@ exports.reassignExtension = async (req, res) => {
     // Use channels passed from frontend so this works even after admin removes
     // themselves from the extension.
     const passedChannels = parseInt(extension?.channels, 10) || 1;
-    const isMultiChannelCloud = (extension?.pbxType === "cloud") && passedChannels > 1;
+    const isMultiChannelCloud = passedChannels > 1;
 
     const adminDoc = await User.findById(companyAdminId).select("assignedExtensions PBXDetails").lean();
     const adminExtEntry = (adminDoc?.assignedExtensions || []).find(
@@ -490,13 +490,25 @@ exports.reassignExtension = async (req, res) => {
       const adminIdStr = String(companyAdminId);
 
       if (fromIdStr === adminIdStr) {
-        // Removing the company admin from this extension
-        await User.findByIdAndUpdate(companyAdminId, {
-          $pull: {
-            assignedCallerNumbers: num,
-            assignedExtensions: { PBX_TELEPHONE: num },
-          },
-        });
+        // Removing the company admin from this extension.
+        // For multichannel: keep entry visible (for superadmin/company views) but mark inactive.
+        // For single-channel: remove entirely.
+        if (isMultiChannelCloud) {
+          await User.findOneAndUpdate(
+            { _id: companyAdminId, "assignedExtensions.PBX_TELEPHONE": num },
+            { $set: { "assignedExtensions.$.inAdminPool": false } }
+          );
+          await User.findByIdAndUpdate(companyAdminId, {
+            $pull: { assignedCallerNumbers: num },
+          });
+        } else {
+          await User.findByIdAndUpdate(companyAdminId, {
+            $pull: {
+              assignedCallerNumbers: num,
+              assignedExtensions: { PBX_TELEPHONE: num },
+            },
+          });
+        }
       } else {
         const fromAgent = await User.findOne({ _id: fromAgentId, createdByWhichCompanyAdmin: companyAdminId, role: "user" });
         if (!fromAgent) return res.status(404).json({ status: "error", message: "Source agent not found or no permission" });
@@ -550,8 +562,8 @@ exports.reassignExtension = async (req, res) => {
             { "assignedExtensions.PBX_TELEPHONE": num },
           ].filter(Boolean),
         });
-        // Count admin only if they currently have the extension
-        const adminHasExt = !!adminExtEntry;
+        // Count admin only if they actively have the extension in their pool
+        const adminHasExt = !!adminExtEntry && adminExtEntry.inAdminPool !== false;
         const totalUsed   = agentCount + (adminHasExt ? 1 : 0);
         if (totalUsed >= maxChannels) {
           return res.status(400).json({
@@ -620,10 +632,10 @@ exports.reassignExtension = async (req, res) => {
     const fromIsAgent = fromAgentId && String(fromAgentId) !== String(companyAdminId);
     if (!toAgentId && (!isMultiChannelCloud || fromIsAgent)) {
       const admin = await User.findById(companyAdminId).select("assignedExtensions").lean();
-      const alreadyInPool = (admin?.assignedExtensions || []).some(
+      const existingPoolEntry = (admin?.assignedExtensions || []).find(
         (e) => (extNum && e.extensionNumber === extNum) || e.PBX_TELEPHONE === num
       );
-      if (!alreadyInPool) {
+      if (!existingPoolEntry) {
         await User.findByIdAndUpdate(companyAdminId, {
           $push: {
             assignedExtensions: {
@@ -636,6 +648,12 @@ exports.reassignExtension = async (req, res) => {
             },
           },
         });
+      } else if (existingPoolEntry.inAdminPool === false) {
+        // Ext was removed from admin pool — re-enable it
+        await User.findOneAndUpdate(
+          { _id: companyAdminId, "assignedExtensions.PBX_TELEPHONE": num },
+          { $set: { "assignedExtensions.$.inAdminPool": true } }
+        );
       }
       // Clean up any accidental assignedCallerNumbers entry for multichannel ext.
       // assignedCallerNumbers on admin is a restriction list — should not contain ext telephones.

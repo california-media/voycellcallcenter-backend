@@ -81,11 +81,6 @@ const getCredits = async (req, res) => {
       ? requestingUser.createdByWhichCompanyAdmin
       : req.user._id;
 
-    // Trigger auto-recharge only for the account owner
-    await autoRechargeIfNeeded(targetId).catch(err =>
-      console.error("autoRecharge error:", err.message)
-    );
-
     const user = await User.findById(targetId)
       .select("creditBalance autoRecharge")
       .lean();

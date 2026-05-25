@@ -3,6 +3,8 @@ const DIDAssignment   = require("../models/DIDAssignment");
 const LiveCallBilling = require("../models/LiveCallBilling");
 const { findCallRateByLPM, normalizeDigits } = require("../utils/callRateLPM");
 const { autoRechargeIfNeeded } = require("./creditsController");
+const SystemEmailTemplate = require("../models/SystemEmailTemplate");
+const { getTransporter, interpolateTemplate } = require("../utils/emailUtils");
 
 // A real purchased DID must have at least 7 digits (rejects placeholders like "0000000")
 function isRealDID(number) {
@@ -142,6 +144,34 @@ const deductLiveMinute = async (req, res) => {
     const newBalance     = updated?.creditBalance ?? 0;
     const newThreshold   = updated?.autoRecharge?.threshold ?? threshold;
     const destNormalized = normalizeDigits(destination);
+
+    // Send low balance warning if balance dropped below $5
+    if (newBalance < 5) {
+      try {
+        const template = await SystemEmailTemplate.findOne({ type: "balance_warning", isActive: true });
+        if (template) {
+          const freqMs = (template.reminderFrequencyDays || 7) * 24 * 60 * 60 * 1000;
+          const companyAdmin = await User.findById(companyAdminId).select("email firstname lastname userInfo balanceWarningSentAt").lean();
+          const lastSent = companyAdmin?.balanceWarningSentAt;
+          if (!lastSent || Date.now() - new Date(lastSent).getTime() > freqMs) {
+            const companyName = companyAdmin?.userInfo?.companyName
+              || `${companyAdmin?.firstname || ""} ${companyAdmin?.lastname || ""}`.trim()
+              || companyAdmin?.email;
+            const subject = interpolateTemplate(template.subject, { companyName, balance: `$${newBalance.toFixed(2)}` });
+            const body    = interpolateTemplate(template.body,    { companyName, balance: `$${newBalance.toFixed(2)}` });
+            getTransporter().sendMail({
+              from: '"VOYCELL" <noreply@voycell.com>',
+              to: companyAdmin.email,
+              subject,
+              html: body,
+            }).catch((e) => console.error("Balance warning email error:", e));
+            await User.findByIdAndUpdate(companyAdminId, { balanceWarningSentAt: new Date() });
+          }
+        }
+      } catch (e) {
+        console.error("Balance warning trigger error:", e);
+      }
+    }
 
     const filter = sdkCallId
       ? { sdkCallId, companyAdminId }

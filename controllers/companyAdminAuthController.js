@@ -8,7 +8,13 @@ const {
   sendVerificationEmail,
   sendMagicLinkEmail,
   sendPostVerificationDemoEmail,
+  getTransporter,
+  interpolateTemplate,
 } = require("../utils/emailUtils");
+const jwt = require("jsonwebtoken");
+const SystemEmailTemplate = require("../models/SystemEmailTemplate");
+const JWT_SECRET = "mysecretkey";
+
 const googleClient = new OAuth2Client(
   "401067515093-9j7faengj216m6uc9csubrmo3men1m7p.apps.googleusercontent.com",
 );
@@ -48,7 +54,8 @@ const disallowedEmailDomains = [
 ];
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-const WEBSITE_URL = process.env.WEBSITE_URL || "https://voycell.com";
+const BACKEND_URL  = process.env.BACKEND_URL  || `http://localhost:${process.env.PORT || 4004}`;
+const WEBSITE_URL  = process.env.WEBSITE_URL  || "https://voycell.com";
 
 // Requires: User and ReferralLog models in scope.
 // Put this near top of your controller file:
@@ -198,6 +205,7 @@ const signupWithEmail = async (req, res) => {
 
       // Only mark emailVerified here — isVerified is set separately once mobile is also verified
       user.emailVerified = true;
+      user.emailVerifiedAt = new Date();
       user.emailVerificationToken = undefined;
 
       if (!user.signupMethod) {
@@ -1163,13 +1171,10 @@ const unifiedLogin = async (req, res) => {
 
         // 🚫 Check if account is locked
         if (user.lockUntil && user.lockUntil > new Date()) {
-          const remainingMinutes = Math.ceil(
-            (user.lockUntil - new Date()) / (1000 * 60),
-          );
-
+          const remainingHours = Math.ceil((user.lockUntil - new Date()) / (1000 * 60 * 60));
           return res.status(403).json({
             status: "error",
-            message: `Account locked due to multiple failed attempts. Try again in ${remainingMinutes} minutes.`,
+            message: `Account locked due to multiple failed attempts. Try again in ${remainingHours} hour(s), or use the unlock link sent to your email.`,
           });
         }
 
@@ -1225,13 +1230,41 @@ const unifiedLogin = async (req, res) => {
 
           // 🔒 Lock account after 5 failed attempts
           if (user.failedLoginAttempts >= 5) {
-            user.lockUntil = new Date(now.getTime() + 15 * 60 * 1000); // 15 min lock
+            user.lockUntil = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24h lock
+            const unlockToken = jwt.sign(
+              { userId: user._id.toString(), purpose: "unlock" },
+              JWT_SECRET,
+              { expiresIn: "24h" }
+            );
+            user.unlockToken = unlockToken;
             await user.save();
+
+            // Fire-and-forget unlock email
+            (async () => {
+              try {
+                const template = await SystemEmailTemplate.findOne({ type: "account_locked", isActive: true });
+                if (template) {
+                  const companyName = user.userInfo?.companyName
+                    || `${user.firstname || ""} ${user.lastname || ""}`.trim()
+                    || user.email;
+                  const magicLink = `${BACKEND_URL}/auth/unlock?token=${unlockToken}`;
+                  const subject = interpolateTemplate(template.subject, { companyName, magicLink });
+                  const body    = interpolateTemplate(template.body,    { companyName, magicLink });
+                  await getTransporter().sendMail({
+                    from: '"VOYCELL" <noreply@voycell.com>',
+                    to: user.email,
+                    subject,
+                    html: body,
+                  });
+                }
+              } catch (e) {
+                console.error("Account locked email error:", e);
+              }
+            })();
 
             return res.status(403).json({
               status: "error",
-              message:
-                "Too many failed login attempts. Your account is locked for 15 minutes.",
+              message: "Too many failed login attempts. Your account is locked for 24 hours. An unlock link has been sent to your email.",
             });
           }
 

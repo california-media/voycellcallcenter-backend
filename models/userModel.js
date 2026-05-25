@@ -212,6 +212,8 @@ const userSchema = new Schema(
       default: null,
     },
 
+    unlockToken: { type: String, default: null },
+
     agentStatus: {
       type: String,
       enum: ["offline", "online", "busy"],
@@ -268,6 +270,9 @@ const userSchema = new Schema(
 
     // ─── Call Credits ─────────────────────────────────────────────────────────
     creditBalance: { type: Number, default: 0 },     // USD balance (dollars)
+    balanceWarningSentAt: { type: Date, default: null },
+    emailVerifiedAt: { type: Date, default: null },
+    activationRemindersSent: { type: Number, default: 0 },
     autoRecharge: {
       enabled:   { type: Boolean, default: false },
       threshold: { type: Number,  default: 5   },    // recharge when balance < threshold ($)

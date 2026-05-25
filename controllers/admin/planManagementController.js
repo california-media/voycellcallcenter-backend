@@ -18,15 +18,35 @@ const getAllPlans = async (req, res) => {
     // Get subscriber counts per plan
     const planIds = plans.map((p) => p._id);
     const subscriberCounts = await Subscription.aggregate([
-      { $match: { planId: { $in: planIds }, status: { $in: ["active", "trialing", "paused"] } } },
-      { $group: { _id: "$planId", count: { $sum: 1 } } },
+      { $match: { planId: { $in: planIds }, status: "active" } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      { $match: { "user.accountStatus": "active" } },
+      {
+        $group: {
+          _id: { planId: "$planId", billingPeriod: "$billingPeriod" },
+          count: { $sum: 1 },
+        },
+      },
     ]);
     const countMap = {};
-    subscriberCounts.forEach((s) => { countMap[s._id.toString()] = s.count; });
+    subscriberCounts.forEach((s) => {
+      const planKey = s._id.planId.toString();
+      if (!countMap[planKey]) countMap[planKey] = { monthly: 0, yearly: 0 };
+      if (s._id.billingPeriod === "monthly") countMap[planKey].monthly = s.count;
+      if (s._id.billingPeriod === "yearly")  countMap[planKey].yearly  = s.count;
+    });
 
     const plansWithCount = plans.map((p) => ({
       ...p.toObject(),
-      subscriberCount: countMap[p._id.toString()] || 0,
+      subscriberCount: countMap[p._id.toString()] || { monthly: 0, yearly: 0 },
     }));
 
     const total = await Plan.countDocuments({ isDeleted: false });
