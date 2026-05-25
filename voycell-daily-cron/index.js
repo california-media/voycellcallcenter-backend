@@ -6,16 +6,9 @@ const Stripe   = require("stripe");
 const nodemailer = require("nodemailer");
 const HelpSupport = require("./models/helpSupportModel");
 const User        = require("./models/userModel");
+const ActivationEmailConfig = require("./models/ActivationEmailConfig");
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-const SUSPENSION_DAY = 24;
-
-const ACTIVATION_EMAILS = [
-  { number: 1, dayThreshold: 0,  subject: "Welcome to VOYCELL – Complete your account activation",        body: `<p>Hi {{companyName}},</p><p>Thank you for registering! Please <a href="${FRONTEND_URL}">log in</a> and verify your phone number to activate your account.</p><p>— The VOYCELL Team</p>` },
-  { number: 2, dayThreshold: 7,  subject: "Reminder: Your VOYCELL account is waiting for activation",     body: `<p>Hi {{companyName}},</p><p>It's been a week. <a href="${FRONTEND_URL}">Log in now</a> and verify your phone number to get started.</p><p>— The VOYCELL Team</p>` },
-  { number: 3, dayThreshold: 14, subject: "Action needed: Activate your VOYCELL account",                 body: `<p>Hi {{companyName}},</p><p>Your account is still inactive. Please <a href="${FRONTEND_URL}">activate it now</a> to avoid suspension.</p><p>— The VOYCELL Team</p>` },
-  { number: 4, dayThreshold: 21, subject: "⚠️ Your VOYCELL account will be suspended in 3 days",         body: `<p>Hi {{companyName}},</p><p><strong>Your account will be suspended on {{suspensionDate}}.</strong> <a href="${FRONTEND_URL}">Activate now</a> to prevent this.</p><p>— The VOYCELL Team</p>` },
-];
 
 const getMailTransporter = () => nodemailer.createTransport({
   service: "smtp",
@@ -30,48 +23,82 @@ const interpolate = (str, vars) =>
   str.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
 
 const runActivationReminderJob = async () => {
-  const now = new Date();
-  let emailsSent = 0, accountsSuspended = 0;
+  const config = await ActivationEmailConfig.findOne({ key: "global" }).lean();
+  if (!config || !config.isActive || !config.emails || config.emails.length === 0) {
+    return { emailsSent: 0, accountsSuspended: 0 };
+  }
 
-  const candidates = await User.find({
-    role: "companyAdmin",
-    emailVerified: true,
-    isVerified: false,
-    accountStatus: { $ne: "suspended" },
-    emailVerifiedAt: { $ne: null },
-  }).select("email firstname lastname userInfo emailVerifiedAt activationRemindersSent");
+  const now    = new Date();
+  const emails = config.emails.slice().sort((a, b) => a.order - b.order);
+  const total  = emails.length;
+
+  let emailsSent = 0;
+  let accountsSuspended = 0;
 
   const transporter = getMailTransporter();
 
-  for (const user of candidates) {
-    const daysSince = Math.floor((now - user.emailVerifiedAt) / 86400000);
-    const companyName = user.userInfo?.companyName || `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email;
+  const candidates = await User.find({
+    role:                  "companyAdmin",
+    emailVerified:         true,
+    isVerified:            false,
+    accountStatus:         { $ne: "suspended" },
+    nextActivationEmailAt: { $lte: now, $ne: null },
+  }).select("email firstname lastname userInfo emailVerifiedAt activationRemindersSent");
 
-    if (daysSince >= SUSPENSION_DAY && user.activationRemindersSent >= 4) {
-      await User.findByIdAndUpdate(user._id, { accountStatus: "suspended" });
-      accountsSuspended++;
+  for (const user of candidates) {
+    const idx  = user.activationRemindersSent;
+    const name =
+      user.userInfo?.companyName ||
+      `${user.firstname || ""} ${user.lastname || ""}`.trim() ||
+      user.email;
+
+    if (!user.emailVerifiedAt) {
+      await User.findByIdAndUpdate(user._id, { nextActivationEmailAt: null });
       continue;
     }
 
-    const nextEmail = ACTIVATION_EMAILS.find(
-      (e) => e.number === user.activationRemindersSent + 1 && daysSince >= e.dayThreshold
+    const lastEmailDay   = emails[total - 1].delayDays;
+    const suspensionDate = new Date(
+      user.emailVerifiedAt.getTime() +
+      (lastEmailDay + config.suspensionDaysAfterLastEmail) * 86400000
     );
-    if (!nextEmail) continue;
 
-    const suspensionDate = new Date(user.emailVerifiedAt);
-    suspensionDate.setDate(suspensionDate.getDate() + SUSPENSION_DAY);
+    if (idx < total) {
+      const emailDef = emails[idx];
+      try {
+        await transporter.sendMail({
+          from:    '"VOYCELL" <noreply@voycell.com>',
+          to:      user.email,
+          subject: interpolate(emailDef.subject, { name }),
+          html:    interpolate(emailDef.body,    { name, suspensionDate: suspensionDate.toDateString() }),
+        });
 
-    try {
-      await transporter.sendMail({
-        from: '"VOYCELL" <noreply@voycell.com>',
-        to: user.email,
-        subject: interpolate(nextEmail.subject, { companyName }),
-        html: interpolate(nextEmail.body, { companyName, suspensionDate: suspensionDate.toDateString() }),
-      });
-      await User.findByIdAndUpdate(user._id, { $inc: { activationRemindersSent: 1 } });
-      emailsSent++;
-    } catch (err) {
-      console.error(`Activation reminder failed for ${user.email}:`, err.message);
+        const update = { $inc: { activationRemindersSent: 1 } };
+        if (idx + 1 < total) {
+          update.$set = {
+            nextActivationEmailAt: new Date(
+              user.emailVerifiedAt.getTime() + emails[idx + 1].delayDays * 86400000
+            ),
+          };
+        } else {
+          update.$set = { nextActivationEmailAt: suspensionDate };
+        }
+
+        await User.findByIdAndUpdate(user._id, update);
+        emailsSent++;
+      } catch (err) {
+        console.error(`Activation reminder failed for ${user.email}:`, err.message);
+      }
+    } else {
+      try {
+        await User.findByIdAndUpdate(user._id, {
+          accountStatus:         "suspended",
+          nextActivationEmailAt: null,
+        });
+        accountsSuspended++;
+      } catch (err) {
+        console.error(`Activation suspension failed for ${user.email}:`, err.message);
+      }
     }
   }
 
