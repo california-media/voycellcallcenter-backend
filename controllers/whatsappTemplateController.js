@@ -308,13 +308,20 @@ exports.createTemplate = async (req, res) => {
         processedButtons = [
           {
             type: "BUTTONS",
-            buttons: buttonsComponent.buttons.map((btn) => ({
-              type: btn.type,
-              text: btn.text,
-              ...(btn.url && { url: btn.url }),
-              ...(btn.phone_number && { phone_number: btn.phone_number }),
-              ...(btn.example && { example: btn.example }),
-            })),
+            buttons: buttonsComponent.buttons.map((btn) => {
+              if (btn.type === "COPY_CODE") {
+                return {
+                  type: "COPY_CODE",
+                  example: Array.isArray(btn.example) ? btn.example : [btn.example],
+                };
+              }
+              return {
+                type: btn.type,
+                text: btn.text,
+                ...(btn.url && { url: btn.url }),
+                ...(btn.phone_number && { phone_number: btn.phone_number }),
+              };
+            }),
           },
         ];
       }
@@ -332,7 +339,7 @@ exports.createTemplate = async (req, res) => {
         ...processedButtons,
       ].filter(Boolean),
     };
-    payload.parameter_format = "named";
+    payload.parameter_format = "NAMED";
     // 🔥 STRIP DB-ONLY FIELDS BEFORE SENDING TO META
     const metaComponents = payload.components.map((c) => {
       const clean = {
@@ -533,7 +540,15 @@ exports.editTemplate = async (req, res) => {
       if (comp.type === "BUTTONS") {
         processedComponents.push({
           type: "BUTTONS",
-          buttons: comp.buttons,
+          buttons: comp.buttons.map((btn) => {
+            if (btn.type === "COPY_CODE") {
+              return {
+                type: "COPY_CODE",
+                example: Array.isArray(btn.example) ? btn.example : [btn.example],
+              };
+            }
+            return btn;
+          }),
         });
       }
     }
@@ -564,7 +579,7 @@ exports.editTemplate = async (req, res) => {
         {
           category: template.category,
           language: template.language,
-          parameter_format: "named",
+          parameter_format: "NAMED",
           components: metaComponents,
         },
         {
@@ -587,7 +602,7 @@ exports.editTemplate = async (req, res) => {
           name: newName,
           category: template.category,
           language: template.language,
-          parameter_format: "named",
+          parameter_format: "NAMED",
           components: metaComponents,
         },
         {
@@ -608,7 +623,7 @@ exports.editTemplate = async (req, res) => {
     // -----------------------------------
     template.category = template.category;
     template.language = template.language;
-    template.parameter_format = "named";
+    template.parameter_format = "NAMED";
     template.components = processedComponents;
 
     await template.save();
@@ -867,12 +882,11 @@ exports.getWabaTemplates = async (req, res) => {
           name: t.name,
           category: t.category,
           language: t.language,
-          // components: mergedComponents, // ✅ IMPORTANT
           components: updatedComponents,
           status: t.status,
           syncedAt: new Date(),
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true, timestamps: false }
       );
 
       syncedTemplates.push(updated);

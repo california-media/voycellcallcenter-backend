@@ -37,7 +37,7 @@ function buildComponents(template, params = {}) {
 
   const body = template.components.find(c => c.type === "BODY");
   if (body && /{{.*?}}/.test(body.text || "")) {
-    if (template.parameter_format === "named") {
+    if (template.parameter_format?.toUpperCase() === "NAMED") {
       const namedExamples = body.example?.body_text_named_params || [];
       components.push({
         type: "body",

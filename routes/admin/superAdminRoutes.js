@@ -87,4 +87,13 @@ router.post("/whatsapp/send-campaign", sendAdminCampaign);
 router.post("/whatsapp/campaigns", getAdminCampaigns);
 router.post("/whatsapp/campaignsById", getAdminCampaignById);
 
+// SuperAdmin billing
+const {
+  getAllCompaniesBilling,
+  getCompanyInvoices,
+} = require("../../controllers/admin/adminBillingController");
+
+router.post("/billing", getAllCompaniesBilling);
+router.post("/billing/invoices", getCompanyInvoices);
+
 module.exports = router;
