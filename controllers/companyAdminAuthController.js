@@ -25,6 +25,7 @@ const querystring = require("querystring");
 const axios = require("axios");
 const ReferralLog = require("../models/referralLogModel");
 const { META_GRAPH_URL } = require("../config/whatsapp");
+const ActivationEmailConfig = require("../models/ActivationEmailConfig");
 // const { getConfig } = require("../utils/getConfig");
 
 const oauth2Client = new google.auth.OAuth2(
@@ -206,6 +207,17 @@ const signupWithEmail = async (req, res) => {
       // Only mark emailVerified here — isVerified is set separately once mobile is also verified
       user.emailVerified = true;
       user.emailVerifiedAt = new Date();
+      if (user.role === "companyAdmin") {
+        try {
+          const cfg = await ActivationEmailConfig.findOne({ key: "global" }).lean();
+          if (cfg && cfg.isActive && cfg.emails && cfg.emails.length > 0) {
+            const sorted = cfg.emails.slice().sort((a, b) => a.order - b.order);
+            user.nextActivationEmailAt = new Date(
+              user.emailVerifiedAt.getTime() + sorted[0].delayDays * 86400000
+            );
+          }
+        } catch (_) {}
+      }
       user.emailVerificationToken = undefined;
 
       if (!user.signupMethod) {
@@ -666,6 +678,7 @@ const verifyRealPhoneNumber = async (req, res) => {
     }
 
     user.isVerified = true;
+    user.nextActivationEmailAt = null;
 
     // clear otp
     user.otp = undefined;
