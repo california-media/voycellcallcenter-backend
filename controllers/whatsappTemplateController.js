@@ -311,8 +311,9 @@ exports.createTemplate = async (req, res) => {
             buttons: buttonsComponent.buttons.map((btn) => ({
               type: btn.type,
               text: btn.text,
-              url: btn.url,
-              phone_number: btn.phone_number,
+              ...(btn.url && { url: btn.url }),
+              ...(btn.phone_number && { phone_number: btn.phone_number }),
+              ...(btn.example && { example: btn.example }),
             })),
           },
         ];
