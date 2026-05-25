@@ -273,6 +273,7 @@ const userSchema = new Schema(
     balanceWarningSentAt: { type: Date, default: null },
     emailVerifiedAt: { type: Date, default: null },
     activationRemindersSent: { type: Number, default: 0 },
+    nextActivationEmailAt:   { type: Date,   default: null },
     autoRecharge: {
       enabled:   { type: Boolean, default: false },
       threshold: { type: Number,  default: 5   },    // recharge when balance < threshold ($)
@@ -990,6 +991,8 @@ userSchema.index(
   { "phonenumbers.countryCode": 1, "phonenumbers.number": 1 },
   { unique: true, sparse: true }
 );
+
+userSchema.index({ nextActivationEmailAt: 1 }, { sparse: true });
 
 const User = model("User", userSchema);
 module.exports = User;
