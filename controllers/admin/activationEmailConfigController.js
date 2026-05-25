@@ -70,6 +70,13 @@ const updateActivationEmailConfig = async (req, res) => {
       return res.status(400).json({ status: "error", message: "At least 2 emails required" });
     }
 
+    for (let i = 0; i < emails.length; i++) {
+      const e = emails[i];
+      if (e.order == null || typeof e.delayDays !== "number" || !e.subject?.trim() || !e.body?.trim()) {
+        return res.status(400).json({ status: "error", message: `Email #${i + 1} is missing required fields (order, delayDays, subject, body)` });
+      }
+    }
+
     for (let i = 1; i < emails.length; i++) {
       if (emails[i].delayDays <= emails[i - 1].delayDays) {
         return res.status(400).json({ status: "error", message: "delayDays must be strictly increasing" });
