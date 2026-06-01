@@ -13,6 +13,7 @@ const axios         = require("axios");
 const SesEmailEvent = require("../models/SesEmailEvent");
 const SesMessageLog = require("../models/SesMessageLog");
 const EmailLog      = require("../models/EmailLog");
+const EmailBatchJob = require("../models/EmailBatchJob");
 
 // Map SES notificationType → EmailLog stats field
 const EVENT_FIELD_MAP = {
@@ -152,6 +153,15 @@ async function processSesEvent(sesEvent) {
     if (statsField && msgLog?.emailLogId) {
       await EmailLog.findByIdAndUpdate(
         msgLog.emailLogId,
+        { $inc: { [`stats.${statsField}`]: 1 } }
+      );
+    }
+
+    // Increment running stats on EmailBatchJob so listBatchJobs can read them
+    // without an expensive aggregate query
+    if (statsField && msgLog?.batchJobId) {
+      await EmailBatchJob.findOneAndUpdate(
+        { jobId: msgLog.batchJobId },
         { $inc: { [`stats.${statsField}`]: 1 } }
       );
     }

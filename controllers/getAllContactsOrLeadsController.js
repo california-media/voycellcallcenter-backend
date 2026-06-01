@@ -1085,6 +1085,8 @@ exports.searchByPhone = async (req, res) => {
       ownerRole: c.createdByUser?.role || "user",
       ownerId: c.createdByUser?._id?.toString() || "",
       contactId: c.contact_id,
+      status: c.status || "",
+      tags: c.tags || [],
     }));
 
     const formattedLeads = leads.map((l) => ({
@@ -1097,14 +1099,56 @@ exports.searchByPhone = async (req, res) => {
       ownerEmail: l.createdByUser?.email || "",
       ownerRole: l.createdByUser?.role || "user",
       ownerId: l.createdByUser?._id?.toString() || "",
-      leadId: l.contact_id,
+      contactId: l.contact_id,
+      status: l.status || "",
+      tags: l.tags || [],
+    }));
+
+    // ✅ SEARCH USERS (agents + company admin in same company)
+    const users = await User.aggregate([
+      {
+        $match: {
+          _id: { $in: ownerIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        },
+      },
+      {
+        $addFields: {
+          fullPhoneNumbers: {
+            $map: {
+              input: { $ifNull: ["$phonenumbers", []] },
+              as: "phone",
+              in: {
+                $concat: [
+                  { $ifNull: ["$$phone.countryCode", ""] },
+                  { $ifNull: ["$$phone.number", ""] },
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          fullPhoneNumbers: { $elemMatch: { $regex: searchDigits, $options: "i" } },
+        },
+      },
+    ]);
+
+    const formattedUsers = users.map((u) => ({
+      type: "user",
+      firstname: u.firstname,
+      lastname: u.lastname,
+      phoneNumbers: u.phonenumbers,
+      role: u.role,
+      email: u.email,
+      userId: u._id?.toString(),
     }));
 
     return res.status(200).json({
       status: "success",
       message: "Search completed successfully",
-      totalResults: formattedContacts.length + formattedLeads.length,
-      results: [...formattedContacts, ...formattedLeads],
+      totalResults: formattedContacts.length + formattedLeads.length + formattedUsers.length,
+      results: [...formattedContacts, ...formattedLeads, ...formattedUsers],
     });
   } catch (error) {
     console.error("Search Error:", error);

@@ -461,6 +461,7 @@ const userSchema = new Schema(
         nickname:         { type: String, default: null }, // friendly label set by company admin
         pbxType:          { type: String, enum: ["local", "cloud"], default: "cloud" }, // local = on-premise device, cloud = hosted PBX
         channels:         { type: Number, default: 1 }, // max concurrent agents (cloud only; local always 1)
+        inAdminPool:      { type: Boolean, default: true }, // false = admin removed themselves from this multi-channel ext
         _id: false,
       },
     ],
@@ -584,6 +585,8 @@ const userSchema = new Schema(
           firstOutgoingMetaMessageId: { type: String },
           lastIncomingMetaMessageId: { type: String },
           lastOutgoingMetaMessageId: { type: String },
+          unreadCount: { type: Number, default: 0 },
+          lastReadAt: { type: Date, default: null },
         }
       ]
 
@@ -622,6 +625,14 @@ const userSchema = new Schema(
             metaMessageId: String,
             chatNumber: String,
             chatName: String,
+          },
+        ],
+
+        failedRefs: [
+          {
+            chatNumber: String,
+            chatName: String,
+            error: String,
           },
         ],
 

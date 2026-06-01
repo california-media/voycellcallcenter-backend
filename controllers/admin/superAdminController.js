@@ -1800,12 +1800,58 @@ exports.setCompanyExtensions = async (req, res) => {
         ...(e.inAdminPool === false ? { inAdminPool: false } : {}),
       }));
 
+    // Find which extensions are being removed (track both extensionNumber and PBX_TELEPHONE)
+    const existing = await User.findById(req.params.userId).select("assignedExtensions");
+    const existingExts = existing?.assignedExtensions || [];
+    const newNums = new Set(cleaned.map((e) => String(e.extensionNumber)));
+    const removedExts = existingExts.filter((e) => !newNums.has(String(e.extensionNumber)));
+    const removedNums = removedExts.map((e) => String(e.extensionNumber));
+    const removedTels = removedExts.map((e) => String(e.PBX_TELEPHONE)).filter(Boolean);
+
     const user = await User.findByIdAndUpdate(
       req.params.userId,
       { $set: { assignedExtensions: cleaned } },
       { new: true, select: "assignedExtensions" }
     );
     if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Cascade removal to all agents belonging to this company
+    if (removedNums.length > 0) {
+      // Pull from assignedExtensions and assignedCallerNumbers
+      await User.updateMany(
+        { createdByWhichCompanyAdmin: req.params.userId },
+        {
+          $pull: {
+            assignedExtensions:    { extensionNumber: { $in: removedNums } },
+            assignedCallerNumbers: { $in: removedTels },
+          },
+        }
+      );
+      // Clear primary extension fields on agents whose primary telephone was one of the removed ones
+      if (removedTels.length > 0) {
+        await User.updateMany(
+          {
+            createdByWhichCompanyAdmin: req.params.userId,
+            $or: [
+              { telephone:                   { $in: removedTels } },
+              { "PBXDetails.PBX_TELEPHONE":  { $in: removedTels } },
+            ],
+          },
+          {
+            $set: {
+              telephone:                          "",
+              extensionNumber:                    "",
+              assignedDeviceId:                   null,
+              extensionStatus:                    false,
+              "PBXDetails.PBX_TELEPHONE":         "",
+              "PBXDetails.PBX_EXTENSION_NUMBER":  "",
+              "PBXDetails.assignedDeviceId":      null,
+            },
+          }
+        );
+      }
+    }
+
     res.json({ extensions: user.assignedExtensions });
   } catch (err) {
     console.error("setCompanyExtensions error:", err);

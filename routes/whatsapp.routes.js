@@ -26,6 +26,7 @@ const {
     deleteChats,
     getWhatsappMessages,
     manageWabaAssignment,
+    markChatRead,
 } = require("../controllers/whatsapp.controller");
 const { createTemplate, editTemplate, getWabaTemplates, deleteWabaTemplate, getApprovedTemplates, getTemplateById } = require("../controllers/whatsappTemplateController");
 const upload = multer();
@@ -66,6 +67,7 @@ router.post("/campaignsById", checkForAuthentication(), getCampaignDetails);
 router.delete("/delete/campaigns", checkForAuthentication(), deleteCampaign);
 
 router.post("/conversations", checkForAuthentication(), getWhatsappConversations);
+router.post("/mark-read", checkForAuthentication(), markChatRead);
 router.post("/messages", checkForAuthentication(), getWhatsappMessages);
 router.post("/send-message", checkForAuthentication(), upload.single("file"), sendMessage);
 

@@ -40,16 +40,16 @@ const updateChatLastMessage = async ({
             : "whatsappWaba.chats.$.lastOutgoingTime";
 
     // 1️⃣ Try updating existing chat
+    const updateFields = { [timeField]: timestamp };
+    const updateOps = { $set: updateFields };
+    if (direction === "incoming") updateOps.$inc = { "whatsappWaba.chats.$.unreadCount": 1 };
+
     const updated = await User.findOneAndUpdate(
         {
             _id: userId,
             "whatsappWaba.chats.chatNumber": chatNumber
         },
-        {
-            $set: {
-                [timeField]: timestamp
-            }
-        },
+        updateOps,
         { new: true }
     );
 
@@ -62,7 +62,8 @@ const updateChatLastMessage = async ({
                     lastIncomingTime:
                         direction === "incoming" ? timestamp : null,
                     lastOutgoingTime:
-                        direction === "outgoing" ? timestamp : null
+                        direction === "outgoing" ? timestamp : null,
+                    unreadCount: direction === "incoming" ? 1 : 0,
                 }
             }
         });
@@ -2436,12 +2437,13 @@ exports.sendTemplateMessage = async (req, res) => {
 
             if (hasVars) {
 
+                const namedExamples = body.example?.body_text_named_params || [];
+                const isNamed =
+                    template.parameter_format?.toUpperCase() === "NAMED" ||
+                    namedExamples.length > 0;
+
                 /* ===== NAMED PARAMS ===== */
-                if (template.parameter_format === "named") {
-
-                    const namedExamples =
-                        body.example?.body_text_named_params || [];
-
+                if (isNamed && namedExamples.length > 0) {
                     components.push({
                         type: "body",
                         parameters: namedExamples.map((ex, i) => ({
@@ -2453,7 +2455,7 @@ exports.sendTemplateMessage = async (req, res) => {
                 }
 
                 /* ===== POSITIONAL PARAMS ===== */
-                else {
+                else if (!isNamed) {
                     components.push({
                         type: "body",
                         parameters: (params.body || []).map(t => ({
@@ -2502,25 +2504,20 @@ exports.sendTemplateMessage = async (req, res) => {
                 }
 
                 // COPY CODE
-                // COPY CODE (dynamic)
                 if (btn.type === "COPY_CODE") {
-                    const code = params.buttons?.[index];
+                    const code = params.buttons?.[index] || btn.example;
 
-                    if (!code) {
-                        throw new Error(
-                            `COPY_CODE button at index ${index} requires coupon_code`
-                        );
+                    if (code) {
+                        components.push({
+                            type: "button",
+                            sub_type: "copy_code",
+                            index,
+                            parameters: [{
+                                type: "coupon_code",
+                                coupon_code: code
+                            }]
+                        });
                     }
-
-                    components.push({
-                        type: "button",
-                        sub_type: "copy_code",
-                        index,
-                        parameters: [{
-                            type: "coupon_code",
-                            coupon_code: code
-                        }]
-                    });
                 }
 
                 // PHONE NUMBER (Meta = voice_call)
@@ -2664,6 +2661,7 @@ exports.sendTemplateMessage = async (req, res) => {
         return res.json({ success: true, data });
 
     } catch (error) {
+        console.error("[send-template] error:", error.response?.data || error.message);
         return res.status(500).json({
             success: false,
             error: error.response?.data || error.message
@@ -2704,40 +2702,31 @@ const extractNumbersWithNames = (records, type = "contact") => {
     return data;
 };
 
-const resolveDynamicParams = (params = {}, recipient) => {
+const resolveDynamicParams = (params = {}, recipient, defaults = {}) => {
 
     const resolved = { ...params };
+
+    const fieldMap = {
+        "{{first_name}}":   recipient.firstName,
+        "{{last_name}}":    recipient.lastName,
+        "{{full_name}}":    recipient.name,
+        "{{company}}":      recipient.company,
+        "{{company_name}}": recipient.company,
+        "{{phone}}":        recipient.phone,
+        "{{email}}":        recipient.email,
+    };
 
     /* ===== BODY PARAMS ===== */
     if (Array.isArray(params.body)) {
         resolved.body = params.body.map(p => {
+            const contactValue = fieldMap[p];
+            if (contactValue) return contactValue;
 
-            if (p === "{{first_name}}") {
-                return recipient.firstName || "Customer";
-            }
-
-            if (p === "{{last_name}}") {
-                return recipient.lastName || "";
-            }
-
-            if (p === "{{full_name}}") {
-                return recipient.name || "Customer";
-            }
-
-            if (p === "{{company}}") {
-                return recipient.company || "";
-            }
-
-            if (p === "{{phone}}") {
-                return recipient.phone || "";
-            }
-
-            if (p === "{{email}}") {
-                return recipient.email || "";
-            }
-
-            if (p === "{{company_name}}") {
-                return recipient.company || "";
+            // Extract field name from {{field_name}} to look up defaults
+            const fieldMatch = p.match(/^{{(.+)}}$/);
+            if (fieldMatch) {
+                const fieldName = fieldMatch[1];
+                return defaults[fieldName] || "";
             }
 
             return p; // static value
@@ -2754,6 +2743,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             templateId,
             campaignName,
             params = {},
+            defaults = {},
             groupName = [],
             excelNumbers = [],   // [{name, number}] from Excel upload
             schedule = "",
@@ -2876,10 +2866,14 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             };
         }
 
+        console.log(`[campaign] found ${contacts.length} contacts, ${leads.length} leads for tags:`, groupName);
+
         let recipients = [
             ...extractNumbersWithNames(contacts, "contact"),
             ...extractNumbersWithNames(leads, "lead")
         ];
+
+        console.log(`[campaign] recipients before dedup: ${recipients.length}`, recipients.map(r => r.number));
 
         // Add Excel-uploaded numbers (already parsed by frontend)
         if (Array.isArray(excelNumbers) && excelNumbers.length) {
@@ -2926,6 +2920,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             numbers: recipients,
             total: recipients.length,
             messageRefs: [],
+            failedRefs: [],
             scheduledAt: schedule ? new Date(schedule) : null,
         };
 
@@ -2988,7 +2983,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             if (hasVars) {
 
                 // Named params
-                if (template.parameter_format === "named") {
+                if (template.parameter_format?.toUpperCase() === "NAMED") {
 
                     const namedExamples =
                         body.example?.body_text_named_params || [];
@@ -3054,23 +3049,19 @@ exports.sendTemplateBulkMessage = async (req, res) => {
 
                 // COPY CODE
                 if (btn.type === "COPY_CODE") {
-                    const code = params.buttons?.[index];
+                    const code = params.buttons?.[index] || btn.example;
 
-                    if (!code) {
-                        throw new Error(
-                            `COPY_CODE button at index ${index} requires coupon_code`
-                        );
+                    if (code) {
+                        components.push({
+                            type: "button",
+                            sub_type: "copy_code",
+                            index,
+                            parameters: [{
+                                type: "coupon_code",
+                                coupon_code: code
+                            }]
+                        });
                     }
-
-                    components.push({
-                        type: "button",
-                        sub_type: "copy_code",
-                        index,
-                        parameters: [{
-                            type: "coupon_code",
-                            coupon_code: code
-                        }]
-                    });
                 }
 
                 // PHONE NUMBER
@@ -3143,8 +3134,9 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                     userId: companyAdminId.toString(),
                     templateId: templateId.toString(),
                     params,
+                    defaults,
                     groupName,
-                    scheduledAt: new Date(schedule), // ⭐ ADD THIS
+                    scheduledAt: new Date(schedule),
                 },
             });
 
@@ -3160,14 +3152,28 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         /* ───────── BULK SEND ───────── */
         const results = [];
 
+        console.log(`[campaign] starting bulk send: ${recipients.length} recipients`, recipients.map(r => r.number));
 
         for (const r of recipients) {
 
             const toNumber = r.number;
             const senderName = r.name;
 
+            console.log(`[campaign] processing recipient: ${toNumber} (${senderName})`);
+
             /* ===== RESOLVE DYNAMIC PARAMS ===== */
-            const resolvedParams = resolveDynamicParams(params, r);
+            const resolvedParams = resolveDynamicParams(params, r, defaults);
+
+            console.log(`[campaign] resolved params for ${toNumber}:`, JSON.stringify(resolvedParams));
+
+            /* ===== VALIDATE RESOLVED PARAMS ===== */
+            if (resolvedParams.body && resolvedParams.body.some(v => typeof v === "string" && !v.trim())) {
+                const emptyError = "Contact is missing required information.";
+                console.warn(`[campaign] ⚠️ skipping ${toNumber}: empty param`);
+                campaignData.failedRefs.push({ chatNumber: toNumber, chatName: senderName || toNumber, error: emptyError });
+                results.push({ to: toNumber, success: false, error: emptyError });
+                continue;
+            }
 
             /* ===== BUILD BODY COMPONENT ===== */
             const dynamicComponents = [...components];
@@ -3179,7 +3185,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             if (bodyIndex !== -1) {
 
                 /* ===== NAMED PARAMS ===== */
-                if (template.parameter_format === "named") {
+                if (template.parameter_format?.toUpperCase() === "NAMED") {
 
                     const namedExamples =
                         template.components
@@ -3221,6 +3227,8 @@ exports.sendTemplateBulkMessage = async (req, res) => {
             };
 
             try {
+                console.log(`[campaign] sending to ${toNumber}, payload:`, JSON.stringify(payload, null, 2));
+
                 const { data } = await axios.post(
                     `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
                     payload,
@@ -3233,6 +3241,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 );
 
                 const metaId = data.messages?.[0]?.id;
+                console.log(`[campaign] ✅ sent to ${toNumber}, metaId: ${metaId}`);
 
                 campaignData.messageRefs.push({
                     metaMessageId: metaId,
@@ -3266,13 +3275,9 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 const phoneNumberObj = parsePhoneNumberFromString("+" + toNumber);
 
                 if (!phoneNumberObj) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Invalid phone number format",
-                    });
-                }
-
-                const countryCode = phoneNumberObj.countryCallingCode; // e.g. 91
+                    console.warn(`[campaign] could not parse phone number: ${toNumber}, skipping activity update`);
+                } else {
+                const countryCode = phoneNumberObj.countryCallingCode;
                 const number = phoneNumberObj.nationalNumber;
 
                 let contact = await Contact.findOne({
@@ -3315,6 +3320,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                     lead.activities.push(activityData);
                     await lead.save();
                 }
+                } // end phoneNumberObj else
 
                 results.push({
                     to: toNumber,
@@ -3323,13 +3329,24 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 });
 
             } catch (err) {
+                const metaErr = err.response?.data?.error;
+                const errMsg = metaErr?.error_data?.details
+                    ? metaErr.error_data.details
+                    : metaErr?.message
+                        ? metaErr.message.replace(/^\(#\d+\)\s*/, "")
+                        : err.message || "Failed to send message";
+                console.error(`[campaign] ❌ failed for ${r.number}:`, errMsg);
+                console.error(`[campaign] ❌ full error for ${r.number}:`, JSON.stringify(err.response?.data || err.message, null, 2));
+                campaignData.failedRefs.push({ chatNumber: toNumber, chatName: senderName || toNumber, error: errMsg });
                 results.push({
                     to: toNumber,
                     success: false,
-                    error: err.response?.data || err.message
+                    error: errMsg
                 });
             }
         }
+
+        console.log(`[campaign] done. sent: ${results.filter(r => r.success).length}, failed: ${results.filter(r => !r.success).length}`);
 
         await User.updateOne(
             { _id: companyAdminId },
@@ -3350,6 +3367,7 @@ exports.sendTemplateBulkMessage = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("[campaign] FATAL outer error:", error.response?.data || error.message, error.stack);
         return res.status(500).json({
             success: false,
             error: error.response?.data || error.message
@@ -3464,7 +3482,7 @@ exports.getAllCampaigns = async (req, res) => {
                 metaMessageId: { $in: messageIds },
             }).lean();
 
-            const total = messageIds.length;
+            const total = camp.numbers?.length || camp.total || messageIds.length;
 
             /* 📊 STATUS COUNTS */
             let delivered = 0;
@@ -3603,50 +3621,58 @@ exports.getCampaignDetails = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
-        /* 4️⃣ Counts (CUMULATIVE) */
-        const total = messageIds.length;
+        /* 4️⃣ Counts */
+        const total = campaign.numbers?.length || messageIds.length;
 
         let sent = 0;
         let delivered = 0;
         let read = 0;
-        let failed = 0;
+        let failed = campaign.failedRefs?.length || 0;
 
         messages.forEach(m => {
             if (m.status === "failed") {
                 failed++;
-                return; // failed stops progression
+                return;
             }
-
-            // If message exists → it was sent
             sent++;
-
-            if (m.status === "delivered" || m.status === "read") {
-                delivered++;
-            }
-
-            if (m.status === "read") {
-                read++;
-            }
+            if (m.status === "delivered" || m.status === "read") delivered++;
+            if (m.status === "read") read++;
         });
 
-        /* 5️⃣ Format List */
-        const list = campaign.messageRefs.map(ref => {
+        /* 5️⃣ Format List — successful sends */
+        const successList = campaign.messageRefs.map(ref => {
             const msg = messages.find(
                 m => m.metaMessageId === ref.metaMessageId
             );
-
             return {
                 metaMessageId: ref.metaMessageId,
                 chatNumber: ref.chatNumber,
-                // templateId: ref.templateId,
                 status: msg?.status || "sent",
-                chatName: msg?.senderName || ref.chatNumber,
+                chatName: msg?.senderName || ref.chatName || ref.chatNumber,
                 sentAt: msg?.messageSentTimestamp || null,
                 deliveredAt: msg?.messageDeliveredTimestamp || null,
                 readAt: msg?.messageReadTimestamp || null,
                 failedAt: msg?.messageFailedTimestamp || null,
+                error: msg?.status === "failed"
+                    ? (msg?.error?.message || "Message delivery failed")
+                    : null,
             };
         });
+
+        /* 5b️⃣ Failed sends */
+        const failedList = (campaign.failedRefs || []).map(ref => ({
+            metaMessageId: null,
+            chatNumber: ref.chatNumber,
+            status: "failed",
+            chatName: ref.chatName || ref.chatNumber,
+            error: ref.error || "Send failed",
+            sentAt: null,
+            deliveredAt: null,
+            readAt: null,
+            failedAt: null,
+        }));
+
+        const list = [...successList, ...failedList];
 
         /* 6️⃣ Response */
         return res.json({
@@ -3717,6 +3743,9 @@ exports.getWhatsappConversations = async (req, res) => {
         const page = parseInt(req.body.page) || 1;
         const limit = parseInt(req.body.limit) || 10;
         const search = req.body.search || "";
+        const readFilter = req.body.readFilter || "all"; // "all" | "unread" | "read"
+        const dateFrom = req.body.dateFrom ? new Date(req.body.dateFrom) : null;
+        const dateTo = req.body.dateTo ? new Date(req.body.dateTo) : null;
 
         const skip = (page - 1) * limit;
 
@@ -3746,6 +3775,34 @@ exports.getWhatsappConversations = async (req, res) => {
 
         const now = new Date();
         const before24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        // Pre-compute unread chat numbers using lastReadAt + real message count
+        let readFilterFromNumbers = null;
+        if (readFilter !== "all") {
+            const userChatsDoc = await User.findById(companyAdminId).select("whatsappWaba.chats");
+            const allChats = userChatsDoc?.whatsappWaba?.chats || [];
+
+            if (allChats.length === 0) {
+                readFilterFromNumbers = [];
+            } else {
+                // Count incoming messages after lastReadAt per chat
+                const orConditions = allChats.map((c) => ({
+                    from: c.chatNumber,
+                    messageTimestamp: { $gt: c.lastReadAt || new Date(0) },
+                }));
+
+                const unreadAgg = await WhatsAppMessage.aggregate([
+                    { $match: { userId: companyAdminObjectId, direction: "incoming", $or: orConditions } },
+                    { $group: { _id: "$from", count: { $sum: 1 } } },
+                ]);
+
+                const unreadSet = new Set(unreadAgg.map((u) => u._id));
+
+                readFilterFromNumbers = allChats
+                    .map((c) => c.chatNumber)
+                    .filter((num) => readFilter === "unread" ? unreadSet.has(num) : !unreadSet.has(num));
+            }
+        }
 
         // For superadmin: match by phoneNumberId so history is visible regardless of
         // which userId (company admin vs superadmin) originally saved the messages.
@@ -3896,19 +3953,24 @@ exports.getWhatsappConversations = async (req, res) => {
                         {
                             $match: {
                                 $expr: {
-                                    $in: [
-                                        "$$convNumber",
+                                    $and: [
+                                        { $in: ["$_id", ownerIds] },
                                         {
-                                            $map: {
-                                                input: { $ifNull: ["$phonenumbers", []] },
-                                                as: "p",
-                                                in: {
-                                                    $replaceAll: {
-                                                        input: { $concat: [{ $ifNull: ["$$p.countryCode", ""] }, { $ifNull: ["$$p.number", ""] }] },
-                                                        find: "+", replacement: ""
+                                            $in: [
+                                                "$$convNumber",
+                                                {
+                                                    $map: {
+                                                        input: { $ifNull: ["$phonenumbers", []] },
+                                                        as: "p",
+                                                        in: {
+                                                            $replaceAll: {
+                                                                input: { $concat: [{ $ifNull: ["$$p.countryCode", ""] }, { $ifNull: ["$$p.number", ""] }] },
+                                                                find: "+", replacement: ""
+                                                            }
+                                                        }
                                                     }
                                                 }
-                                            }
+                                            ]
                                         }
                                     ]
                                 }
@@ -4075,21 +4137,21 @@ exports.getWhatsappConversations = async (req, res) => {
                             ]
                         } : {},
                         type === "chats"
-                            // Active chats: customer sent a message within the last 24 hours
                             ? { lastIncomingTime: { $gte: before24Hours } }
                             : type === "history"
-                                // History: customer has NOT sent a message in the last 24 hours,
-                                // OR has never sent one at all (e.g. outgoing-only template sends).
-                                // We intentionally use lastIncomingTime — not lastMessageTime —
-                                // because an outgoing template sent today should still appear in
-                                // history if the customer never replied.
                                 ? {
                                     $or: [
                                         { lastIncomingTime: { $lt: before24Hours } },
                                         { lastIncomingTime: null }
                                     ]
                                 }
-                                : {}
+                                : {},
+                        dateFrom && dateTo
+                            ? { lastMessageTime: { $gte: dateFrom, $lte: dateTo } }
+                            : {},
+                        readFilterFromNumbers !== null
+                            ? { from: { $in: readFilterFromNumbers } }
+                            : {},
                     ]
                 }
             },
@@ -4146,6 +4208,31 @@ exports.getWhatsappConversations = async (req, res) => {
         const result = await WhatsAppMessage.aggregate(aggregationPipeline);
         const conversations = result[0].data;
         const totalCount = result[0].metadata[0]?.total || 0;
+
+        /* -------------------------------------------------- */
+        /* STEP: Compute real unreadCount per conversation    */
+        /* -------------------------------------------------- */
+        const userForUnread = await User.findById(companyAdminId).select("whatsappWaba.chats");
+        const chatReadMap = {};
+        (userForUnread?.whatsappWaba?.chats || []).forEach((c) => {
+            chatReadMap[c.chatNumber] = c.lastReadAt || new Date(0);
+        });
+
+        if (conversations.length > 0) {
+            const pageOrConditions = conversations.map((c) => ({
+                from: c.from,
+                messageTimestamp: { $gt: chatReadMap[c.from] || new Date(0) },
+            }));
+
+            const pageUnreadAgg = await WhatsAppMessage.aggregate([
+                { $match: { userId: companyAdminObjectId, direction: "incoming", $or: pageOrConditions } },
+                { $group: { _id: "$from", count: { $sum: 1 } } },
+            ]);
+
+            const pageUnreadMap = {};
+            pageUnreadAgg.forEach((u) => { pageUnreadMap[u._id] = u.count; });
+            conversations.forEach((c) => { c.unreadCount = pageUnreadMap[c.from] || 0; });
+        }
 
         /* -------------------------------------------------- */
         /* STEP 🔥 Sync isWabaChat with Contact & Lead        */
@@ -4966,5 +5053,22 @@ exports.embeddedSignupExchange = async (req, res) => {
             status:  "error",
             message: error.response?.data?.error?.message || "Internal server error",
         });
+    }
+};
+
+exports.markChatRead = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { chatNumber } = req.body;
+        if (!chatNumber) return res.status(400).json({ message: "chatNumber required" });
+
+        await User.findOneAndUpdate(
+            { _id: userId, "whatsappWaba.chats.chatNumber": chatNumber },
+            { $set: { "whatsappWaba.chats.$.unreadCount": 0, "whatsappWaba.chats.$.lastReadAt": new Date() } }
+        );
+
+        return res.json({ success: true });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Failed to mark chat as read" });
     }
 };

@@ -84,10 +84,11 @@ const sendEmailBatchService = async ({ jobId, batchIndex }) => {
   }
 
   // ── Step 2: Check daily cap at fire time ─────────────────────────────────
-  // Count BOTH completed EmailLogs AND in-progress batch jobs (batches already
-  // sent within the current day but whose EmailLog hasn't been written yet because
-  // the job isn't finished). This prevents two overlapping large jobs from both
-  // blasting through the daily cap before either one writes its EmailLog.
+  // Two-source accounting (no double-counting):
+  //   1. EmailLog.aggregate  → completed jobs (EmailLog written at job completion)
+  //   2. in_progress jobs    → batches sent but EmailLog not yet written
+  // "completed" is intentionally excluded from source 2 — those emails are
+  // already in source 1. Including them would halve the effective daily cap.
   const now     = new Date();
   const day1Ago = new Date(now - 24 * 60 * 60 * 1000);
 
@@ -99,11 +100,12 @@ const sendEmailBatchService = async ({ jobId, batchIndex }) => {
   ]);
   const completedEmailLogCount = dailyAgg[0]?.total ?? 0;
 
-  // Emails already sent by ALL in-progress batch jobs TODAY (not yet in EmailLog).
-  // Intentionally includes the CURRENT job so batches within the same large job
-  // correctly count toward the daily cap as previous batches complete.
+  // Emails already sent by in-progress batch jobs TODAY (not yet written to EmailLog).
+  // Only "in_progress" — "completed" jobs already have their EmailLog written and are
+  // fully counted by the EmailLog.aggregate above. Including "completed" here would
+  // double-count those emails, effectively halving the daily cap.
   const inProgressJobs = await EmailBatchJob.find({
-    status: { $in: ["in_progress", "completed"] },
+    status: "in_progress",
     updatedAt: { $gte: day1Ago },
   }).select("batches").lean();
 
@@ -263,12 +265,18 @@ const sendEmailBatchService = async ({ jobId, batchIndex }) => {
 
       // EmailLog is best-effort — failure here must NOT affect the batch result
       try {
+        // Use `updated.batches` (fresh from DB) not `job.batches` (stale, loaded at
+        // batch start). Previous batches updated their succeededCount via findOneAndUpdate
+        // which doesn't mutate the in-memory `job` object.
+        const actualSentCount = updated.batches.reduce(
+          (sum, b) => sum + (b.succeededCount || 0), 0
+        );
         const emailLog = await EmailLog.create({
           subject:        job.subject,
           title:          job.title || "",
           body:           job.body,
           target:         "batch",
-          recipientCount: job.totalRecipients,
+          recipientCount: actualSentCount || job.totalRecipients,
           recipients:     job.batches.flatMap((b) =>
             b.recipients.map((r) => ({ email: r.email, name: r.name || "", userId: null }))
           ),

@@ -61,29 +61,31 @@ const extractNumbersWithNames = (
 ────────────────────────────────────────────── */
 const resolveDynamicParams = (
     params = {},
-    recipient
+    recipient,
+    defaults = {}
 ) => {
 
     const resolved = { ...params };
 
+    const fieldMap = {
+        "{{first_name}}":   recipient.firstName,
+        "{{last_name}}":    recipient.lastName,
+        "{{full_name}}":    recipient.name,
+        "{{company}}":      recipient.company,
+        "{{company_name}}": recipient.company,
+        "{{phone}}":        recipient.phone,
+        "{{email}}":        recipient.email,
+    };
+
     if (Array.isArray(params.body)) {
-
         resolved.body = params.body.map(p => {
+            const contactValue = fieldMap[p];
+            if (contactValue) return contactValue;
 
-            if (p === "{{first_name}}") {
-                return recipient.firstName || "Customer";
-            }
-
-            if (p === "{{last_name}}") {
-                return recipient.lastName || "";
-            }
-
-            if (p === "{{full_name}}") {
-                return recipient.name || "Customer";
-            }
-
-            if (p === "{{company}}") {
-                return recipient.company || "";
+            const fieldMatch = p.match(/^{{(.+)}}$/);
+            if (fieldMatch) {
+                const fieldName = fieldMatch[1];
+                return defaults[fieldName] || "";
             }
 
             return p;
@@ -202,7 +204,7 @@ const applyDynamicParams = (
     if (bodyIndex !== -1) {
 
         /* ===== NAMED PARAMS ===== */
-        if (template.parameter_format === "named") {
+        if (template.parameter_format?.toUpperCase() === "NAMED") {
 
             const namedExamples =
                 template.components
@@ -243,6 +245,7 @@ exports.sendScheduledCampaignService =
         userId,
         templateId,
         params = {},
+        defaults = {},
         groupName = [],
     }) => {
 
@@ -311,7 +314,7 @@ exports.sendScheduledCampaignService =
                 r.number;
 
             const resolvedParams =
-                resolveDynamicParams(params, r);
+                resolveDynamicParams(params, r, defaults);
 
             const dynamicComponents =
                 applyDynamicParams(

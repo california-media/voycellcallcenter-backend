@@ -562,8 +562,8 @@ exports.reassignExtension = async (req, res) => {
             { "assignedExtensions.PBX_TELEPHONE": num },
           ].filter(Boolean),
         });
-        // Count admin only if they actively have the extension in their pool
-        const adminHasExt = !!adminExtEntry && adminExtEntry.inAdminPool !== false;
+        // Don't count admin's existing slot when admin is the one being added — they're reclaiming it
+        const adminHasExt = !isAddingAdmin && !!adminExtEntry && adminExtEntry.inAdminPool !== false;
         const totalUsed   = agentCount + (adminHasExt ? 1 : 0);
         if (totalUsed >= maxChannels) {
           return res.status(400).json({
@@ -618,11 +618,16 @@ exports.reassignExtension = async (req, res) => {
         setOnAgent.telephone       = num;
       }
 
-      await User.findByIdAndUpdate(toAgentId, {
-        $push:     { assignedExtensions: extEntry },
-        $addToSet: { assignedCallerNumbers: num },
-        $set:      setOnAgent,
-      });
+      const toUpdate = {
+        $push: { assignedExtensions: extEntry },
+        $set:  setOnAgent,
+      };
+      // Don't add to assignedCallerNumbers for admin — their pool is driven by assignedExtensions,
+      // not assignedCallerNumbers. Adding here would incorrectly restrict their dialer to only that number.
+      if (!isAddingAdmin) {
+        toUpdate.$addToSet = { assignedCallerNumbers: num };
+      }
+      await User.findByIdAndUpdate(toAgentId, toUpdate);
     }
 
     // ── Return to admin pool ──────────────────────────────────────────────────

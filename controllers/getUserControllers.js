@@ -48,6 +48,13 @@ const getUserData = async (req, res) => {
     // Company admin → only numbers NOT currently assigned to any agent (free pool)
     // Agent → numbers assigned specifically to them
     const isAgent = user.role === "user";
+
+    // For company admins: assignedCallerNumbers should always be empty (their pool is driven by
+    // assignedExtensions). Clear any stale entries that were incorrectly added.
+    if (!isAgent && user.role === "companyAdmin" && (user.assignedCallerNumbers || []).length > 0) {
+      await User.findByIdAndUpdate(user._id, { $set: { assignedCallerNumbers: [] } });
+      user.assignedCallerNumbers = [];
+    }
     const purchasedDIDDocs = isAgent
       ? await DIDAssignment.find({ assignedAgentId: user._id, status: "assigned" }).select("number -_id").lean()
       : await DIDAssignment.find({ companyAdminId: user._id, status: "assigned", $or: [{ assignedAgentId: null }, { assignedAgentId: { $exists: false } }] }).select("number -_id").lean();

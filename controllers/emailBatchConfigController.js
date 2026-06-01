@@ -180,56 +180,11 @@ exports.listBatchJobs = async (req, res) => {
       return res.json({ status: "success", data: [], total, page: Number(page), limit: Number(limit) });
     }
 
-    // ── Resolve SES stats for all jobs via the reliable two-step path ─────────
-    // Step 1: SesMessageLog is the authoritative batchJobId → sesMessageId map.
-    // We use this (not SesEmailEvent.batchJobId) to avoid a race condition where
-    // the SNS webhook can arrive before SesMessageLog.insertMany completes, leaving
-    // SesEmailEvent.batchJobId = null even though the message belongs to a batch.
-    const jobIds = jobs.map((j) => j.jobId);
-
-    const sesLogs = await SesMessageLog.find({ batchJobId: { $in: jobIds } })
-      .select("sesMessageId batchJobId")
-      .lean();
-
-    const statsMap = {};
-
-    if (sesLogs.length) {
-      // Build sesMessageId → jobId map
-      const msgIdToJobId = {};
-      sesLogs.forEach((sl) => { if (sl.sesMessageId) msgIdToJobId[sl.sesMessageId] = sl.batchJobId; });
-      const allMsgIds = Object.keys(msgIdToJobId);
-
-      // Step 2: Aggregate events by sesMessageId — works regardless of whether
-      // SesEmailEvent.batchJobId was set correctly.
-      const eventAgg = await SesEmailEvent.aggregate([
-        { $match: { sesMessageId: { $in: allMsgIds } } },
-        // Deduplicate: each recipient counts once per eventType
-        {
-          $group: {
-            _id: { sesMessageId: "$sesMessageId", email: "$recipientEmail", eventType: "$eventType" },
-          },
-        },
-        {
-          $group: {
-            _id: { sesMessageId: "$_id.sesMessageId", eventType: "$_id.eventType" },
-            count: { $sum: 1 },
-          },
-        },
-      ]);
-
-      // Step 3: Map sesMessageId → jobId and accumulate stats
-      for (const { _id, count } of eventAgg) {
-        const jobId = msgIdToJobId[_id.sesMessageId];
-        const field = EVENT_STATS_MAP[_id.eventType];
-        if (!jobId || !field) continue;
-        if (!statsMap[jobId]) statsMap[jobId] = emptyStats();
-        statsMap[jobId][field] += count;
-      }
-    }
-
+    // Stats are maintained live on each EmailBatchJob document by the SES webhook
+    // ($inc on stats.* fields) — no aggregate needed here.
     const jobsWithStats = jobs.map((job) => ({
       ...job.toObject(),
-      stats: statsMap[job.jobId] || emptyStats(),
+      stats: job.stats || emptyStats(),
     }));
 
     res.json({ status: "success", data: jobsWithStats, total, page: Number(page), limit: Number(limit) });

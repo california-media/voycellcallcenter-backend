@@ -72,6 +72,17 @@ const emailBatchJobSchema = new Schema(
       },
     ],
 
+    // Running stats incremented live by the SES webhook as events arrive
+    stats: {
+      sends:       { type: Number, default: 0 },
+      deliveries:  { type: Number, default: 0 },
+      opens:       { type: Number, default: 0 },
+      clicks:      { type: Number, default: 0 },
+      bounces:     { type: Number, default: 0 },
+      complaints:  { type: Number, default: 0 },
+      rejections:  { type: Number, default: 0 },
+    },
+
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true }
