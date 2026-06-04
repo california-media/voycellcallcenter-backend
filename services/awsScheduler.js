@@ -1,7 +1,8 @@
 const {
   SchedulerClient,
   CreateScheduleCommand,
-  DeleteScheduleCommand, // ✅ ADD THIS
+  UpdateScheduleCommand,
+  DeleteScheduleCommand,
 } = require("@aws-sdk/client-scheduler");
 
 const client = new SchedulerClient({
@@ -117,9 +118,42 @@ const deleteEmailBatchSchedule = async (jobId, batchIndex) => {
   }
 };
 
+/**
+ * Creates (or updates if already exists) a recurring hourly EventBridge schedule
+ * that fires WABA_SESSION_TIMEOUT to time out stale flow sessions.
+ * Call once at server startup on AWS.
+ */
+const ensureWabaSessionTimeoutSchedule = async () => {
+  const scheduleParams = {
+    Name: "waba-session-timeout-hourly",
+    GroupName: "default",
+    ScheduleExpression: "rate(1 hour)",
+    FlexibleTimeWindow: { Mode: "OFF" },
+    Target: {
+      Arn: process.env.SCHEDULE_LAMBDA_ARN,
+      RoleArn: process.env.SCHEDULER_ROLE_ARN,
+      Input: JSON.stringify({ type: "WABA_SESSION_TIMEOUT" }),
+    },
+  };
+
+  try {
+    await client.send(new CreateScheduleCommand(scheduleParams));
+    console.log("[EventBridge] WABA session timeout schedule created (hourly)");
+  } catch (err) {
+    if (err.name === "ConflictException") {
+      // Schedule already exists — update it to ensure target is current
+      await client.send(new UpdateScheduleCommand(scheduleParams));
+      console.log("[EventBridge] WABA session timeout schedule updated (already existed)");
+    } else {
+      console.error("[EventBridge] Failed to create WABA session timeout schedule:", err.message);
+    }
+  }
+};
+
 module.exports = {
   createCampaignSchedule,
   deleteCampaignSchedule,
   createEmailBatchSchedule,
   deleteEmailBatchSchedule,
+  ensureWabaSessionTimeoutSchedule,
 };

@@ -1,14 +1,39 @@
 import AWS from "aws-sdk";
+import mongoose from "mongoose";
 import dotenv from "dotenv";
+import WsConnection from "./models/wsConnection.mjs";
 dotenv.config();
 
 const apiGateway = new AWS.ApiGatewayManagementApi({
   endpoint: "https://o6iyrho5q6.execute-api.eu-north-1.amazonaws.com/production"
 });
 
+let dbConnected = false;
+const connectDB = async () => {
+  if (dbConnected || mongoose.connection.readyState === 1) return;
+  await mongoose.connect(process.env.MONGO_URL, { maxPoolSize: 3 });
+  dbConnected = true;
+};
+
+const pushToConnection = async (conn, data) => {
+  try {
+    await apiGateway.postToConnection({
+      ConnectionId: conn.connectionId,
+      Data: JSON.stringify(data)
+    }).promise();
+    return { connectionId: conn.connectionId, ok: true };
+  } catch (err) {
+    if (err.statusCode === 410) {
+      console.log("🧹 Stale connection:", conn.connectionId);
+      return { connectionId: conn.connectionId, ok: false, stale: true };
+    }
+    console.error("WS push error:", conn.connectionId, err.message);
+    return { connectionId: conn.connectionId, ok: false, stale: false };
+  }
+};
+
 export const handler = async (event) => {
   try {
-    // 🔥 Parse payload from InvokeCommand
     const payload =
       event.Payload
         ? JSON.parse(Buffer.from(event.Payload).toString())
@@ -21,47 +46,71 @@ export const handler = async (event) => {
       return { statusCode: 200 };
     }
 
-    // ── Handle message status updates (delivered / read / failed) ──────────
+    // ── Message status updates ──────────────────────────────────────────────
     if (type === "message_status_update") {
       const { metaMessageId, status, conversationId, message } = payload;
       console.log("📬 Status update:", status, metaMessageId);
 
-      for (const conn of connections) {
+      const data = {
+        type: "message_status_update",
+        message: {
+          metaMessageId,
+          status,
+          conversationId: conversationId || message?.conversationId,
+        }
+      };
+
+      const results = await Promise.allSettled(
+        connections.map(conn => pushToConnection(conn, data))
+      );
+
+      const staleIds = results
+        .filter(r => r.status === "fulfilled" && r.value?.stale)
+        .map(r => r.value.connectionId);
+
+      if (staleIds.length > 0) {
         try {
-          await apiGateway.postToConnection({
-            ConnectionId: conn.connectionId,
-            Data: JSON.stringify({
-              type: "message_status_update",
-              message: {
-                metaMessageId,
-                status,
-                conversationId: conversationId || message?.conversationId,
-              }
-            })
-          }).promise();
-        } catch (err) {
-          if (err.statusCode === 410) {
-            console.log("🧹 Stale connection:", conn.connectionId);
-          } else {
-            console.error("WS push error (status update):", err);
-          }
+          await connectDB();
+          await WsConnection.deleteMany({ connectionId: { $in: staleIds } });
+          console.log(`🗑️ Deleted ${staleIds.length} stale connections from DB`);
+        } catch (dbErr) {
+          console.error("Failed to delete stale connections:", dbErr.message);
+        }
+      }
+
+      return { statusCode: 200 };
+    }
+
+    // ── Outgoing auto-reply push (basic replies / flow engine) ─────────────
+    if (type === "outgoing_message") {
+      const { message } = payload;
+      console.log("📤 Outgoing message push from:", message?.from, "type:", message?.type);
+      const data = { type: "whatsapp_message", message };
+      const results = await Promise.allSettled(
+        connections.map(conn => pushToConnection(conn, data))
+      );
+      const staleIds = results
+        .filter(r => r.status === "fulfilled" && r.value?.stale)
+        .map(r => r.value.connectionId);
+      if (staleIds.length > 0) {
+        try {
+          await connectDB();
+          await WsConnection.deleteMany({ connectionId: { $in: staleIds } });
+          console.log(`🗑️ Deleted ${staleIds.length} stale connections`);
+        } catch (dbErr) {
+          console.error("Failed to delete stale connections:", dbErr.message);
         }
       }
       return { statusCode: 200 };
     }
 
-    // ── Handle incoming messages ────────────────────────────────────────────
+    // ── Incoming messages ───────────────────────────────────────────────────
     const { whatsappEvent, userId, finalSenderName, s3dataurl } = payload;
 
     if (!whatsappEvent) {
       console.log("No whatsappEvent in payload");
       return { statusCode: 200 };
     }
-
-    console.log("whatsappEvent", whatsappEvent);
-
-    console.log("s3dataurl", s3dataurl);
-
 
     const entry = whatsappEvent.entry?.[0];
     const change = entry?.changes?.[0];
@@ -82,60 +131,50 @@ export const handler = async (event) => {
     console.log("👤 User:", userId);
 
     const contact = value.contacts?.[0];
+    let senderName = contact?.profile?.name || "";
+    const senderWabaID = contact?.wa_id || "";
 
-    let senderName = "";
-    let senderWabaID = "";
+    if (finalSenderName) senderName = finalSenderName;
 
-    if (contact) {
-      senderName = contact.profile?.name || "";
-      senderWabaID = contact.wa_id || "";
-    }
+    const staleIds = [];
 
-    console.log("Sender Name:", senderName);
-    console.log("Sender WA ID:", senderWabaID);
-
-    if (finalSenderName) {
-      console.log("finalSenderName", finalSenderName);
-      senderName = finalSenderName;
-    }
-
-    console.log("senderName after final sendername", senderName);
-
-
-    // 🚀 Push each WhatsApp message to all WS connections
     for (const msg of value.messages) {
-      for (const conn of connections) {
-        try {
-          console.log("into try block for send to frontend");
+      const enrichedMsg = {
+        ...msg,
+        senderName,
+        senderWabaID,
+        s3dataurl
+      };
 
-          // console.log(msg);
-          const enrichedMsg = {
-            ...msg,
-            senderName,       // 👈 added
-            senderWabaID,      // 👈 optional but useful
-            s3dataurl
-          };
+      const data = {
+        type: "whatsapp_message",
+        userId,
+        message: enrichedMsg
+      };
 
-          console.log("enrichedMsg", enrichedMsg);
+      const results = await Promise.allSettled(
+        connections.map(conn => pushToConnection(conn, data))
+      );
 
-          await apiGateway.postToConnection({
-            ConnectionId: conn.connectionId,
-            Data: JSON.stringify({
-              type: "whatsapp_message",
-              userId,
-              message: enrichedMsg
-            })
-          }).promise();
-          console.log("send the message to frontend");
+      const newStale = results
+        .filter(r => r.status === "fulfilled" && r.value?.stale)
+        .map(r => r.value.connectionId);
 
-        } catch (err) {
-          if (err.statusCode === 410) {
-            console.log("🧹 Stale connection:", conn.connectionId);
-            // optional: cleanup handled in main server
-          } else {
-            console.error("WS error:", err);
-          }
-        }
+      newStale.forEach(id => {
+        if (!staleIds.includes(id)) staleIds.push(id);
+      });
+
+      const successCount = results.filter(r => r.status === "fulfilled" && r.value?.ok).length;
+      console.log(`✅ Pushed msg ${msg.id} to ${successCount}/${connections.length} connections`);
+    }
+
+    if (staleIds.length > 0) {
+      try {
+        await connectDB();
+        await WsConnection.deleteMany({ connectionId: { $in: staleIds } });
+        console.log(`🗑️ Deleted ${staleIds.length} stale connections from DB`);
+      } catch (dbErr) {
+        console.error("Failed to delete stale connections:", dbErr.message);
       }
     }
 

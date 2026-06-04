@@ -14,6 +14,8 @@ const PowerDialerContactSchema = new Schema({
   email: { type: String, default: "" },
   notes: { type: String, default: "" },
   attempt_count: { type: Number, default: 0 },
+  campaign_attempt_counts: { type: Map, of: Number, default: {} },
+  campaign_dispositions: { type: Map, of: String, default: {} },
   last_called_at: { type: Date },
   order: { type: Number, default: 0 },
 });

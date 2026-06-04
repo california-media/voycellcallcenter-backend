@@ -408,17 +408,20 @@ exports.resubscribeWabaWebhook = async (req, res) => {
         if (!wabaId) {
             return res.status(400).json({ success: false, message: "No WABA connected for this account" });
         }
-        if (!accessToken) {
-            return res.status(400).json({ success: false, message: "No access token stored — please reconnect WhatsApp" });
+
+        // Prefer permanent system user token — never expires.
+        // Fall back to stored user longLivedToken if system token not configured.
+        const systemUserToken = process.env.META_SYSTEM_USER_TOKEN;
+        const tokenToUse = systemUserToken || accessToken;
+
+        if (!tokenToUse) {
+            return res.status(400).json({ success: false, message: "No access token available — please reconnect WhatsApp" });
         }
 
-        // Use the user's stored access token (longLivedToken from embedded signup).
-        // App access token (APP_ID|APP_SECRET) only works for WABAs in Voycell's own BM.
-        // For client WABAs (different BM), the user token with whatsapp_business_management is required.
         const subscribeRes = await axios.post(
             `${META_GRAPH_URL}/${wabaId}/subscribed_apps`,
             {},
-            { headers: { Authorization: `Bearer ${accessToken}` } }
+            { headers: { Authorization: `Bearer ${tokenToUse}` } }
         );
 
         console.log("WABA resubscribe result:", subscribeRes.data);
@@ -1769,31 +1772,39 @@ exports.webhookReceive = async (req, res) => {
             let fileSize = 0;
 
             if (content.mediaId) {
-                const downloaded = await downloadMetaMedia({
-                    mediaId: content.mediaId,
-                    accessToken: messageOwner.whatsappWaba.accessToken
-                });
+                console.log(`[webhook:media] downloading media msgId=${msg.id} mediaId=${content.mediaId} type=${messageType}`);
+                try {
+                    const downloaded = await downloadMetaMedia({
+                        mediaId: content.mediaId,
+                        accessToken: messageOwner.whatsappWaba.accessToken
+                    });
 
-                mimeType = downloaded.mimeType;
-                fileSize = downloaded.buffer.length;
+                    mimeType = downloaded.mimeType;
+                    fileSize = downloaded.buffer.length;
+                    console.log(`[webhook:media] downloaded msgId=${msg.id} mimeType=${mimeType} size=${fileSize}B`);
 
-                attachmentName = getAttachmentName(msg, mimeType);
+                    attachmentName = getAttachmentName(msg, mimeType);
+                    console.log(`[webhook:media] uploading to S3 msgId=${msg.id} fileName=${attachmentName}`);
 
-                const s3Url = await uploadWhatsAppMediaToS3({
-                    userId: messageOwner._id,
-                    messageType,
-                    buffer: downloaded.buffer,
-                    mimeType,
-                    originalName: attachmentName
-                });
+                    const s3Url = await uploadWhatsAppMediaToS3({
+                        userId: messageOwner._id,
+                        messageType,
+                        buffer: downloaded.buffer,
+                        mimeType,
+                        originalName: attachmentName
+                    });
 
-                s3dataurl = s3Url;
-                content.mimeType = mimeType;
-                content.fileName = attachmentName;
-                content.fileSize = fileSize;
-                content.mediaUrl = s3Url;
-                content.sha256 = msg[messageType]?.sha256;
-                content.isVoice = msg.type === "voice";
+                    s3dataurl = s3Url;
+                    content.mimeType = mimeType;
+                    content.fileName = attachmentName;
+                    content.fileSize = fileSize;
+                    content.mediaUrl = s3Url;
+                    content.sha256 = msg[messageType]?.sha256;
+                    content.isVoice = msg.type === "voice";
+                    console.log(`[webhook:media] S3 upload done msgId=${msg.id} url=${s3Url}`);
+                } catch (mediaErr) {
+                    console.error(`[webhook:media] failed to download/upload media for msg ${msg.id}:`, mediaErr?.response?.data || mediaErr.message);
+                }
             }
 
             // Always save to DB regardless of WebSocket connections
@@ -1825,6 +1836,19 @@ exports.webhookReceive = async (req, res) => {
             });
 
             console.log(`[webhook:msg] from=${msg.from} type=${messageType} connections=${connections.length}`);
+
+            // ── Flow Engine: handle basic replies + active flow sessions ──
+            try {
+              const { handleIncomingMessage } = require("../services/wabaFlowEngine");
+              // messageOwner is always companyAdmin or superadmin — both own their resources under their own _id
+              const companyAdminId = messageOwner._id;
+              // Pass both parsed content AND raw msg so engine can read text either way
+              const enginePayload = { ...content, _raw: msg, _msgText: messageType === "text" ? (msg.text?.body || content.text || "") : "" };
+              console.log(`[flowEngine] calling handleIncomingMessage companyAdminId=${companyAdminId} from=${msg.from} type=${messageType} msgText="${enginePayload._msgText}"`);
+              await handleIncomingMessage(companyAdminId, msg.from, messageType, enginePayload);
+            } catch (flowErr) {
+              console.error("[flowEngine] error:", flowErr.message, flowErr.stack);
+            }
 
             // Only push real-time event if users are connected via WebSocket
             if (connections.length > 0) {
@@ -4977,14 +5001,15 @@ exports.embeddedSignupExchange = async (req, res) => {
         }
 
         // ── Step 5: Subscribe WABA to our app (enables webhook delivery) ───────
-        // Must use user access token — appAccessToken only works for WABAs in Voycell's own BM.
+        // Use permanent system user token (never expires) — falls back to longLivedToken (60 days).
         try {
+            const step5Token = systemToken || longLivedToken;
             await axios.post(
                 `${GRAPH}/${wabaId}/subscribed_apps`,
                 {},
-                { headers: { Authorization: `Bearer ${longLivedToken}` } }
+                { headers: { Authorization: `Bearer ${step5Token}` } }
             );
-            console.log(`[EmbeddedSignup] ✅ Step 5 — WABA subscribed to app webhook`);
+            console.log(`[EmbeddedSignup] ✅ Step 5 — WABA subscribed to app webhook (token: ${systemToken ? "permanent system user" : "longLived user"})`);
         } catch (subErr) {
             console.warn(`[EmbeddedSignup] ⚠️ Step 5 — webhook subscription failed (non-fatal): ${subErr?.response?.data?.error?.message || subErr.message}`);
         }
@@ -5036,6 +5061,19 @@ exports.embeddedSignupExchange = async (req, res) => {
                     { params: { access_token: userAccessToken } }
                 );
                 console.log(`[EmbeddedSignup] ✅ Step 8 — system user ${systemUserId} assigned to wabaId: ${wabaId}`);
+
+                // Re-subscribe with permanent system user token — overwrites the 60-day
+                // longLivedToken subscription from Step 5 with one that never expires.
+                try {
+                    await axios.post(
+                        `${GRAPH}/${wabaId}/subscribed_apps`,
+                        {},
+                        { headers: { Authorization: `Bearer ${systemToken}` } }
+                    );
+                    console.log(`[EmbeddedSignup] ✅ Step 8b — WABA re-subscribed with permanent system user token`);
+                } catch (subErr) {
+                    console.warn(`[EmbeddedSignup] ⚠️ Step 8b — re-subscription with system token failed (non-fatal): ${subErr?.response?.data?.error?.message || subErr.message}`);
+                }
             }
         } catch (err) {
             console.warn(`[EmbeddedSignup] ⚠️ Step 8 — failed to assign system user to WABA: ${err.response?.data?.error?.message || err.message}`);

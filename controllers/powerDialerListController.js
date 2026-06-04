@@ -236,10 +236,11 @@ const assignList = async (req, res) => {
   }
 };
 
-// GET /api/power-dialer/lists/:id/contacts
+// GET /api/power-dialer/lists/:id/contacts?campaign_id=<id>
 const getListContacts = async (req, res) => {
   try {
     const { id } = req.params;
+    const { campaign_id } = req.query;
     const company_id = getCompanyId(req.user);
 
     const list = await PowerDialerList.findOne({ _id: id, company_id });
@@ -249,7 +250,17 @@ const getListContacts = async (req, res) => {
       .sort({ order: 1 })
       .lean();
 
-    return res.status(200).json({ status: "success", data: contacts });
+    const data = contacts.map((c) => ({
+      ...c,
+      campaign_attempt_count: campaign_id && c.campaign_attempt_counts
+        ? (c.campaign_attempt_counts[campaign_id] || 0)
+        : null,
+      campaign_disposition: campaign_id && c.campaign_dispositions
+        ? (c.campaign_dispositions[campaign_id] ?? null)
+        : null,
+    }));
+
+    return res.status(200).json({ status: "success", data });
   } catch (err) {
     return res.status(500).json({ status: "error", message: err.message });
   }

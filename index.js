@@ -202,6 +202,7 @@ app.use("/faq", checkForAuthentication(), faqRoutes);
 // app.use("/chatAgent", checkForAuthentication(), chatAgentRoutes);
 
 app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/waba/automation", require("./routes/wabaAutomation.routes"));
 
 app.use(
   "/help-support",
@@ -492,6 +493,12 @@ const http = require("http");
 
       // Backup scheduling is handled by cron-job.org calling POST /cron/backup every 2 hours
       // Activation reminders triggered by AWS EventBridge → Lambda (voycell-daily-cron)
+    } else {
+      // On AWS: ensure the hourly WABA session timeout schedule exists
+      const { ensureWabaSessionTimeoutSchedule } = require("./services/awsScheduler");
+      ensureWabaSessionTimeoutSchedule().catch((e) =>
+        console.error("[startup] ensureWabaSessionTimeoutSchedule failed:", e.message)
+      );
     }
   } catch (err) {
     console.error("Startup Error:", err);
@@ -615,7 +622,17 @@ module.exports.handler = async (event, context) => {
     }
 
     /* ================================
-       3️⃣ NORMAL API REQUEST
+       4️⃣ WABA SESSION TIMEOUT
+    ================================= */
+    if (event?.type === "WABA_SESSION_TIMEOUT") {
+      const { timeoutStaleSessions } = require("./services/wabaFlowEngine");
+      await timeoutStaleSessions();
+      console.log("[EventBridge] WABA_SESSION_TIMEOUT completed");
+      return { statusCode: 200, body: JSON.stringify({ success: true }) };
+    }
+
+    /* ================================
+       5️⃣ NORMAL API REQUEST
     ================================= */
 
     return serverlessHandler(event, context);

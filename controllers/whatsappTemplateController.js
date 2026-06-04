@@ -418,6 +418,9 @@ exports.editTemplate = async (req, res) => {
     const { templateId } = req.body;
     const userId = req.user._id;
 
+    console.log("[editTemplate] START — templateId:", templateId, "userId:", userId);
+    console.log("[editTemplate] raw req.body.components:", req.body.components);
+
     if (!templateId) {
       return res.status(400).json({ message: "templateId required" });
     }
@@ -429,6 +432,8 @@ exports.editTemplate = async (req, res) => {
     if (!template) {
       return res.status(404).json({ message: "Template not found" });
     }
+    console.log("[editTemplate] DB template found — name:", template.name, "metaTemplateId:", template.metaTemplateId);
+    console.log("[editTemplate] existing DB components:", JSON.stringify(template.components));
 
     const user = await User.findById(userId);
     const { wabaId, accessToken } = user.whatsappWaba;
@@ -444,6 +449,8 @@ exports.editTemplate = async (req, res) => {
       typeof req.body.components === "string"
         ? JSON.parse(req.body.components)
         : req.body.components;
+
+    console.log("[editTemplate] parsed incoming components:", JSON.stringify(components));
 
     if (!components?.length) {
       return res.status(400).json({ message: "Components required" });
@@ -509,6 +516,7 @@ exports.editTemplate = async (req, res) => {
           };
         }
 
+        console.log("[editTemplate] processed HEADER:", JSON.stringify(headerObj));
         processedComponents.push(headerObj);
       }
 
@@ -553,6 +561,8 @@ exports.editTemplate = async (req, res) => {
       }
     }
 
+    console.log("[editTemplate] all processedComponents:", JSON.stringify(processedComponents));
+
     // -----------------------------------
     // 🔥 STRIP INVALID FIELDS FOR META
     // -----------------------------------
@@ -567,11 +577,14 @@ exports.editTemplate = async (req, res) => {
       return clean;
     });
 
+    console.log("[editTemplate] metaComponents (sent to Meta):", JSON.stringify(metaComponents));
+
     // -----------------------------------
     // Try Meta Edit
     // -----------------------------------
     let metaResponse;
     const metaUrl = `https://graph.facebook.com/v23.0/${template.metaTemplateId}`;
+    console.log("[editTemplate] attempting Meta edit at:", metaUrl);
 
     try {
       metaResponse = await axios.post(
@@ -589,12 +602,15 @@ exports.editTemplate = async (req, res) => {
           },
         }
       );
+      console.log("[editTemplate] Meta edit SUCCESS — response:", JSON.stringify(metaResponse.data));
 
     } catch (err) {
+      console.error("[editTemplate] Meta edit FAILED — error:", err.response?.data || err.message);
       // -----------------------------------
       // Recreate Template (Meta restriction)
       // -----------------------------------
       const newName = `${template.name}`;
+      console.log("[editTemplate] attempting Meta recreate for name:", newName);
 
       metaResponse = await axios.post(
         `https://graph.facebook.com/v23.0/${wabaId}/message_templates`,
@@ -613,6 +629,7 @@ exports.editTemplate = async (req, res) => {
         }
       );
 
+      console.log("[editTemplate] Meta recreate SUCCESS — response:", JSON.stringify(metaResponse.data));
       // Update metaTemplateId → new template
       template.metaTemplateId = metaResponse.data.id;
       template.name = newName;
@@ -626,7 +643,9 @@ exports.editTemplate = async (req, res) => {
     template.parameter_format = "NAMED";
     template.components = processedComponents;
 
+    console.log("[editTemplate] saving to DB — components:", JSON.stringify(processedComponents));
     await template.save();
+    console.log("[editTemplate] DB save SUCCESS — saved components:", JSON.stringify(template.components));
 
     res.json({
       success: true,
@@ -635,6 +654,7 @@ exports.editTemplate = async (req, res) => {
       data: template,
     });
   } catch (error) {
+    console.error("[editTemplate] OUTER ERROR:", error.response?.data || error.message, error.stack);
     res.status(500).json({
       success: false,
       message: "Failed to edit template",

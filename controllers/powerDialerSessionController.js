@@ -34,21 +34,23 @@ const startSession = async (req, res) => {
       return res.status(400).json({ status: "error", message: "This list has no contacts" });
     }
 
-    // Always skip contacts whose disposition matches the campaign's configured dispositions
     const skipDispositions = (campaign.call_dispositions || []).filter(Boolean);
+    const campaignIdStr = campaign._id.toString();
 
+    // Use per-campaign disposition so contacts always start as pending in a new campaign
     const firstContactQuery = { list_id: campaign.list_id };
     if (skipDispositions.length > 0) {
-      firstContactQuery.$or = [
-        { disposition: { $nin: skipDispositions } },
-        { disposition: { $in: [null, ""] } },
-        { disposition: { $exists: false } },
-      ];
+      // $nin matches documents where the field is missing (never called in this campaign) OR value not in list
+      firstContactQuery[`campaign_dispositions.${campaignIdStr}`] = { $nin: skipDispositions };
     }
 
     const firstContact = await PowerDialerContact.findOne(firstContactQuery).sort({ order: 1 });
     if (!firstContact) {
-      return res.status(400).json({ status: "error", message: "All contacts have been completed with a final disposition. No contacts to re-dial." });
+      if (campaign.status !== "completed") {
+        campaign.status = "completed";
+        await campaign.save();
+      }
+      return res.status(400).json({ status: "error", message: "All contacts have been dialed with the required disposition. No contacts left to re-dial." });
     }
 
     const session = await PowerDialerSession.create({
@@ -161,12 +163,19 @@ const nextContact = async (req, res) => {
     if (session.current_contact_id) {
       const currentContact = await PowerDialerContact.findById(session.current_contact_id);
 
+      const campaignId = session.campaign_id._id.toString();
       await PowerDialerContact.findByIdAndUpdate(session.current_contact_id, {
-        status: contact_status || "called",
-        disposition: disposition || "",
-        notes: notes || "",
-        last_called_at: new Date(),
-        $inc: { attempt_count: 1 },
+        $set: {
+          status: contact_status || "called",
+          disposition: disposition || "",
+          notes: notes || "",
+          last_called_at: new Date(),
+          [`campaign_dispositions.${campaignId}`]: disposition || "",
+        },
+        $inc: {
+          attempt_count: 1,
+          [`campaign_attempt_counts.${campaignId}`]: 1,
+        },
       });
 
       await PowerDialerCampaign.findByIdAndUpdate(session.campaign_id._id, {
@@ -174,18 +183,15 @@ const nextContact = async (req, res) => {
         updated_at: new Date(),
       });
 
-      // Find next contact after current order, skipping final-disposition contacts if this is a restart
+      const sessionSkip = session.skip_dispositions || [];
+
+      // Forward search uses per-campaign disposition so contacts from other campaigns don't interfere
       const nextQuery = {
         list_id: session.campaign_id.list_id,
         order: { $gt: currentContact.order },
       };
-      const sessionSkip = session.skip_dispositions || [];
       if (sessionSkip.length > 0) {
-        nextQuery.$or = [
-          { disposition: { $nin: sessionSkip } },
-          { disposition: { $in: [null, ""] } },
-          { disposition: { $exists: false } },
-        ];
+        nextQuery[`campaign_dispositions.${campaignId}`] = { $nin: sessionSkip };
       }
       const nextCon = await PowerDialerContact.findOne(nextQuery).sort({ order: 1 });
 
@@ -196,9 +202,19 @@ const nextContact = async (req, res) => {
         session.current_contact_id = null;
         await session.save();
 
-        await PowerDialerCampaign.findByIdAndUpdate(session.campaign_id._id, {
-          status: "completed",
-        });
+        // Only mark campaign completed if no contacts remain without required disposition
+        const hasUnresolved = sessionSkip.length > 0
+          ? await PowerDialerContact.findOne({
+              list_id: session.campaign_id.list_id,
+              [`campaign_dispositions.${campaignId}`]: { $nin: sessionSkip },
+            })
+          : null;
+
+        if (!hasUnresolved) {
+          await PowerDialerCampaign.findByIdAndUpdate(session.campaign_id._id, {
+            status: "completed",
+          });
+        }
 
         return res.status(200).json({
           status: "success",
