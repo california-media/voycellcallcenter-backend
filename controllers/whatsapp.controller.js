@@ -2746,10 +2746,14 @@ const resolveDynamicParams = (params = {}, recipient, defaults = {}) => {
             const contactValue = fieldMap[p];
             if (contactValue) return contactValue;
 
-            // Extract field name from {{field_name}} to look up defaults
+            // Extract field name from {{field_name}}
             const fieldMatch = p.match(/^{{(.+)}}$/);
             if (fieldMatch) {
                 const fieldName = fieldMatch[1];
+                // Check per-contact extraFields from Excel first, then defaults
+                if (recipient.extraFields && recipient.extraFields[fieldName]) {
+                    return recipient.extraFields[fieldName];
+                }
                 return defaults[fieldName] || "";
             }
 
@@ -2905,12 +2909,18 @@ exports.sendTemplateBulkMessage = async (req, res) => {
                 const raw = String(row.number || "").replace(/[^0-9]/g, "");
                 if (!raw) return;
                 const nameParts = (row.name || "").trim().split(" ");
+                const reserved = new Set(["name", "number"]);
+                const extraFields = {};
+                Object.keys(row).forEach(k => {
+                    if (!reserved.has(k)) extraFields[k] = String(row[k] || "").trim();
+                });
                 recipients.push({
                     number: raw,
                     name: row.name || raw,
                     firstName: nameParts[0] || "",
                     lastName: nameParts.slice(1).join(" ") || "",
-                    company: row.company || ""
+                    company: row.company || row.company_name || "",
+                    extraFields,
                 });
             });
         }

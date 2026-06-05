@@ -132,9 +132,12 @@ async function processSesEvent(sesEvent) {
     // The SES "Send" event fires within milliseconds of SES accepting the email —
     // sometimes BEFORE our SesMessageLog.insertMany has finished writing to MongoDB.
     // We retry once after 3 seconds to eliminate this race condition.
+    // FIX 3: increased retry wait 3s → 10s.
+    // SesMessageLog.insertMany is now awaited before Lambda returns, but Atlas
+    // write propagation can still take a few seconds under load. 10s covers it.
     let msgLog = await SesMessageLog.findOne({ sesMessageId }).lean();
     if (!msgLog) {
-      await new Promise((r) => setTimeout(r, 3000));
+      await new Promise((r) => setTimeout(r, 10000));
       msgLog = await SesMessageLog.findOne({ sesMessageId }).lean();
     }
 

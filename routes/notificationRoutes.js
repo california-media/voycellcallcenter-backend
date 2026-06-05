@@ -47,6 +47,8 @@ const {
 } = require("../controllers/emailBatchConfigController");
 
 const { triggerBatchJob } = require("../controllers/emailBatchTriggerController");
+const { repairStuckJobs, listStuckJobs } = require("../controllers/repairStuckJobsController");
+const { getBulkRecipients } = require("../controllers/bulkRecipientsController");
 
 // All routes require auth + active account (added in index.js)
 router.get("/", getNotifications);
@@ -84,5 +86,12 @@ router.delete("/batch-jobs/:jobId/cancel",  checkRole(["superadmin"]), cancelBat
 router.get("/send-caps",                    checkRole(["superadmin"]), getSendCaps);
 router.delete("/ses-events/cleanup",        checkRole(["superadmin"]), cleanupSesEvents);
 router.post("/fix-email-stats",             checkRole(["superadmin"]), fixEmailStats);
+
+// SuperAdmin only: repair stuck IN_PROGRESS jobs
+router.get("/repair-stuck-jobs",            checkRole(["superadmin"]), listStuckJobs);
+router.post("/repair-stuck-jobs",           checkRole(["superadmin"]), repairStuckJobs);
+
+// SuperAdmin only: bulk recipient fetch across multiple campaigns
+router.post("/email-logs/bulk-recipients",  checkRole(["superadmin"]), getBulkRecipients);
 
 module.exports = router;

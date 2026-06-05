@@ -457,7 +457,7 @@ const userSchema = new Schema(
         extensionNumber:  { type: String }, // e.g. "1010"
         PBX_TELEPHONE:    { type: String }, // e.g. "971585990233"
         PBX_BASE_URL:     { type: String, default: null }, // PBX server for this extension (optional)
-        assignedDeviceId: { type: String, default: null }, // deviceId string matching PBXDevices[].deviceId
+        assignedDeviceId: { type: String, required: true }, // deviceId string matching PBXDevices[].deviceId
         nickname:         { type: String, default: null }, // friendly label set by company admin
         pbxType:          { type: String, enum: ["local", "cloud"], default: "cloud" }, // local = on-premise device, cloud = hosted PBX
         channels:         { type: Number, default: 1 }, // max concurrent agents (cloud only; local always 1)

@@ -727,8 +727,10 @@ exports.sendEmailNotification = async (req, res) => {
           });
         }
       });
+      // FIX 2C: await insertMany so Delivery events find the record within the
+      // webhook's retry window — prevents Delivered=0 bug for immediate sends.
       if (sesLogDocs.length) {
-        SesMessageLog.insertMany(sesLogDocs, { ordered: false }).catch((err) =>
+        await SesMessageLog.insertMany(sesLogDocs, { ordered: false }).catch((err) =>
           console.error("[SesMessageLog] Insert error (immediate):", err.message)
         );
       }
@@ -746,10 +748,11 @@ exports.sendEmailNotification = async (req, res) => {
 };
 
 // ─── GET /notifications/email-logs  (superAdmin — paginated list) ────────────
-const EVENT_STATS_MAP = {
-  Send: "sends", Delivery: "deliveries", Open: "opens",
-  Click: "clicks", Bounce: "bounces", Complaint: "complaints", Reject: "rejections",
-};
+// FIX 4: Uses stored EmailLog.stats directly instead of re-aggregating from
+// sesemailevents on every load. The webhook already increments stats in real time
+// via $inc so stored values are always current. This makes Refresh near-instant
+// (simple paginated find) instead of running a complex aggregation on 30k+ records.
+// Per-recipient detail (who opened, exact timestamps) is still live in getEmailLogById.
 
 exports.getEmailLogs = async (req, res) => {
   try {
@@ -766,152 +769,21 @@ exports.getEmailLogs = async (req, res) => {
       EmailLog.countDocuments(),
     ]);
 
-    // Strip recipients from each log (only keep count)
-    const stripped = logs.map(({ recipients, ...rest }) => ({
+    // Strip recipients array (large, not needed for list view)
+    const finalLogs = logs.map(({ recipients, ...rest }) => ({
       ...rest,
       recipientCount: rest.recipientCount || (recipients ? recipients.length : 0),
+      stats: {
+        sends:        rest.stats?.sends        || 0,
+        deliveries:   rest.stats?.deliveries   || 0,
+        netDeliveries:rest.stats?.netDeliveries|| 0,
+        opens:        rest.stats?.opens        || 0,
+        clicks:       rest.stats?.clicks       || 0,
+        bounces:      rest.stats?.bounces      || 0,
+        complaints:   rest.stats?.complaints   || 0,
+        rejections:   rest.stats?.rejections   || 0,
+      },
     }));
-
-    // ── Compute live stats from SesEmailEvent for this page ──────────────────
-    const logIds = logs.map((l) => l._id);
-
-    // Build a map of logId → Set<lowercased recipientEmails>.
-    // All comparisons are case-insensitive so SES email casing (e.g. "Alice@Co.COM")
-    // matches the stored recipients (e.g. "alice@co.com").
-    const recipientEmailsByLogId = {};
-    logs.forEach((log) => {
-      if (log.recipients && log.recipients.length > 0) {
-        recipientEmailsByLogId[log._id.toString()] = new Set(
-          log.recipients.map((r) => (r.email || "").toLowerCase()).filter(Boolean)
-        );
-      }
-    });
-
-    const resolveEventType = {
-      $cond: {
-        if: { $eq: ["$eventType", "Unknown"] },
-        then: "$raw.eventType",
-        else: "$eventType",
-      },
-    };
-
-    // ── Single per-recipient aggregation — same logic as getEmailLogById ─────────
-    // This guarantees the table and modal always show identical numbers.
-    // Step 1: build sesMessageId → emailLogId map for the fallback path
-    const sesLogs = await SesMessageLog.find({ emailLogId: { $in: logIds } })
-      .select("sesMessageId emailLogId")
-      .lean();
-    const msgIdToLogId = {};
-    sesLogs.forEach((sl) => {
-      if (sl.sesMessageId) msgIdToLogId[sl.sesMessageId] = sl.emailLogId.toString();
-    });
-    const allSesIds = Object.keys(msgIdToLogId);
-
-    // Step 2: fetch all events for these logs via both paths in one query
-    const allOrConditions = [
-      { emailLogId: { $in: logIds } },
-      ...(allSesIds.length ? [{ sesMessageId: { $in: allSesIds } }] : []),
-    ];
-
-    const perRecipientAgg = await SesEmailEvent.aggregate([
-      { $match: { $or: allOrConditions } },
-      // Collect all event flags per (emailLogId, sesMessageId, email)
-      {
-        $group: {
-          _id: {
-            emailLogId:  "$emailLogId",
-            sesMessageId: "$sesMessageId",
-            // Normalise to lowercase so "Alice@Co.COM" and "alice@co.com" are the same key
-            email: { $toLower: { $ifNull: ["$recipientEmail", ""] } },
-          },
-          hasDelivery:  { $max: { $cond: [{ $eq: ["$eventType", "Delivery"]  }, 1, 0] } },
-          hasOpen:      { $max: { $cond: [{ $eq: ["$eventType", "Open"]      }, 1, 0] } },
-          hasClick:     { $max: { $cond: [{ $eq: ["$eventType", "Click"]     }, 1, 0] } },
-          hasBounce:    { $max: { $cond: [{ $eq: ["$eventType", "Bounce"]    }, 1, 0] } },
-          hasComplaint: { $max: { $cond: [{ $eq: ["$eventType", "Complaint"] }, 1, 0] } },
-          hasReject:    { $max: { $cond: [{ $in:  ["$eventType", ["Reject", "RenderingFailure"]] }, 1, 0] } },
-          hasSend:      { $max: { $cond: [{ $eq: ["$eventType", "Send"]      }, 1, 0] } },
-        },
-      },
-    ]);
-
-    // Step 3: resolve logId and merge flags per (logId, email)
-    // An email can appear via BOTH emailLogId and sesMessageId paths — take the max flag.
-    // Only count events for emails that are actually in log.recipients (same filter the
-    // modal uses) so outer table and modal statistics always match.
-    // Email comparison is case-insensitive (the aggregate already lowercased emails).
-    const recipientFlagsMap = {}; // logKey → { email → flags }
-    for (const doc of perRecipientAgg) {
-      const logKey = doc._id.emailLogId
-        ? doc._id.emailLogId.toString()
-        : (msgIdToLogId[doc._id.sesMessageId] || null);
-      if (!logKey) continue;
-
-      // email is already lowercased by $toLower in the aggregate
-      const email = doc._id.email || "";
-      if (!email) continue;
-
-      // Skip events for emails not in the recipient list (guards against stray SES
-      // events for forwarded/monitored addresses that are not actual recipients)
-      const recipientSet = recipientEmailsByLogId[logKey];
-      if (recipientSet && recipientSet.size > 0 && !recipientSet.has(email)) continue;
-
-      if (!recipientFlagsMap[logKey]) recipientFlagsMap[logKey] = {};
-      if (!recipientFlagsMap[logKey][email]) {
-        recipientFlagsMap[logKey][email] = { hasDelivery: 0, hasOpen: 0, hasClick: 0, hasBounce: 0, hasComplaint: 0, hasReject: 0, hasSend: 0 };
-      }
-      const f = recipientFlagsMap[logKey][email];
-      f.hasDelivery  = Math.max(f.hasDelivery,  doc.hasDelivery);
-      f.hasOpen      = Math.max(f.hasOpen,      doc.hasOpen);
-      f.hasClick     = Math.max(f.hasClick,     doc.hasClick);
-      f.hasBounce    = Math.max(f.hasBounce,    doc.hasBounce);
-      f.hasComplaint = Math.max(f.hasComplaint, doc.hasComplaint);
-      f.hasReject    = Math.max(f.hasReject,    doc.hasReject);
-      f.hasSend      = Math.max(f.hasSend,      doc.hasSend);
-    }
-
-    // Step 4: count stats per logId from per-recipient flags
-    const statsMap = {};
-    for (const [logKey, emailMap] of Object.entries(recipientFlagsMap)) {
-      const s = { sends: 0, deliveries: 0, netDeliveries: 0, opens: 0, clicks: 0, bounces: 0, complaints: 0, rejections: 0 };
-      for (const f of Object.values(emailMap)) {
-        if (f.hasSend)                         s.sends++;
-        if (f.hasDelivery)                     s.deliveries++;
-        if (f.hasDelivery && !f.hasBounce)     s.netDeliveries++;  // delivered AND not bounced
-        if (f.hasOpen)                         s.opens++;
-        if (f.hasClick)                        s.clicks++;
-        if (f.hasBounce)                       s.bounces++;
-        if (f.hasComplaint)                    s.complaints++;
-        if (f.hasReject)                       s.rejections++;
-      }
-      statsMap[logKey] = s;
-    }
-
-    // Step 5: build final stats — always use live per-recipient computation.
-    // Never short-circuit on stored stats, because stored stats may have been saved
-    // by old code before the recipient-filter fix and could be inflated.
-    const finalLogs = stripped.map((log) => {
-      const live   = statsMap[log._id.toString()];
-      const stored = log.stats || {};
-
-      const merged = live || {
-        sends:         stored.sends         || 0,
-        deliveries:    stored.deliveries    || 0,
-        netDeliveries: stored.netDeliveries || 0,
-        opens:         stored.opens         || 0,
-        clicks:        stored.clicks        || 0,
-        bounces:       stored.bounces       || 0,
-        complaints:    stored.complaints    || 0,
-        rejections:    stored.rejections    || 0,
-      };
-
-      // Persist whenever the live value differs from stored (keeps stored fresh)
-      if (live) {
-        const changed = Object.keys(merged).some((k) => (merged[k] || 0) !== (stored[k] || 0));
-        if (changed) EmailLog.findByIdAndUpdate(log._id, { $set: { stats: merged } }).catch(() => {});
-      }
-      return { ...log, stats: merged };
-    });
 
     res.json({ status: "success", data: finalLogs, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (err) {
