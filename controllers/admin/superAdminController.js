@@ -1798,6 +1798,7 @@ exports.setCompanyExtensions = async (req, res) => {
         channels:         typeof e.channels === "number" ? e.channels : 1,
         nickname:         e.nickname          ? String(e.nickname).trim()          : null,
         ...(e.inAdminPool === false ? { inAdminPool: false } : {}),
+        ...(e.enabled === false ? { enabled: false } : {}),
       }));
 
     // Find which extensions are being removed (track both extensionNumber and PBX_TELEPHONE)
@@ -1878,5 +1879,48 @@ exports.setCallerPreferences = async (req, res) => {
   } catch (err) {
     console.error("setCallerPreferences error:", err);
     res.status(500).json({ error: "Failed to update caller preferences" });
+  }
+};
+
+// PATCH /superAdmin/companies/:userId/extension/:extensionNumber/toggle
+// Body: { enabled: boolean }
+exports.toggleCompanyExtensionEnabled = async (req, res) => {
+  try {
+    const { userId, extensionNumber } = req.params;
+    const { enabled } = req.body;
+
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled must be a boolean" });
+    }
+
+    const result = await User.findOneAndUpdate(
+      { _id: userId },
+      { $set: { "assignedExtensions.$[elem].enabled": enabled } },
+      { arrayFilters: [{ "elem.extensionNumber": String(extensionNumber) }], new: true, select: "assignedExtensions" }
+    );
+
+    if (!result) {
+      return res.status(404).json({ error: "Extension not found on user" });
+    }
+
+    // Cascade to all agents under this company admin who share the same extension.
+    await User.updateMany(
+      {
+        createdByWhichCompanyAdmin: userId,
+        role: "user",
+        "assignedExtensions.extensionNumber": String(extensionNumber),
+      },
+      { $set: { "assignedExtensions.$[elem].enabled": enabled } },
+      { arrayFilters: [{ "elem.extensionNumber": String(extensionNumber) }] }
+    );
+
+    return res.json({
+      status: "success",
+      message: enabled ? "Extension enabled" : "Extension disabled",
+      extensions: result.assignedExtensions,
+    });
+  } catch (err) {
+    console.error("toggleCompanyExtensionEnabled error:", err);
+    return res.status(500).json({ error: "Failed to toggle extension" });
   }
 };

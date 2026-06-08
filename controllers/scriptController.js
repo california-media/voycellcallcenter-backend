@@ -228,8 +228,15 @@ exports.getManagedExtensions = async (req, res) => {
       extensions.push({ extensionNumber, telephone: telephone || "", label: label || "" });
     };
 
-    // Own primary extension
-    if (admin.PBXDetails?.PBX_EXTENSION_NUMBER) {
+    // Build a set of disabled extensionNumbers for admin's own pool
+    const adminDisabled = new Set(
+      (admin.assignedExtensions || [])
+        .filter((e) => e.enabled === false)
+        .map((e) => e.extensionNumber)
+    );
+
+    // Own primary extension — skip if disabled in pool
+    if (admin.PBXDetails?.PBX_EXTENSION_NUMBER && !adminDisabled.has(admin.PBXDetails.PBX_EXTENSION_NUMBER)) {
       addExt(
         admin.PBXDetails.PBX_EXTENSION_NUMBER,
         admin.PBXDetails.PBX_TELEPHONE,
@@ -237,8 +244,9 @@ exports.getManagedExtensions = async (req, res) => {
       );
     }
 
-    // Own pool extensions
+    // Own pool extensions — skip disabled
     for (const e of admin.assignedExtensions || []) {
+      if (e.enabled === false) continue;
       addExt(e.extensionNumber, e.PBX_TELEPHONE, `Ext ${e.extensionNumber} (Pool)`);
     }
 
@@ -249,14 +257,25 @@ exports.getManagedExtensions = async (req, res) => {
 
     for (const agent of agents) {
       const name = `${agent.firstname || ""} ${agent.lastname || ""}`.trim() || "Agent";
-      if (agent.PBXDetails?.PBX_EXTENSION_NUMBER) {
+
+      // Build set of disabled extensionNumbers for this agent
+      const agentDisabled = new Set(
+        (agent.assignedExtensions || [])
+          .filter((e) => e.enabled === false)
+          .map((e) => e.extensionNumber)
+      );
+
+      // Primary PBX extension — skip if disabled in agent's pool
+      if (agent.PBXDetails?.PBX_EXTENSION_NUMBER && !agentDisabled.has(agent.PBXDetails.PBX_EXTENSION_NUMBER)) {
         addExt(
           agent.PBXDetails.PBX_EXTENSION_NUMBER,
           agent.PBXDetails.PBX_TELEPHONE,
           `Ext ${agent.PBXDetails.PBX_EXTENSION_NUMBER} (${name})`
         );
       }
+
       for (const e of agent.assignedExtensions || []) {
+        if (e.enabled === false) continue;
         addExt(e.extensionNumber, e.PBX_TELEPHONE, `Ext ${e.extensionNumber} (${name})`);
       }
     }

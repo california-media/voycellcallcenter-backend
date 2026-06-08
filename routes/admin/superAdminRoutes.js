@@ -26,6 +26,7 @@ const {
   adjustBalance,
   getCompanyExtensions,
   setCompanyExtensions,
+  toggleCompanyExtensionEnabled,
   setCallerPreferences,
 } = require("../../controllers/admin/superAdminController");
 
@@ -74,6 +75,7 @@ router.put("/adjustBalance", adjustBalance);
 // Company extension management (SuperAdmin)
 router.get("/companies/:userId/extensions", getCompanyExtensions);
 router.put("/companies/:userId/extensions", setCompanyExtensions);
+router.patch("/companies/:userId/extension/:extensionNumber/toggle", toggleCompanyExtensionEnabled);
 router.put("/companies/:userId/caller-preferences", setCallerPreferences);
 
 // SuperAdmin WhatsApp campaigns

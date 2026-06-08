@@ -8,6 +8,7 @@ const {
   assignAgentCallerNumbers,
   toggleAgentCallerNumber,
   reassignExtension,
+  toggleExtensionEnabled,
 } = require("../../controllers/admin/adminUserController");
 
 router.post("/register", adminRegisterUser);
@@ -15,6 +16,8 @@ router.post("/register", adminRegisterUser);
 router.get("/getAgent", getAllUsersByCompanyAdmin);
 
 router.put("/reassign-extension", reassignExtension);
+
+router.patch("/extension/:extensionNumber/toggle", toggleExtensionEnabled);
 
 router.put("/:id", editAgent);
 

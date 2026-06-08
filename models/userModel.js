@@ -462,6 +462,7 @@ const userSchema = new Schema(
         pbxType:          { type: String, enum: ["local", "cloud"], default: "cloud" }, // local = on-premise device, cloud = hosted PBX
         channels:         { type: Number, default: 1 }, // max concurrent agents (cloud only; local always 1)
         inAdminPool:      { type: Boolean, default: true }, // false = admin removed themselves from this multi-channel ext
+        enabled:          { type: Boolean, default: true }, // false = disabled by admin/superadmin; hidden from dialer
         _id: false,
       },
     ],

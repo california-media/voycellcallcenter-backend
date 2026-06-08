@@ -19,7 +19,8 @@ async function getYeastarLoginSignature(req, res) {
     );
 
     const hasPrimaryExt    = !!user?.PBXDetails?.PBX_EXTENSION_NUMBER;
-    const hasAssignedExts  = !!(user?.assignedExtensions?.length);
+    const enabledAssigned  = (user?.assignedExtensions || []).filter((e) => e.enabled !== false);
+    const hasAssignedExts  = enabledAssigned.length > 0;
 
     if (!user || (!hasPrimaryExt && !hasAssignedExts)) {
       return res.status(400).json({ status: "error", message: "User/Extension not configured" });
@@ -37,14 +38,14 @@ async function getYeastarLoginSignature(req, res) {
     // Fallback: if no primary PBXDetails extension, use first assignedExtensions entry.
     // This covers agents whose extension was assigned by a company admin (not directly by superadmin).
     if (!extensionNumber && hasAssignedExts) {
-      const first = user.assignedExtensions[0];
+      const first = enabledAssigned[0];
       extensionNumber = first.extensionNumber;
       if (first.PBX_BASE_URL)     pbxBaseUrl = first.PBX_BASE_URL;
       if (first.assignedDeviceId) deviceId   = first.assignedDeviceId;
     }
 
     if (requestedExtension && requestedExtension !== extensionNumber) {
-      const assigned = (user.assignedExtensions || []).find(
+      const assigned = enabledAssigned.find(
         (e) => e.extensionNumber === String(requestedExtension)
       );
       if (assigned) {

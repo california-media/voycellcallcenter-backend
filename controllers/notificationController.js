@@ -773,16 +773,22 @@ exports.getEmailLogs = async (req, res) => {
     const finalLogs = logs.map(({ recipients, ...rest }) => ({
       ...rest,
       recipientCount: rest.recipientCount || (recipients ? recipients.length : 0),
-      stats: {
-        sends:        rest.stats?.sends        || 0,
-        deliveries:   rest.stats?.deliveries   || 0,
-        netDeliveries:rest.stats?.netDeliveries|| 0,
-        opens:        rest.stats?.opens        || 0,
-        clicks:       rest.stats?.clicks       || 0,
-        bounces:      rest.stats?.bounces      || 0,
-        complaints:   rest.stats?.complaints   || 0,
-        rejections:   rest.stats?.rejections   || 0,
-      },
+      stats: (() => {
+        const deliveries = rest.stats?.deliveries  || 0;
+        const bounces    = rest.stats?.bounces     || 0;
+        return {
+          sends:         rest.stats?.sends        || 0,
+          deliveries,
+          // Always recompute: deliveries - bounces. The stored netDeliveries can be
+          // stale when SES Bounce webhooks arrive after the last per-recipient sync.
+          netDeliveries: Math.max(0, deliveries - bounces),
+          opens:         rest.stats?.opens        || 0,
+          clicks:        rest.stats?.clicks       || 0,
+          bounces,
+          complaints:    rest.stats?.complaints   || 0,
+          rejections:    rest.stats?.rejections   || 0,
+        };
+      })(),
     }));
 
     res.json({ status: "success", data: finalLogs, total, page: parseInt(page), limit: parseInt(limit) });

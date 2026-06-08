@@ -700,6 +700,70 @@ exports.reassignExtension = async (req, res) => {
   }
 };
 
+// PATCH /admin/user/extension/:extensionNumber/toggle
+// Body: { enabled: boolean, targetUserId?: string }
+// targetUserId omitted → toggle on company admin's own pool
+// targetUserId provided → toggle on that agent (must belong to this company admin)
+exports.toggleExtensionEnabled = async (req, res) => {
+  try {
+    const companyAdminId = req.user._id;
+    const { extensionNumber } = req.params;
+    const { enabled, targetUserId } = req.body;
+
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ status: "error", message: "enabled must be a boolean" });
+    }
+
+    const targetId = targetUserId || companyAdminId;
+
+    // If toggling an agent, verify it belongs to this company admin
+    if (String(targetId) !== String(companyAdminId)) {
+      const agent = await User.findOne({
+        _id: targetId,
+        createdByWhichCompanyAdmin: companyAdminId,
+        role: "user",
+      });
+      if (!agent) {
+        return res.status(404).json({ status: "error", message: "Agent not found or no permission" });
+      }
+    }
+
+    const result = await User.findOneAndUpdate(
+      { _id: targetId },
+      { $set: { "assignedExtensions.$[elem].enabled": enabled } },
+      { arrayFilters: [{ "elem.extensionNumber": String(extensionNumber) }], new: true, select: "assignedExtensions" }
+    );
+
+    if (!result) {
+      return res.status(404).json({ status: "error", message: "Extension not found on user" });
+    }
+
+    // Cascade to all agents under this company admin who share the same extension.
+    // Only when toggling admin's own pool (no targetUserId) — toggling a specific
+    // agent directly is intentionally scoped to that agent only.
+    if (!targetUserId) {
+      await User.updateMany(
+        {
+          createdByWhichCompanyAdmin: companyAdminId,
+          role: "user",
+          "assignedExtensions.extensionNumber": String(extensionNumber),
+        },
+        { $set: { "assignedExtensions.$[elem].enabled": enabled } },
+        { arrayFilters: [{ "elem.extensionNumber": String(extensionNumber) }] }
+      );
+    }
+
+    return res.json({
+      status: "success",
+      message: enabled ? "Extension enabled" : "Extension disabled",
+      assignedExtensions: result.assignedExtensions,
+    });
+  } catch (err) {
+    console.error("toggleExtensionEnabled error:", err);
+    return res.status(500).json({ status: "error", message: "Failed to toggle extension" });
+  }
+};
+
 exports.assignAgentCallerNumbers = async (req, res) => {
   try {
     const { id } = req.params;
